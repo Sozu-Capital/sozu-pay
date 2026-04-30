@@ -22,10 +22,14 @@ export function OnboardingRedirect() {
       router.replace("/onboarding/organizations");
       return;
     }
+    if (profile.needsSmartWalletSetup) {
+      router.replace("/onboarding/setup-smart-wallet");
+      return;
+    }
     if (profile.needsPayoutWalletSetup) {
       router.replace("/onboarding/set-payout-wallet");
     }
-  }, [profile?.needsOrgCreation, profile?.needsOrganization, profile?.needsPayoutWalletSetup, profile, router]);
+  }, [profile?.needsOrgCreation, profile?.needsOrganization, profile?.needsSmartWalletSetup, profile?.needsPayoutWalletSetup, profile, router]);
 
   return null;
 }

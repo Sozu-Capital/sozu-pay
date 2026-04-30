@@ -19,7 +19,8 @@ export function PrivyProviderWrapper({
     <PrivyProvider
       appId={appId}
       config={{
-        loginMethods: ["email", "passkey"],
+        // email (OTP), passkey, and Google OAuth (Gmail). Enable Google in Privy Dashboard > Login methods > OAuth.
+        loginMethods: ["email", "passkey", "google"],
         appearance: {
           theme: "light",
           accentColor: "#111827",

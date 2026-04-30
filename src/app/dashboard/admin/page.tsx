@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 
 type PendingUser = {
   id: number;
@@ -17,6 +18,8 @@ const STELLAR_EXPERT_BASE =
     : "https://stellar.expert/explorer/testnet";
 
 export default function AdminPage() {
+  const t = useTranslations("adminPage");
+  const tc = useTranslations("common");
   const [users, setUsers] = useState<PendingUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
@@ -51,7 +54,7 @@ export default function AdminPage() {
         setUsers((prev) => prev.filter((u) => u.privy_user_id !== privyUserId));
         setLastResult({ funded: data.funded, fund_tx_hash: data.fund_tx_hash });
       } else {
-        setLastResult({ error: data.error ?? data.details ?? "Activation failed" });
+        setLastResult({ error: data.error ?? data.details ?? t("activationFailed") });
       }
     } finally {
       setActivatingId(null);
@@ -59,23 +62,23 @@ export default function AdminPage() {
   };
 
   if (loading) {
-    return <div className="text-gray-500 dark:text-gray-400">Loading…</div>;
+    return <div className="text-gray-500 dark:text-gray-400">{tc("loading")}</div>;
   }
 
   if (forbidden) {
     return (
       <div>
-        <h1 className="text-2xl font-bold">Admin</h1>
-        <p className="mt-2 text-red-600 dark:text-red-400">You don’t have permission to view this page.</p>
+        <h1 className="text-2xl font-bold">{t("title")}</h1>
+        <p className="mt-2 text-red-600 dark:text-red-400">{t("forbidden")}</p>
       </div>
     );
   }
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">Admin</h1>
+      <h1 className="text-2xl font-bold">{t("title")}</h1>
       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-        Activate user profiles and fund their wallet. Classic accounts (G...) are funded with XLM via createAccount when you click Activate (requires STELLAR_FUNDER_SECRET). Smart accounts (C...) will use a separate Soroban flow — see docs/smart-accounts.md.
+        {t("subtitle")}
       </p>
       {lastResult && (
         <div className="mt-3 p-3 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm">
@@ -85,10 +88,10 @@ export default function AdminPage() {
             <>
               {lastResult.funded && lastResult.fund_tx_hash ? (
                 <p className="text-green-700 dark:text-green-400">
-                  User allowed and account funded. Tx: {lastResult.fund_tx_hash.slice(0, 12)}…
+                  {t("fundedOk", { hash: lastResult.fund_tx_hash.slice(0, 12) })}
                 </p>
               ) : (
-                <p className="text-gray-600 dark:text-gray-400">User allowed. (No G address to fund or STELLAR_FUNDER_SECRET not set.)</p>
+                <p className="text-gray-600 dark:text-gray-400">{t("allowedNoFund")}</p>
               )}
             </>
           )}
@@ -96,10 +99,10 @@ export default function AdminPage() {
       )}
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold">Pending activation requests</h2>
+        <h2 className="text-lg font-semibold">{t("pendingTitle")}</h2>
         {users.length === 0 ? (
           <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
-            No pending requests.
+            {t("noPending")}
           </p>
         ) : (
           <ul className="mt-4 space-y-4">
@@ -111,7 +114,9 @@ export default function AdminPage() {
                 <div>
                   <p className="font-medium">{u.email}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    Requested: {u.activation_requested_at ? new Date(u.activation_requested_at).toLocaleString() : "—"}
+                    {t("requested", {
+                      when: u.activation_requested_at ? new Date(u.activation_requested_at).toLocaleString() : "—",
+                    })}
                   </p>
                   {u.stellar_public_key && (
                     <p className="text-xs font-mono text-gray-600 dark:text-gray-300 mt-1 break-all">
@@ -127,7 +132,7 @@ export default function AdminPage() {
                       rel="noopener noreferrer"
                       className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
-                      Stellar Expert
+                      {t("stellarExpert")}
                     </a>
                   )}
                   <button
@@ -136,7 +141,7 @@ export default function AdminPage() {
                     onClick={() => handleActivate(u.privy_user_id)}
                     className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-1.5 text-sm font-medium disabled:opacity-50"
                   >
-                    {activatingId === u.privy_user_id ? "Activating…" : "Activate"}
+                    {activatingId === u.privy_user_id ? t("activating") : t("activate")}
                   </button>
                 </div>
               </li>
@@ -146,7 +151,7 @@ export default function AdminPage() {
       </section>
 
       <p className="mt-6 text-xs text-gray-500 dark:text-gray-400">
-        Activate sets the user as allowed. To fully activate their smart wallet, call your contract and deposit the required XLM (e.g. from your treasury) — plug in that logic in the API route.
+        {t("footnote")}
       </p>
     </div>
   );

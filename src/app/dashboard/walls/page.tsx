@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 
 interface Wall {
   id: string;
@@ -19,6 +20,8 @@ const baseUrl =
     : process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
 export default function WallsPage() {
+  const t = useTranslations("wallsPage");
+  const tc = useTranslations("common");
   const [walls, setWalls] = useState<Wall[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -43,7 +46,7 @@ export default function WallsPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: name || "Unnamed wall",
+        name: name || t("unnamed"),
         defaultAmount: defaultAmount || "0",
         reference,
       }),
@@ -69,9 +72,9 @@ export default function WallsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">Payment walls</h1>
+      <h1 className="text-2xl font-bold">{t("title")}</h1>
       <p className="mt-1 text-gray-600 dark:text-gray-400">
-        Create walls for in-store (QR / kiosk). Shareable link per wall.
+        {t("subtitle")}
       </p>
 
       {!showForm ? (
@@ -80,12 +83,12 @@ export default function WallsPage() {
           onClick={() => setShowForm(true)}
           className="mt-6 rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 font-medium"
         >
-          Create payment wall
+          {t("createWall")}
         </button>
       ) : (
         <form onSubmit={handleCreate} className="mt-6 max-w-md space-y-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <div>
-            <label className="block text-sm font-medium">Name</label>
+            <label className="block text-sm font-medium">{t("name")}</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -93,7 +96,7 @@ export default function WallsPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium">Default amount (USDC)</label>
+            <label className="block text-sm font-medium">{t("defaultAmount")}</label>
             <input
               type="text"
               inputMode="decimal"
@@ -103,7 +106,7 @@ export default function WallsPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium">Reference (optional)</label>
+            <label className="block text-sm font-medium">{t("reference")}</label>
             <input
               value={reference}
               onChange={(e) => setReference(e.target.value)}
@@ -115,14 +118,14 @@ export default function WallsPage() {
               type="submit"
               className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2"
             >
-              Create
+              {tc("create")}
             </button>
             <button
               type="button"
               onClick={() => setShowForm(false)}
               className="rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2"
             >
-              Cancel
+              {tc("cancel")}
             </button>
           </div>
         </form>
@@ -142,11 +145,14 @@ export default function WallsPage() {
                 <div>
                   <h2 className="font-semibold">{w.name}</h2>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Default: {w.defaultAmount} USDC
+                    {t("defaultLine", { amount: w.defaultAmount })}
                     {w.reference ? ` · ${w.reference}` : ""}
                   </p>
                   <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                    Last used: {w.lastUsedAt ? new Date(w.lastUsedAt).toLocaleDateString() : "Never"} · Volume: {w.totalVolume} USDC
+                    {t("lastUsed", {
+                      when: w.lastUsedAt ? new Date(w.lastUsedAt).toLocaleDateString() : tc("never"),
+                      vol: w.totalVolume,
+                    })}
                   </p>
                 </div>
                 <div className="flex flex-col gap-2">
@@ -164,14 +170,14 @@ export default function WallsPage() {
                     rel="noopener noreferrer"
                     className="text-sm text-gray-600 dark:text-gray-400"
                   >
-                    QR code
+                    {t("qrCode")}
                   </a>
                   <button
                     type="button"
                     onClick={() => toggleArchive(w)}
                     className="text-sm text-amber-600 dark:text-amber-400"
                   >
-                    {w.archived ? "Unarchive" : "Archive"}
+                    {w.archived ? t("unarchive") : t("archive")}
                   </button>
                 </div>
               </li>

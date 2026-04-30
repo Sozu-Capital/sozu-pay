@@ -36,6 +36,17 @@ Each phase builds on:
 
 **Key milestone at 12 months:** Fully operational NGO disbursement OS; recipients using Sozu wallet; repayment tracking; yield auto-compounding; first behavioral credit cycle.
 
+#### Shadow payment rail POC (manual bridge spike)
+
+This is **not** production fiat licensing or a live PSP integration. It is a **closed-loop simulation** of Year 2 merchant settlement: internal ledger, manual “confirm payment” oracle, API-first payment creation, CLP→USDC quoting with a fixed spread—so we validate UX and ops **before** a Fiat Bridge Aggregator.
+
+- **In scope:** Ledger tables, merchant payment API, admin confirmation flow, optional manual CLP withdrawal queue.
+- **Explicitly out of scope for this spike:** Anchor licensing, card issuance, automated webhooks/PSP, production chargeback handling.
+
+**Spec and schema:** [03-planning/shadow-payment-rail-poc.md](./03-planning/shadow-payment-rail-poc.md) · **SQL:** [supabase-shadow-ledger.sql](./supabase-shadow-ledger.sql)
+
+**Priority:** High for the **SozuPay_dashboard** product track (parallel or short-lag with NGO dashboard work); it does **not** replace NGO-first distribution in the ecosystem.
+
 ---
 
 ### Year 2 — Merchant Acceptance + Anchor Path
@@ -91,6 +102,7 @@ Before moving to the next **year-phase**:
 | **Production dashboard & simultaneous disbursements** | [production-disbursements-tasks.md](./production-disbursements-tasks.md) |
 | **Technical spec** | [technical-spec.md](./technical-spec.md) |
 | **NFRs** | [nfr.md](./nfr.md) |
+| **Shadow payment rail POC (ledger + manual oracle)** | [03-planning/shadow-payment-rail-poc.md](./03-planning/shadow-payment-rail-poc.md) |
 
 ---
 
@@ -100,9 +112,9 @@ Before moving to the next **year-phase**:
 
 - Attempt anchor licensing in Year 1
 - Attempt card issuance in Year 1
-- Attempt fiat bridge before real volume
+- Attempt **production** fiat bridge (licensed PSP, automated settlement) before real volume
 
-**Sequence matters.** Distribution comes from NGOs first.
+**Sequence matters.** Distribution comes from NGOs first. A **manual** shadow-rail POC (internal ledger + ops confirmation) is allowed to de-risk merchant UX without counting as “fiat bridge” in the sense above—see *Shadow payment rail POC* under Year 1.
 
 ---
 
@@ -123,3 +135,4 @@ Everything feeds the credit engine.
 | Version | Date | Change |
 |--------|------|--------|
 | 0.1 | 2026-03-01 | Initial: phased roadmap (Y1, Y2, Y4) and dev cycle conventions. |
+| 0.2 | 2026-04-04 | Shadow payment rail POC: spike placement, doc links, clarify manual POC vs production fiat bridge. |

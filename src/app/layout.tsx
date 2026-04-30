@@ -1,21 +1,28 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { LazyPrivyWrapper } from "@/components/LazyPrivyWrapper";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages } from "next-intl/server";
 
 export const metadata: Metadata = {
-  title: "SozuPay Dashboard",
-  description: "Merchant dashboard – EMPRENDE / MUJERES 2000.",
+  title: "Panel de SozuPay",
+  description: "Panel para comercios – EMPRENDE / MUJERES 2000.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body className="antialiased min-h-screen">
-        <LazyPrivyWrapper>{children}</LazyPrivyWrapper>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <LazyPrivyWrapper>{children}</LazyPrivyWrapper>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

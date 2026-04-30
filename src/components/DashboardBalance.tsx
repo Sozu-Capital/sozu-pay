@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 
 export default function DashboardBalance() {
+  const t = useTranslations("dashboardBalance");
   const [data, setData] = useState<{
     usdc: string;
     available: string;
@@ -31,7 +33,7 @@ export default function DashboardBalance() {
   return (
     <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6">
       <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-        Organization wallet balance
+        {t("title")}
       </h2>
       <p className="mt-2 text-2xl font-bold">{usdc} USDC</p>
       <p className="mt-1 text-gray-600 dark:text-gray-400">
@@ -42,7 +44,7 @@ export default function DashboardBalance() {
       </p>
       {parseFloat(inVault) > 0 && (
         <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-          In vault: {inVault} USDC
+          {t("inVault", { amount: inVault })}
         </p>
       )}
     </div>

@@ -16,7 +16,8 @@ export async function GET() {
   try {
     const user = await getUserByPrivyId(session.id);
     if (!user) {
-      return NextResponse.json({ organizations: [], canCreate: false });
+      // Session exists but user row missing (should be rare). Still allow creating an org.
+      return NextResponse.json({ organizations: [], canCreate: true });
     }
 
     const organizations: { id: string; name: string }[] = [];
@@ -27,7 +28,9 @@ export async function GET() {
       }
     }
 
-    const canCreate = user.admin_level === "super_admin";
+    // We allow creating a new organization even if the user already has access to one.
+    // (Creating will switch the user's active org to the newly created one.)
+    const canCreate = true;
 
     return NextResponse.json({
       organizations,

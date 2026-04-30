@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePrivy } from "@privy-io/react-auth";
+import { useTranslations } from "next-intl";
 
 type ProfileData = {
   email: string;
@@ -12,6 +13,8 @@ type ProfileData = {
   org_id: string | null;
   org_stellar_disbursement_public_key?: string | null;
   org_has_stored_secret?: boolean;
+  org_encryption_type?: "legacy" | "user_derived" | null;
+  org_has_recovery?: boolean;
   allowed: boolean;
   admin_level: string;
   activation_requested_at: string | null;
@@ -28,6 +31,8 @@ const FRIENDBOT_URL = "https://friendbot.stellar.org";
 const REGISTRATION_MESSAGE_PREFIX = "SozuPay wallet registration";
 
 export default function ProfilePage() {
+  const t = useTranslations("profilePage");
+  const tc = useTranslations("common");
   const { user: privyUser } = usePrivy();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,8 +47,33 @@ export default function ProfilePage() {
   const [creatingOrg, setCreatingOrg] = useState(false);
   const [createOrgError, setCreateOrgError] = useState<string | null>(null);
   const [justCreatedOrgKeys, setJustCreatedOrgKeys] = useState<{ publicKey: string; secretKey: string } | null>(null);
+  const [justCreatedOrgSecure, setJustCreatedOrgSecure] = useState<{ publicKey: string } | null>(null);
+  const [orgCreateName, setOrgCreateName] = useState("My organization");
+  const [orgCreateType, setOrgCreateType] = useState<"store" | "ngo">("ngo");
+  const [orgCreatePassword, setOrgCreatePassword] = useState("");
+  const [orgCreateWithRecovery, setOrgCreateWithRecovery] = useState(false);
+  const [orgCreatedRecoveryCode, setOrgCreatedRecoveryCode] = useState<string | null>(null);
+  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
+  const [recoveryCodeInput, setRecoveryCodeInput] = useState("");
+  const [recoveryNewPassword, setRecoveryNewPassword] = useState("");
+  const [recoverySubmitting, setRecoverySubmitting] = useState(false);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const [showMigrationModal, setShowMigrationModal] = useState(false);
+  const [migrationSecretInput, setMigrationSecretInput] = useState("");
+  const [migrationPasswordInput, setMigrationPasswordInput] = useState("");
+  const [migrationSubmitting, setMigrationSubmitting] = useState(false);
+  const [migrationError, setMigrationError] = useState<string | null>(null);
   const [revealedOrgSecret, setRevealedOrgSecret] = useState<string | null>(null);
   const [loadingOrgSecret, setLoadingOrgSecret] = useState(false);
+
+  const [showTrustlineModal, setShowTrustlineModal] = useState(false);
+  const [trustlineSecretInput, setTrustlineSecretInput] = useState("");
+  const [trustlineSigning, setTrustlineSigning] = useState(false);
+  const [trustlineError, setTrustlineError] = useState<string | null>(null);
+  const [trustlineStatus, setTrustlineStatus] = useState<{
+    needs_trustline: boolean;
+    has_trustline: boolean;
+  } | null>(null);
 
   const loadProfile = useCallback(() => {
     setLoading(true);
@@ -65,10 +95,78 @@ export default function ProfilePage() {
     loadProfile();
   }, [loadProfile]);
 
+  const loadTrustlineStatus = useCallback(() => {
+    if (!profile?.stellar_public_key) return;
+    fetch("/api/profile/wallet/trustline-status")
+      .then((r) => r.json())
+      .then((data) => {
+        if (typeof data.needs_trustline === "boolean" && typeof data.has_trustline === "boolean") {
+          setTrustlineStatus({ needs_trustline: data.needs_trustline, has_trustline: data.has_trustline });
+        }
+      })
+      .catch(() => {});
+  }, [profile?.stellar_public_key]);
+
+  useEffect(() => {
+    loadTrustlineStatus();
+  }, [loadTrustlineStatus]);
+
+  const handleOpenTrustlineSign = () => {
+    setTrustlineError(null);
+    setTrustlineSecretInput("");
+    setShowTrustlineModal(true);
+  };
+
+  const handleSubmitTrustline = async () => {
+    const secret = trustlineSecretInput.trim();
+    if (!secret) {
+      setTrustlineError(t("trustlineSecretRequired"));
+      return;
+    }
+    setTrustlineSigning(true);
+    setTrustlineError(null);
+    try {
+      const res = await fetch("/api/profile/wallet/trustline-tx");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.envelope_xdr) {
+        setTrustlineError(data.error ?? t("failedGetTx"));
+        return;
+      }
+      const { Transaction, Keypair: Kp, Networks } = await import("@stellar/stellar-sdk");
+      const networkPassphrase = data.network === "public" ? Networks.PUBLIC : Networks.TESTNET;
+      const tx = new Transaction(data.envelope_xdr, networkPassphrase);
+      const keypair = Kp.fromSecret(secret);
+      if (keypair.publicKey() !== profile?.stellar_public_key) {
+        setTrustlineError(t("secretMismatchWallet"));
+        return;
+      }
+      tx.sign(keypair);
+      const xdr = tx.toEnvelope().toXDR("base64");
+      const horizonUrl = data.network === "public" ? "https://horizon.stellar.org" : "https://horizon-testnet.stellar.org";
+      const submitRes = await fetch(`${horizonUrl}/transactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `tx=${encodeURIComponent(xdr)}`,
+      });
+      const submitData = await submitRes.json().catch(() => ({}));
+      if (!submitRes.ok || submitData.status === "failed") {
+        setTrustlineError(submitData.detail ?? submitData.extras?.result_codes?.transaction ?? t("transactionFailed"));
+        return;
+      }
+      setShowTrustlineModal(false);
+      setTrustlineSecretInput("");
+      setTrustlineStatus({ needs_trustline: false, has_trustline: true });
+    } catch (e) {
+      setTrustlineError(e instanceof Error ? e.message : t("failedAddTrustline"));
+    } finally {
+      setTrustlineSigning(false);
+    }
+  };
+
   const displayName =
     privyUser?.email?.address ??
     profile?.email?.split("@")[0] ??
-    "User";
+    t("userFallback");
   const avatarUrl = (privyUser as { avatar?: string })?.avatar ?? null;
 
   const handleRequestActivation = async () => {
@@ -108,7 +206,7 @@ export default function ProfilePage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setCreateOrgError(data.error ?? "Failed to create organization");
+        setCreateOrgError(data.error ?? t("failedCreateOrg"));
         return;
       }
       if (data.publicKey && data.secretKey) {
@@ -118,6 +216,138 @@ export default function ProfilePage() {
       }
     } finally {
       setCreatingOrg(false);
+    }
+  };
+
+  const handleCreateOrganizationSecure = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const passphrase = orgCreatePassword.trim();
+    if (!passphrase) {
+      setCreateOrgError(t("enterPayoutPasswordOrg"));
+      return;
+    }
+    setCreateOrgError(null);
+    setCreatingOrg(true);
+    try {
+      const { Keypair } = await import("@stellar/stellar-sdk");
+      const { encryptOrgSecretClient } = await import("@/lib/org-wallet-client-crypto");
+      const keypair = Keypair.random();
+      const publicKey = keypair.publicKey();
+      const secretKey = keypair.secret();
+      const encryptedBlob = await encryptOrgSecretClient(secretKey, passphrase);
+      const encryptedSecret = JSON.stringify(encryptedBlob);
+      const body: Record<string, unknown> = {
+        name: orgCreateName.trim() || "My organization",
+        type: orgCreateType,
+        publicKey,
+        encryptedSecret,
+      };
+      if (orgCreateWithRecovery) {
+        const recoveryCode = `RC-${Date.now().toString(36)}-${crypto.getRandomValues(new Uint8Array(8)).reduce((s, b) => s + b.toString(36), "")}`;
+        const recoveryBlob = await encryptOrgSecretClient(secretKey, recoveryCode);
+        body.recoveryEncryptedSecret = JSON.stringify(recoveryBlob);
+        setOrgCreatedRecoveryCode(recoveryCode);
+      }
+      const res = await fetch("/api/profile/org", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setCreateOrgError(data.error ?? t("failedCreateOrg"));
+        return;
+      }
+      setJustCreatedOrgSecure({ publicKey });
+      setOrgCreatePassword("");
+      setOrgCreateWithRecovery(false);
+      loadProfile();
+    } catch (err) {
+      setCreateOrgError(err instanceof Error ? err.message : t("failedCreateOrg"));
+    } finally {
+      setCreatingOrg(false);
+    }
+  };
+
+  const handleRecoverySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const code = recoveryCodeInput.trim();
+    const newPass = recoveryNewPassword.trim();
+    if (!code || !newPass || !profile?.org_stellar_disbursement_public_key) return;
+    setRecoverySubmitting(true);
+    setRecoveryError(null);
+    try {
+      const res = await fetch("/api/profile/org/recovery-encrypted-secret");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.recoveryEncryptedSecret) {
+        setRecoveryError(data.error ?? t("failedLoadRecovery"));
+        return;
+      }
+      const { decryptOrgSecretClient, encryptOrgSecretClient } = await import("@/lib/org-wallet-client-crypto");
+      const secretKey = await decryptOrgSecretClient(data.recoveryEncryptedSecret, code);
+      const blob = await encryptOrgSecretClient(secretKey, newPass);
+      const patchRes = await fetch("/api/profile/org/wallet", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          publicKey: profile.org_stellar_disbursement_public_key,
+          encryptedSecret: JSON.stringify(blob),
+        }),
+      });
+      const patchData = await patchRes.json().catch(() => ({}));
+      if (!patchRes.ok) {
+        setRecoveryError(patchData.error ?? t("failedUpdateWallet"));
+        return;
+      }
+      setShowRecoveryModal(false);
+      setRecoveryCodeInput("");
+      setRecoveryNewPassword("");
+      setRecoveryError(null);
+    } catch (err) {
+      setRecoveryError(err instanceof Error ? err.message : t("recoveryFailed"));
+    } finally {
+      setRecoverySubmitting(false);
+    }
+  };
+
+  const handleMigrationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const secret = migrationSecretInput.trim();
+    const pass = migrationPasswordInput.trim();
+    if (!secret || !pass || !profile?.org_stellar_disbursement_public_key) return;
+    setMigrationSubmitting(true);
+    setMigrationError(null);
+    try {
+      const { Keypair } = await import("@stellar/stellar-sdk");
+      const { encryptOrgSecretClient } = await import("@/lib/org-wallet-client-crypto");
+      const keypair = Keypair.fromSecret(secret);
+      if (keypair.publicKey() !== profile.org_stellar_disbursement_public_key) {
+        setMigrationError(t("migrationSecretMismatch"));
+        return;
+      }
+      const blob = await encryptOrgSecretClient(secret, pass);
+      const res = await fetch("/api/profile/org/wallet", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          publicKey: profile.org_stellar_disbursement_public_key,
+          encryptedSecret: JSON.stringify(blob),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMigrationError(data.error ?? t("failedReSecure"));
+        return;
+      }
+      setShowMigrationModal(false);
+      setMigrationSecretInput("");
+      setMigrationPasswordInput("");
+      setMigrationError(null);
+      loadProfile();
+    } catch (err) {
+      setMigrationError(err instanceof Error ? err.message : t("migrationFailed"));
+    } finally {
+      setMigrationSubmitting(false);
     }
   };
 
@@ -161,7 +391,7 @@ export default function ProfilePage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setCreateError(data.error ?? "Registration failed");
+        setCreateError(data.error ?? t("registrationFailed"));
         setCreateStep("backup");
         return;
       }
@@ -171,7 +401,7 @@ export default function ProfilePage() {
       loadProfile();
       loadProfile();
     } catch (e) {
-      setCreateError(e instanceof Error ? e.message : "Registration failed");
+      setCreateError(e instanceof Error ? e.message : t("registrationFailed"));
       setCreateStep("backup");
     }
   };
@@ -185,19 +415,19 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="text-gray-500 dark:text-gray-400">Loading profile…</div>
+      <div className="text-gray-500 dark:text-gray-400">{t("loadingProfile")}</div>
     );
   }
 
   if (!profile) {
     return (
       <div>
-        <p className="text-red-600 dark:text-red-400">Could not load profile.</p>
+        <p className="text-red-600 dark:text-red-400">{t("couldNotLoadProfile")}</p>
         <button type="button" onClick={() => loadProfile()} className="mt-2 rounded-md border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm">
-          Retry
+          {t("retry")}
         </button>
         <Link href="/dashboard" className="mt-3 ml-2 inline-block text-sm text-gray-600 dark:text-gray-400 underline">
-          Back to dashboard
+          {t("backToDashboard")}
         </Link>
       </div>
     );
@@ -210,12 +440,12 @@ export default function ProfilePage() {
   return (
     <div className="max-w-2xl">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Profile</h1>
+        <h1 className="text-2xl font-bold">{t("title")}</h1>
         <Link
           href="/dashboard/settings"
           className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
         >
-          Settings
+          {t("settings")}
         </Link>
       </div>
 
@@ -238,9 +468,9 @@ export default function ProfilePage() {
       {/* Admin payout wallet (super-admin): only needed when org has no disbursement wallet. With org wallet, you approve in one click and the org signs. */}
       {profile.admin_level === "super_admin" && !profile.org_has_stored_secret && (
         <section className="mt-6 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 p-6">
-          <h2 className="text-lg font-semibold">Admin payout wallet</h2>
+          <h2 className="text-lg font-semibold">{t("adminPayoutWalletTitle")}</h2>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Your organization has no disbursement wallet yet. Set up this wallet to sign payouts, or create an organization with a wallet above. Fund it with XLM and add a USDC trustline.
+            {t("adminPayoutWalletBody")}
           </p>
           {(profile.stellar_payout_public_key || profile.stellar_public_key) ? (
             <div className="mt-4 space-y-3">
@@ -253,20 +483,20 @@ export default function ProfilePage() {
                   onClick={() => handleCopy(profile.stellar_payout_public_key ?? profile.stellar_public_key!, "admin-payout")}
                   className="rounded-md border border-amber-300 dark:border-amber-700 px-2 py-1.5 text-xs font-medium shrink-0"
                 >
-                  {copied === "admin-payout" ? "Copied" : "Copy"}
+                  {copied === "admin-payout" ? tc("copied") : tc("copy")}
                 </button>
               </div>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Fund this address with XLM, then add a USDC trustline. On testnet, use{" "}
+                {t("fundXlmTrustlineBefore")}
                 <a
                   href={`${FRIENDBOT_URL}/?addr=${encodeURIComponent(profile.stellar_payout_public_key ?? profile.stellar_public_key ?? "")}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-600 dark:text-blue-400 hover:underline"
                 >
-                  Friendbot
-                </a>{" "}
-                to get XLM, then add the USDC trustline (e.g. via Stellar Laboratory or your wallet).
+                  {t("friendbot")}
+                </a>
+                {t("fundXlmTrustlineAfter")}
               </p>
               <a
                 href={`${STELLAR_EXPERT_BASE}/account/${profile.stellar_payout_public_key ?? profile.stellar_public_key}`}
@@ -274,31 +504,31 @@ export default function ProfilePage() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
               >
-                View on Stellar Expert →
+                {t("viewOnStellarExpert")}
               </a>
             </div>
           ) : (
             <div className="mt-4 space-y-3">
               <p className="text-sm text-amber-800 dark:text-amber-200">
-                Set up a wallet so you can sign payouts. Choose one:
+                {t("setupWalletPrompt")}
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link
                   href="/onboarding/set-payout-wallet"
                   className="rounded-md bg-amber-600 dark:bg-amber-500 text-white px-3 py-2 text-sm font-medium hover:opacity-90"
                 >
-                  Set passphrase (recommended)
+                  {t("setPassphraseRecommended")}
                 </Link>
                 <button
                   type="button"
                   onClick={handleCreateWallet}
                   className="rounded-md border border-amber-300 dark:border-amber-700 px-3 py-2 text-sm font-medium hover:bg-amber-100/50 dark:hover:bg-amber-900/20"
                 >
-                  Create new keypair
+                  {t("createNewKeypair")}
                 </button>
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Passphrase: we derive a key (you never see the secret). Keypair: you back up the secret once and use it to unlock when paying.
+                {t("passphraseVsKeypairNote")}
               </p>
             </div>
           )}
@@ -306,24 +536,123 @@ export default function ProfilePage() {
       )}
 
       {/* Create organization (super_admin without org) */}
-      {profile.admin_level === "super_admin" && !profile.org_id && !justCreatedOrgKeys && (
+      {profile.admin_level === "super_admin" && !profile.org_id && !justCreatedOrgKeys && !justCreatedOrgSecure && (
         <section className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6">
-          <h2 className="text-lg font-semibold">Organization</h2>
+          <h2 className="text-lg font-semibold">{t("organizationTitle")}</h2>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Create an organization to associate payouts and (optionally) Soroban contracts. You can set the name and type (NGO / store) later.
+            {t("organizationIntro")}
           </p>
-          {createOrgError && (
-            <p className="mt-2 text-sm text-red-600 dark:text-red-400" role="alert">
-              {createOrgError}
-            </p>
+          <form onSubmit={handleCreateOrganizationSecure} className="mt-4 space-y-4">
+            <div>
+              <label htmlFor="org-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                {t("orgNameLabel")}
+              </label>
+              <input
+                id="org-name"
+                type="text"
+                value={orgCreateName}
+                onChange={(e) => setOrgCreateName(e.target.value)}
+                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
+                placeholder={t("orgNamePlaceholder")}
+              />
+            </div>
+            <div>
+              <label htmlFor="org-type" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                {t("typeLabel")}
+              </label>
+              <select
+                id="org-type"
+                value={orgCreateType}
+                onChange={(e) => setOrgCreateType(e.target.value as "store" | "ngo")}
+                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
+              >
+                <option value="ngo">{t("typeNgo")}</option>
+                <option value="store">{t("typeStore")}</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="org-payout-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                {t("payoutPasswordOrgLabel")}
+              </label>
+              <input
+                id="org-payout-password"
+                type="password"
+                value={orgCreatePassword}
+                onChange={(e) => setOrgCreatePassword(e.target.value)}
+                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
+                placeholder={t("payoutPasswordOrgPlaceholder")}
+                autoComplete="new-password"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {t("payoutPasswordOrgHint")}
+              </p>
+            </div>
+            <label className="flex items-center gap-2 mt-2">
+              <input type="checkbox" checked={orgCreateWithRecovery} onChange={(e) => setOrgCreateWithRecovery(e.target.checked)} className="rounded border-gray-300 dark:border-gray-600" />
+              <span className="text-sm">{t("recoveryCheckbox")}</span>
+            </label>
+            {createOrgError && (
+              <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+                {createOrgError}
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={creatingOrg}
+              className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              {creatingOrg ? t("creatingOrg") : t("createOrganization")}
+            </button>
+          </form>
+          <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
+            {t("legacyFlowPrefix")}{" "}
+            <button
+              type="button"
+              onClick={handleCreateOrganization}
+              disabled={creatingOrg}
+              className="underline hover:no-underline"
+            >
+              {t("createWithBackupKey")}
+            </button>
+          </p>
+        </section>
+      )}
+
+      {/* Just-created org (secure flow): no secret shown */}
+      {justCreatedOrgSecure && (
+        <section className="mt-6 rounded-xl border border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-900/10 p-6">
+          <h2 className="text-lg font-semibold">{t("orgCreatedTitle")}</h2>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            {t("orgCreatedBody")}
+          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <code className="flex-1 min-w-0 font-mono text-sm break-all bg-white dark:bg-gray-800 px-2 py-1.5 rounded border border-green-200 dark:border-green-800">
+              {justCreatedOrgSecure.publicKey}
+            </code>
+            <button
+              type="button"
+              onClick={() => handleCopy(justCreatedOrgSecure.publicKey, "org-pub")}
+              className="rounded-md border border-green-300 dark:border-green-700 px-2 py-1.5 text-xs shrink-0"
+            >
+              {copied === "org-pub" ? tc("copied") : tc("copy")}
+            </button>
+          </div>
+          {orgCreatedRecoveryCode && (
+            <div className="mt-4 p-3 rounded border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">{t("saveRecoveryCodeTitle")}</p>
+              <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{t("saveRecoveryCodeBody")}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <code className="flex-1 min-w-0 font-mono text-sm break-all">{orgCreatedRecoveryCode}</code>
+                <button type="button" onClick={() => handleCopy(orgCreatedRecoveryCode, "recovery")} className="rounded border border-amber-300 dark:border-amber-700 px-2 py-1 text-xs shrink-0">{copied === "recovery" ? tc("copied") : tc("copy")}</button>
+              </div>
+            </div>
           )}
           <button
             type="button"
-            disabled={creatingOrg}
-            onClick={handleCreateOrganization}
-            className="mt-4 rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-2 text-sm font-medium disabled:opacity-50"
+            onClick={() => { setJustCreatedOrgSecure(null); setOrgCreatedRecoveryCode(null); loadProfile(); }}
+            className="mt-4 rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-2 text-sm font-medium"
           >
-            {creatingOrg ? "Creating…" : "Create organization"}
+            {t("continue")}
           </button>
         </section>
       )}
@@ -331,9 +660,9 @@ export default function ProfilePage() {
       {/* Just-created org: backup secret (from Profile create-org flow) */}
       {justCreatedOrgKeys && (
         <section className="mt-6 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 p-6">
-          <h2 className="text-lg font-semibold">Save your organization wallet key</h2>
+          <h2 className="text-lg font-semibold">{t("saveOrgKeyTitle")}</h2>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Store the secret key securely. Payouts are sent from this wallet. You can reveal it again from this page later.
+            {t("saveOrgKeyBody")}
           </p>
           <div className="mt-4 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -341,7 +670,7 @@ export default function ProfilePage() {
                 {justCreatedOrgKeys.publicKey}
               </code>
               <button type="button" onClick={() => handleCopy(justCreatedOrgKeys.publicKey, "org-pub")} className="rounded-md border border-amber-300 dark:border-amber-700 px-2 py-1.5 text-xs shrink-0">
-                {copied === "org-pub" ? "Copied" : "Copy"}
+                {copied === "org-pub" ? tc("copied") : tc("copy")}
               </button>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -349,7 +678,7 @@ export default function ProfilePage() {
                 {justCreatedOrgKeys.secretKey}
               </code>
               <button type="button" onClick={() => handleCopy(justCreatedOrgKeys.secretKey, "org-secret")} className="rounded-md border border-red-300 dark:border-red-700 px-2 py-1.5 text-xs shrink-0 text-red-700 dark:text-red-400">
-                {copied === "org-secret" ? "Copied" : "Copy"}
+                {copied === "org-secret" ? tc("copied") : tc("copy")}
               </button>
             </div>
           </div>
@@ -358,7 +687,7 @@ export default function ProfilePage() {
             onClick={() => { setJustCreatedOrgKeys(null); loadProfile(); }}
             className="mt-4 rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-2 text-sm font-medium"
           >
-            I’ve saved the key — continue
+            {t("savedKeyContinue")}
           </button>
         </section>
       )}
@@ -366,9 +695,9 @@ export default function ProfilePage() {
       {/* Organization disbursement wallet (super_admin with org that has a wallet) */}
       {profile.admin_level === "super_admin" && profile.org_id && profile.org_stellar_disbursement_public_key && (
         <section className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6">
-          <h2 className="text-lg font-semibold">Organization disbursement wallet</h2>
+          <h2 className="text-lg font-semibold">{t("orgDisbursementTitle")}</h2>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Payouts are sent from this wallet. As a super admin you can reveal the secret key to back it up or use it elsewhere.
+            {t("orgDisbursementBody")}
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <code className="flex-1 min-w-0 font-mono text-sm break-all bg-gray-100 dark:bg-gray-700/50 px-2 py-1.5 rounded">
@@ -379,10 +708,36 @@ export default function ProfilePage() {
               onClick={() => handleCopy(profile.org_stellar_disbursement_public_key!, "org-addr")}
               className="rounded-md border border-gray-300 dark:border-gray-600 px-2 py-1.5 text-xs shrink-0"
             >
-              {copied === "org-addr" ? "Copied" : "Copy"}
+              {copied === "org-addr" ? tc("copied") : tc("copy")}
             </button>
           </div>
-          {profile.org_has_stored_secret && (
+          {profile.org_encryption_type === "legacy" && (
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={() => { setShowMigrationModal(true); setMigrationError(null); setMigrationSecretInput(""); setMigrationPasswordInput(""); }}
+                className="rounded-md border border-amber-500 dark:border-amber-600 text-amber-700 dark:text-amber-400 px-3 py-2 text-sm font-medium hover:bg-amber-50 dark:hover:bg-amber-900/20"
+              >
+                {t("reSecureButton")}
+              </button>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {t("reSecureHint")}
+              </p>
+            </div>
+          )}
+          {profile.org_encryption_type === "user_derived" && profile.org_has_recovery && (
+            <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+              {t("forgotPayoutPassword")}{" "}
+              <button
+                type="button"
+                onClick={() => { setShowRecoveryModal(true); setRecoveryError(null); setRecoveryCodeInput(""); setRecoveryNewPassword(""); }}
+                className="text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                {t("resetWithRecovery")}
+              </button>
+            </p>
+          )}
+          {profile.org_has_stored_secret && profile.org_encryption_type !== "user_derived" && (
             <div className="mt-4">
               <button
                 type="button"
@@ -390,7 +745,7 @@ export default function ProfilePage() {
                 disabled={loadingOrgSecret}
                 className="rounded-md border border-amber-500 dark:border-amber-600 text-amber-700 dark:text-amber-400 px-3 py-2 text-sm font-medium hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50"
               >
-                {loadingOrgSecret ? "Loading…" : "Reveal org wallet secret"}
+                {loadingOrgSecret ? t("loadingShort") : t("revealOrgSecret")}
               </button>
               {revealedOrgSecret && (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -402,14 +757,14 @@ export default function ProfilePage() {
                     onClick={() => handleCopy(revealedOrgSecret, "revealed-secret")}
                     className="rounded-md border border-red-300 dark:border-red-700 px-2 py-1.5 text-xs text-red-700 dark:text-red-400 shrink-0"
                   >
-                    {copied === "revealed-secret" ? "Copied" : "Copy"}
+                    {copied === "revealed-secret" ? tc("copied") : tc("copy")}
                   </button>
                   <button
                     type="button"
                     onClick={() => setRevealedOrgSecret(null)}
                     className="rounded-md border border-gray-300 dark:border-gray-600 px-2 py-1.5 text-xs shrink-0"
                   >
-                    Hide
+                    {t("hide")}
                   </button>
                 </div>
               )}
@@ -421,9 +776,9 @@ export default function ProfilePage() {
       {/* Org payout wallet from env (optional; when set, Classic payouts can use this shared org key) */}
       {profile.org_payout_wallet_public_key && profile.admin_level === "super_admin" && (
         <section className="mt-6 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 p-6">
-          <h2 className="text-lg font-semibold">Organization payout wallet</h2>
+          <h2 className="text-lg font-semibold">{t("orgPayoutWalletTitle")}</h2>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            All Stellar payouts to recipients are sent from this wallet. You authorize each payout; the org wallet signs. Fund it with XLM and USDC (testnet or mainnet).
+            {t("orgPayoutWalletBody")}
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <code className="flex-1 min-w-0 font-mono text-sm text-gray-800 dark:text-gray-200 break-all bg-white dark:bg-gray-800 px-2 py-1.5 rounded border border-amber-200 dark:border-amber-800">
@@ -434,7 +789,7 @@ export default function ProfilePage() {
               onClick={() => handleCopy(profile.org_payout_wallet_public_key!, "org")}
               className="rounded-md border border-amber-300 dark:border-amber-700 px-2 py-1.5 text-xs font-medium shrink-0"
             >
-              {copied === "org" ? "Copied" : "Copy"}
+              {copied === "org" ? tc("copied") : tc("copy")}
             </button>
           </div>
           <a
@@ -443,16 +798,16 @@ export default function ProfilePage() {
             rel="noopener noreferrer"
             className="mt-2 inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
           >
-            View on Stellar Expert →
+            {t("viewOnStellarExpert")}
           </a>
         </section>
       )}
 
       {/* Smart wallet: one card with wallet UI + small activation button when not allowed */}
       <section className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6">
-        <h2 className="text-lg font-semibold">Smart wallet</h2>
+        <h2 className="text-lg font-semibold">{t("smartWalletTitle")}</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Your Stellar account for receiving and sending. You control the keys; we only store your public address.
+          {t("smartWalletBody")}
         </p>
 
         {profile.stellar_public_key ? (
@@ -466,7 +821,7 @@ export default function ProfilePage() {
                 onClick={() => handleCopy(profile.stellar_public_key!, "address")}
                 className="rounded-md border border-gray-300 dark:border-gray-600 px-2 py-1.5 text-xs font-medium shrink-0"
               >
-                {copied === "address" ? "Copied" : "Copy"}
+                {copied === "address" ? tc("copied") : tc("copy")}
               </button>
             </div>
             {stellarExplorerUrl && (
@@ -476,37 +831,54 @@ export default function ProfilePage() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
               >
-                View on Stellar Expert →
+                {t("viewOnStellarExpert")}
               </a>
             )}
+            {/* Sign transaction with wallet auth (no external wallet): add USDC trustline */}
+            {trustlineStatus?.has_trustline ? (
+              <p className="text-sm text-green-600 dark:text-green-400">{t("usdcTrustlineAdded")}</p>
+            ) : trustlineStatus?.needs_trustline ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleOpenTrustlineSign}
+                  className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-2 text-sm font-medium hover:opacity-90"
+                >
+                  {t("addUsdcTrustline")}
+                </button>
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {t("trustlineSignHint")}
+                </span>
+              </div>
+            ) : null}
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              To connect a different wallet, go to Settings → Recovery & wallet.
+              {t("settingsRecoveryWallet")}
             </p>
           </div>
         ) : (createStep === "backup" || createStep === "registering") && newKeypair ? (
           <div className="mt-4 space-y-4">
             <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
-              Save your secret key somewhere safe. We never store it. You won’t see it again.
+              {t("saveSecretWarning")}
             </p>
             <div>
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Public address</p>
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t("publicAddressLabel")}</p>
               <div className="flex flex-wrap items-center gap-2">
                 <code className="flex-1 min-w-0 font-mono text-sm break-all bg-gray-100 dark:bg-gray-700/50 px-2 py-1.5 rounded">
                   {newKeypair.publicKey}
                 </code>
                 <button type="button" onClick={() => handleCopy(newKeypair.publicKey, "pub")} className="rounded-md border px-2 py-1.5 text-xs shrink-0">
-                  {copied === "pub" ? "Copied" : "Copy"}
+                  {copied === "pub" ? tc("copied") : tc("copy")}
                 </button>
               </div>
             </div>
             <div>
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Secret key (backup and never share)</p>
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t("secretKeyLabel")}</p>
               <div className="flex flex-wrap items-center gap-2">
                 <code className="flex-1 min-w-0 font-mono text-sm break-all bg-red-50 dark:bg-red-900/20 px-2 py-1.5 rounded">
                   {newKeypair.secretKey}
                 </code>
                 <button type="button" onClick={() => handleCopy(newKeypair.secretKey, "secret")} className="rounded-md border border-red-300 dark:border-red-700 px-2 py-1.5 text-xs shrink-0 text-red-700 dark:text-red-400">
-                  {copied === "secret" ? "Copied" : "Copy"}
+                  {copied === "secret" ? tc("copied") : tc("copy")}
                 </button>
               </div>
             </div>
@@ -517,7 +889,7 @@ export default function ProfilePage() {
                 onChange={(e) => setBackupConfirmed(e.target.checked)}
                 className="rounded border-gray-300 dark:border-gray-600"
               />
-              <span className="text-sm">I’ve saved my secret key and won’t lose it</span>
+              <span className="text-sm">{t("backupConfirmCheckbox")}</span>
             </label>
             {createError && <p className="text-sm text-red-600 dark:text-red-400">{createError}</p>}
             <div className="flex flex-wrap gap-2">
@@ -527,7 +899,7 @@ export default function ProfilePage() {
                 onClick={handleConfirmBackupAndRegister}
                 className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-2 text-sm font-medium disabled:opacity-50"
               >
-                {createStep === "registering" ? "Registering…" : "Register wallet"}
+                {createStep === "registering" ? t("registering") : t("registerWallet")}
               </button>
               <button
                 type="button"
@@ -535,14 +907,14 @@ export default function ProfilePage() {
                 disabled={createStep === "registering"}
                 className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm font-medium"
               >
-                Cancel
+                {tc("cancel")}
               </button>
             </div>
           </div>
         ) : (
           <div className="mt-4 space-y-3">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              No wallet linked yet. Create one or connect an existing Stellar account.
+              {t("noWalletLinked")}
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -550,19 +922,19 @@ export default function ProfilePage() {
                 onClick={handleCreateWallet}
                 className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-2 text-sm font-medium hover:opacity-90"
               >
-                Create new wallet
+                {t("createNewWallet")}
               </button>
               <button
                 type="button"
                 className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
               >
-                Connect existing wallet
+                {t("connectExistingWallet")}
               </button>
               {!profile.allowed && (
                 <>
                   <span className="text-gray-400 dark:text-gray-500">·</span>
                   {activationRequested ? (
-                    <span className="text-sm text-amber-600 dark:text-amber-400">Activation requested</span>
+                    <span className="text-sm text-amber-600 dark:text-amber-400">{t("activationRequested")}</span>
                   ) : (
                     <button
                       type="button"
@@ -570,14 +942,14 @@ export default function ProfilePage() {
                       onClick={handleRequestActivation}
                       className="rounded-md border border-amber-500 dark:border-amber-600 text-amber-700 dark:text-amber-400 px-2 py-1.5 text-xs font-medium hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50"
                     >
-                      {requestingActivation ? "…" : "Request activation"}
+                      {requestingActivation ? t("requestActivationLoading") : t("requestActivation")}
                     </button>
                   )}
                 </>
               )}
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Create: we generate a keypair in your browser; you back up the secret. Connect: you prove ownership by signing a message.
+              {t("createVsConnectNote")}
             </p>
           </div>
         )}
@@ -585,45 +957,144 @@ export default function ProfilePage() {
 
       {/* Recovery methods (no 2FA toggle – Privy handles it) */}
       <section className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6">
-        <h2 className="text-lg font-semibold">Recovery methods</h2>
+        <h2 className="text-lg font-semibold">{t("recoveryMethodsTitle")}</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Login uses Privy (email + passkey). Configure wallet recovery in Settings.
+          {t("recoveryMethodsBody")}
         </p>
         <ul className="mt-4 space-y-3">
           <li className="flex items-center justify-between gap-4 py-2 border-b border-gray-100 dark:border-gray-700/50">
             <div>
-              <p className="font-medium text-sm">Login (Privy)</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Email and passkey — 2FA is handled by Privy</p>
+              <p className="font-medium text-sm">{t("loginPrivy")}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("loginPrivySub")}</p>
             </div>
           </li>
           <li className="flex items-center justify-between gap-4 py-2 border-b border-gray-100 dark:border-gray-700/50">
             <div>
-              <p className="font-medium text-sm">Recovery phrase</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Back up your wallet secret (shown when you create a wallet)</p>
+              <p className="font-medium text-sm">{t("recoveryPhrase")}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("recoveryPhraseSub")}</p>
             </div>
             <Link href="/dashboard/settings#recovery" className="text-sm text-blue-600 dark:text-blue-400 hover:underline shrink-0">
-              Settings
+              {t("settings")}
             </Link>
           </li>
           <li className="flex items-center justify-between gap-4 py-2">
             <div>
-              <p className="font-medium text-sm">Recovery email</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Fallback for account recovery</p>
+              <p className="font-medium text-sm">{t("recoveryEmail")}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("recoveryEmailSub")}</p>
             </div>
             <Link href="/dashboard/settings#recovery" className="text-sm text-blue-600 dark:text-blue-400 hover:underline shrink-0">
-              Settings
+              {t("settings")}
             </Link>
           </li>
         </ul>
         <Link href="/dashboard/settings#recovery" className="mt-4 inline-block rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm font-medium">
-          Open Settings to manage recovery
+          {t("openSettingsRecovery")}
         </Link>
       </section>
 
       {profile.allowed && (
         <p className="mt-6 text-sm text-gray-500 dark:text-gray-400">
-          Your profile is activated. You can use your Stellar wallet for payments.
+          {t("profileActivated")}
         </p>
+      )}
+
+      {/* Modal: recovery — enter recovery code and new payout password */}
+      {showRecoveryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" role="dialog" aria-modal="true" aria-labelledby="recovery-modal-title">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
+            <h2 id="recovery-modal-title" className="text-lg font-semibold text-gray-900 dark:text-white">{t("resetPayoutPasswordTitle")}</h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{t("resetPayoutPasswordBody")}</p>
+            <form onSubmit={handleRecoverySubmit} className="mt-4 space-y-3">
+              <div>
+                <label htmlFor="recovery-code" className="block text-sm font-medium">{t("recoveryCodeLabel")}</label>
+                <input id="recovery-code" type="text" value={recoveryCodeInput} onChange={(e) => setRecoveryCodeInput(e.target.value)} className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2" autoComplete="off" />
+              </div>
+              <div>
+                <label htmlFor="recovery-new-password" className="block text-sm font-medium">{t("newPayoutPasswordLabel")}</label>
+                <input id="recovery-new-password" type="password" value={recoveryNewPassword} onChange={(e) => setRecoveryNewPassword(e.target.value)} className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2" autoComplete="new-password" />
+              </div>
+              {recoveryError && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{recoveryError}</p>}
+              <div className="flex gap-2">
+                <button type="submit" disabled={recoverySubmitting || !recoveryCodeInput.trim() || !recoveryNewPassword.trim()} className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 text-sm font-medium disabled:opacity-50">{recoverySubmitting ? t("resetting") : t("resetPassword")}</button>
+                <button type="button" onClick={() => { setShowRecoveryModal(false); setRecoveryError(null); }} className="rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm">{tc("cancel")}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: migration — paste secret and set payout password */}
+      {showMigrationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" role="dialog" aria-modal="true" aria-labelledby="migration-modal-title">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
+            <h2 id="migration-modal-title" className="text-lg font-semibold text-gray-900 dark:text-white">{t("migrationModalTitle")}</h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{t("migrationModalBody")}</p>
+            <form onSubmit={handleMigrationSubmit} className="mt-4 space-y-3">
+              <div>
+                <label htmlFor="migration-secret" className="block text-sm font-medium">{t("orgWalletSecretLabel")}</label>
+                <input id="migration-secret" type="password" value={migrationSecretInput} onChange={(e) => setMigrationSecretInput(e.target.value)} placeholder="S..." className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 font-mono text-sm" autoComplete="off" />
+              </div>
+              <div>
+                <label htmlFor="migration-password" className="block text-sm font-medium">{t("newPayoutPasswordLabel")}</label>
+                <input id="migration-password" type="password" value={migrationPasswordInput} onChange={(e) => setMigrationPasswordInput(e.target.value)} className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2" autoComplete="new-password" />
+              </div>
+              {migrationError && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{migrationError}</p>}
+              <div className="flex gap-2">
+                <button type="submit" disabled={migrationSubmitting || !migrationSecretInput.trim() || !migrationPasswordInput.trim()} className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 text-sm font-medium disabled:opacity-50">{migrationSubmitting ? t("reSecuring") : t("reSecureWallet")}</button>
+                <button type="button" onClick={() => { setShowMigrationModal(false); setMigrationError(null); }} className="rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm">{tc("cancel")}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: authenticate to sign transaction (wallet secret, not stored) */}
+      {showTrustlineModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" role="dialog" aria-modal="true" aria-labelledby="trustline-modal-title">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
+            <h2 id="trustline-modal-title" className="text-lg font-semibold text-gray-900 dark:text-white">
+              {t("signTransactionTitle")}
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              {t("signTransactionBody")}
+            </p>
+            <input
+              type="password"
+              value={trustlineSecretInput}
+              onChange={(e) => setTrustlineSecretInput(e.target.value)}
+              placeholder={t("secretKeyPlaceholderShort")}
+              className="mt-4 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-500"
+              autoComplete="off"
+            />
+            {trustlineError && (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400" role="alert">
+                {trustlineError}
+              </p>
+            )}
+            <div className="mt-6 flex flex-wrap gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowTrustlineModal(false);
+                  setTrustlineError(null);
+                  setTrustlineSecretInput("");
+                }}
+                disabled={trustlineSigning}
+                className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50"
+              >
+                {tc("cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitTrustline}
+                disabled={trustlineSigning || !trustlineSecretInput.trim()}
+                className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-2 text-sm font-medium disabled:opacity-50"
+              >
+                {trustlineSigning ? t("signing") : t("signAndSubmit")}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 
 interface Tx {
   id: string;
@@ -13,6 +14,7 @@ interface Tx {
 }
 
 export default function TransactionsPage() {
+  const t = useTranslations("transactionsPage");
   const [list, setList] = useState<Tx[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -25,9 +27,9 @@ export default function TransactionsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">Transactions</h1>
+      <h1 className="text-2xl font-bold">{t("title")}</h1>
       <p className="mt-1 text-gray-600 dark:text-gray-400">
-        Organization wallet activity. Date, amount, type, source, status. Each row links to Stellar Expert.
+        {t("subtitle")}
       </p>
       {loading ? (
         <div className="mt-6 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -36,18 +38,18 @@ export default function TransactionsPage() {
           <div className="animate-pulse h-12 bg-gray-100 dark:bg-gray-800" />
         </div>
       ) : list.length === 0 ? (
-        <p className="mt-6 text-gray-500 dark:text-gray-400">No transactions yet.</p>
+        <p className="mt-6 text-gray-500 dark:text-gray-400">{t("empty")}</p>
       ) : (
         <div className="mt-6 rounded-lg border border-gray-200 dark:border-gray-700 overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-800/50">
               <tr>
-                <th className="text-left p-3 font-medium">Date</th>
-                <th className="text-left p-3 font-medium">Amount</th>
-                <th className="text-left p-3 font-medium">Type</th>
-                <th className="text-left p-3 font-medium">Source</th>
-                <th className="text-left p-3 font-medium">Status</th>
-                <th className="text-left p-3 font-medium">Stellar Expert</th>
+                <th className="text-left p-3 font-medium">{t("columns.date")}</th>
+                <th className="text-left p-3 font-medium">{t("columns.amount")}</th>
+                <th className="text-left p-3 font-medium">{t("columns.type")}</th>
+                <th className="text-left p-3 font-medium">{t("columns.source")}</th>
+                <th className="text-left p-3 font-medium">{t("columns.status")}</th>
+                <th className="text-left p-3 font-medium">{t("columns.stellarExpert")}</th>
               </tr>
             </thead>
             <tbody>
@@ -70,7 +72,7 @@ export default function TransactionsPage() {
                       rel="noopener noreferrer"
                       className="text-blue-600 dark:text-blue-400 hover:underline"
                     >
-                      View
+                      {t("view")}
                     </a>
                   </td>
                 </tr>

@@ -58,6 +58,17 @@ export async function getUserByPrivyId(
   return (data as User) ?? null;
 }
 
+export async function getUserById(id: number): Promise<User | null> {
+  const { data } = await getSupabase()
+    .from("users")
+    .select("*")
+    .eq("id", id)
+    .limit(1)
+    .maybeSingle();
+
+  return (data as User) ?? null;
+}
+
 export async function setActivationRequested(privyUserId: string): Promise<User | null> {
   const { data, error } = await getSupabase()
     .from("users")
@@ -138,6 +149,19 @@ export async function updateUserOrgId(
   const { data, error } = await getSupabase()
     .from("users")
     .update({ org_id: orgId, updated_at: new Date().toISOString() })
+    .eq("privy_user_id", privyUserId)
+    .select()
+    .single();
+
+  if (error) return null;
+  return data as User;
+}
+
+/** Clears org_id (e.g. org row deleted or broken FK). */
+export async function clearUserOrgId(privyUserId: string): Promise<User | null> {
+  const { data, error } = await getSupabase()
+    .from("users")
+    .update({ org_id: null, updated_at: new Date().toISOString() })
     .eq("privy_user_id", privyUserId)
     .select()
     .single();

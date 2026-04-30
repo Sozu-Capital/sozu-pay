@@ -15,12 +15,15 @@
     "@stellar/stellar-sdk": "^14.0.0",
     "@supabase/supabase-js": "^2.98.0",
     "next": "^15.0.0",
+    "next-intl": "^4.9.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "server-only": "^0.0.1"
+    "server-only": "^0.0.1",
+    "smart-account-kit": "^0.2.10"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.0.0",
+    "@playwright/test": "^1.59.1",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

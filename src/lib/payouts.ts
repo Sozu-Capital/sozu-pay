@@ -68,6 +68,11 @@ export function listPayouts(userId: string, limit: number = 50): PayoutRecord[] 
     .slice(0, limit);
 }
 
+export function getPayoutById(id: string, userId: string): PayoutRecord | null {
+  const r = store.find((x) => x.id === id && x.userId === userId);
+  return r ?? null;
+}
+
 export function stellarExpertTxUrl(hash: string): string {
   return `${STELLAR_EXPERT_BASE}/tx/${hash}`;
 }

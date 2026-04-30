@@ -13,6 +13,7 @@ const AUTH_MOCK =
 export function middleware(request: NextRequest) {
   const session = request.cookies.get("sozupay_session")?.value;
   const isLogin = request.nextUrl.pathname.startsWith("/login");
+  const isHome = request.nextUrl.pathname === "/";
   const isAuthApi =
     request.nextUrl.pathname.startsWith("/api/auth/verify") ||
     request.nextUrl.pathname.startsWith("/api/auth/send-link") ||
@@ -20,12 +21,17 @@ export function middleware(request: NextRequest) {
 
   if (isAuthApi) return NextResponse.next();
 
-  // Mock auth (no Privy): allow all routes; redirect to dashboard if logged in and on /login
+  // Mock auth (no Privy): allow all routes; redirect to dashboard if logged in on / or /login
   if (AUTH_MOCK) {
-    if (isLogin && session) {
+    if ((isLogin || isHome) && session) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
     return NextResponse.next();
+  }
+
+  // Privy: logged-in users shouldn’t see the home gate; /login is special (session clear on that route).
+  if (isHome && session) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   // Privy auth: protect dashboard and onboarding; do NOT redirect away from /login when session exists
@@ -33,12 +39,27 @@ export function middleware(request: NextRequest) {
   const isDashboard = request.nextUrl.pathname.startsWith("/dashboard");
   const isOnboarding = request.nextUrl.pathname.startsWith("/onboarding");
   const isAuthSuccess = request.nextUrl.pathname === "/auth/success";
+  const isSdpRegister = request.nextUrl.pathname.startsWith("/sdp/register");
   if ((isDashboard || isOnboarding || isAuthSuccess) && !session) {
     return NextResponse.redirect(new URL("/login", request.url));
+  }
+  if (isSdpRegister && !session) {
+    const login = new URL("/login", request.url);
+    login.searchParams.set("sdpInvite", "1");
+    return NextResponse.redirect(login);
   }
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/onboarding/:path*", "/auth/success", "/login", "/api/auth/verify", "/api/auth/send-link"],
+  matcher: [
+    "/",
+    "/dashboard/:path*",
+    "/onboarding/:path*",
+    "/auth/success",
+    "/login",
+    "/sdp/register",
+    "/api/auth/verify",
+    "/api/auth/send-link",
+  ],
 };

@@ -1,17 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 
 type PendingUser = {
   id: number;
   privy_user_id: string;
   email: string;
   stellar_public_key: string | null;
-  stellar_smart_account_address?: string | null;
   allowed: boolean;
   activation_requested_at: string | null;
-  activation_requested_org_id?: string | null;
-  requested_org_name?: string | null;
 };
 
 const STELLAR_EXPERT_BASE =
@@ -20,6 +18,8 @@ const STELLAR_EXPERT_BASE =
     : "https://stellar.expert/explorer/testnet";
 
 export default function AdminPage() {
+  const t = useTranslations("adminPage");
+  const tc = useTranslations("common");
   const [users, setUsers] = useState<PendingUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
@@ -54,7 +54,7 @@ export default function AdminPage() {
         setUsers((prev) => prev.filter((u) => u.privy_user_id !== privyUserId));
         setLastResult({ funded: data.funded, fund_tx_hash: data.fund_tx_hash });
       } else {
-        setLastResult({ error: data.error ?? data.details ?? "Activation failed" });
+        setLastResult({ error: data.error ?? data.details ?? t("activationFailed") });
       }
     } finally {
       setActivatingId(null);
@@ -62,26 +62,23 @@ export default function AdminPage() {
   };
 
   if (loading) {
-    return <div className="text-gray-500 dark:text-gray-400">Loading…</div>;
+    return <div className="text-gray-500 dark:text-gray-400">{tc("loading")}</div>;
   }
 
   if (forbidden) {
     return (
       <div>
-        <h1 className="text-2xl font-bold">Admin</h1>
-        <p className="mt-2 text-red-600 dark:text-red-400">You don’t have permission to view this page.</p>
+        <h1 className="text-2xl font-bold">{t("title")}</h1>
+        <p className="mt-2 text-red-600 dark:text-red-400">{t("forbidden")}</p>
       </div>
     );
   }
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">Admin</h1>
+      <h1 className="text-2xl font-bold">{t("title")}</h1>
       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-        Activate user profiles and fund their wallet. Classic accounts (G...) are funded with XLM via createAccount; smart accounts (C...) are funded via XLM Payment. Requires STELLAR_FUNDER_SECRET.
-      </p>
-      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-        Network: <span className="font-medium capitalize">{process.env.NEXT_PUBLIC_STELLAR_NETWORK === "public" ? "mainnet" : "testnet"}</span>
+        {t("subtitle")}
       </p>
       {lastResult && (
         <div className="mt-3 p-3 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm">
@@ -91,10 +88,10 @@ export default function AdminPage() {
             <>
               {lastResult.funded && lastResult.fund_tx_hash ? (
                 <p className="text-green-700 dark:text-green-400">
-                  User allowed and account funded. Tx: {lastResult.fund_tx_hash.slice(0, 12)}…
+                  {t("fundedOk", { hash: lastResult.fund_tx_hash.slice(0, 12) })}
                 </p>
               ) : (
-                <p className="text-gray-600 dark:text-gray-400">User allowed. (No G address to fund or STELLAR_FUNDER_SECRET not set.)</p>
+                <p className="text-gray-600 dark:text-gray-400">{t("allowedNoFund")}</p>
               )}
             </>
           )}
@@ -102,10 +99,10 @@ export default function AdminPage() {
       )}
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold">Pending activation requests</h2>
+        <h2 className="text-lg font-semibold">{t("pendingTitle")}</h2>
         {users.length === 0 ? (
           <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
-            No pending requests.
+            {t("noPending")}
           </p>
         ) : (
           <ul className="mt-4 space-y-4">
@@ -117,33 +114,25 @@ export default function AdminPage() {
                 <div>
                   <p className="font-medium">{u.email}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    Requested: {u.activation_requested_at ? new Date(u.activation_requested_at).toLocaleString() : "—"}
+                    {t("requested", {
+                      when: u.activation_requested_at ? new Date(u.activation_requested_at).toLocaleString() : "—",
+                    })}
                   </p>
-                  {u.requested_org_name ? (
-                    <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">
-                      Requested as org admin: {u.requested_org_name}
-                    </p>
-                  ) : u.activation_requested_org_id ? (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Requested (org id: {u.activation_requested_org_id})</p>
-                  ) : null}
-                  {(u.stellar_smart_account_address || u.stellar_public_key) && (
+                  {u.stellar_public_key && (
                     <p className="text-xs font-mono text-gray-600 dark:text-gray-300 mt-1 break-all">
-                      {u.stellar_smart_account_address ?? u.stellar_public_key}
-                      {u.stellar_smart_account_address && (
-                        <span className="text-gray-400 dark:text-gray-500 ml-1">(C)</span>
-                      )}
+                      {u.stellar_public_key}
                     </p>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {(u.stellar_smart_account_address || u.stellar_public_key) && (
+                  {u.stellar_public_key && (
                     <a
-                      href={`${STELLAR_EXPERT_BASE}/account/${u.stellar_smart_account_address ?? u.stellar_public_key}`}
+                      href={`${STELLAR_EXPERT_BASE}/account/${u.stellar_public_key}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
-                      Stellar Expert
+                      {t("stellarExpert")}
                     </a>
                   )}
                   <button
@@ -152,7 +141,7 @@ export default function AdminPage() {
                     onClick={() => handleActivate(u.privy_user_id)}
                     className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-1.5 text-sm font-medium disabled:opacity-50"
                   >
-                    {activatingId === u.privy_user_id ? "Activating…" : "Activate"}
+                    {activatingId === u.privy_user_id ? t("activating") : t("activate")}
                   </button>
                 </div>
               </li>
@@ -162,7 +151,7 @@ export default function AdminPage() {
       </section>
 
       <p className="mt-6 text-xs text-gray-500 dark:text-gray-400">
-        Activate sets the user as allowed and funds their wallet (XLM). If they requested in org context, they are assigned as org admin. G accounts get createAccount; C accounts get a Payment. After activation, G-account users can add the USDC trustline from Profile.
+        {t("footnote")}
       </p>
     </div>
   );

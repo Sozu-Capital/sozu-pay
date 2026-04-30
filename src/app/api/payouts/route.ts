@@ -16,6 +16,8 @@ import {
   UNLOCK_COOKIE_NAME,
 } from "@/lib/auth/wallet-unlock";
 import { decryptOrgSecret } from "@/lib/org-secret";
+import { isUserDerivedEncrypted } from "@/lib/org-wallet-encryption";
+import { buildUnsignedUsdcEnvelope } from "@/lib/stellar/sendUsdc";
 import type { Organization } from "@/lib/db/organizations";
 
 const LARGE_PAYOUT_THRESHOLD = 1000;
@@ -26,9 +28,10 @@ function getSignerPublicKey(signerSecretKey: string | undefined, org: Organizati
   return org?.stellar_disbursement_public_key ?? getOrgDisbursementPublicKey() ?? undefined;
 }
 
-/** If the org has a stored encrypted disbursement secret, decrypt and return it; else undefined. */
+/** If the org has a stored encrypted disbursement secret (legacy only), decrypt and return it; else undefined. */
 function getOrgStoredSignerSecret(org: Organization | null): string | undefined {
   if (!org?.stellar_disbursement_secret_encrypted) return undefined;
+  if (isUserDerivedEncrypted(org.stellar_disbursement_secret_encrypted)) return undefined;
   try {
     return decryptOrgSecret(org.id, org.stellar_disbursement_secret_encrypted);
   } catch {
@@ -38,8 +41,8 @@ function getOrgStoredSignerSecret(org: Organization | null): string | undefined 
 
 /**
  * Resolve signer secret for Stellar payout:
- * 1) Org's stored encrypted key (org wallet signs), 2) unlocked super_admin key (memory then cookie), 3) undefined (sendUsdc uses env org key).
- * Returns { signerSecretKey, requireUnlock }.
+ * 1) Org's stored encrypted key (legacy only), 2) unlocked super_admin key (memory then cookie), 3) undefined (sendUsdc uses env org key).
+ * For user-derived encrypted orgs, server cannot decrypt; returns requirePayoutPassword so client signs.
  */
 function resolveStellarSigner(
   sessionId: string,
@@ -48,16 +51,20 @@ function resolveStellarSigner(
 ): {
   signerSecretKey: string | undefined;
   requireUnlock: boolean;
+  requirePayoutPassword: boolean;
 } {
+  if (org?.stellar_disbursement_secret_encrypted && isUserDerivedEncrypted(org.stellar_disbursement_secret_encrypted)) {
+    return { signerSecretKey: undefined, requireUnlock: true, requirePayoutPassword: true };
+  }
   const orgStored = getOrgStoredSignerSecret(org);
-  if (orgStored) return { signerSecretKey: orgStored, requireUnlock: false };
+  if (orgStored) return { signerSecretKey: orgStored, requireUnlock: false, requirePayoutPassword: false };
   const fromMemory = getUnlockedKey(sessionId);
-  if (fromMemory) return { signerSecretKey: fromMemory, requireUnlock: false };
+  if (fromMemory) return { signerSecretKey: fromMemory, requireUnlock: false, requirePayoutPassword: false };
   const fromCookie = getUnlockedKeyFromCookie(cookieValue);
-  if (fromCookie) return { signerSecretKey: fromCookie, requireUnlock: false };
+  if (fromCookie) return { signerSecretKey: fromCookie, requireUnlock: false, requirePayoutPassword: false };
   const hasOrgKey = !!getOrgDisbursementPublicKey();
-  if (hasOrgKey) return { signerSecretKey: undefined, requireUnlock: false };
-  return { signerSecretKey: undefined, requireUnlock: true };
+  if (hasOrgKey) return { signerSecretKey: undefined, requireUnlock: false, requirePayoutPassword: false };
+  return { signerSecretKey: undefined, requireUnlock: true, requirePayoutPassword: false };
 }
 
 /** Try sendUsdc from org wallet; if org wallet doesn't exist on network, fund it (when STELLAR_FUNDER_SECRET is set) and retry once. */
@@ -194,7 +201,13 @@ export async function POST(request: NextRequest) {
       orgSorobanContractId = org?.soroban_contract_id ?? null;
       const cookieStore = await cookies();
       const unlockCookie = cookieStore.get(UNLOCK_COOKIE_NAME)?.value;
-      const { signerSecretKey, requireUnlock } = resolveStellarSigner(session.id, unlockCookie, org);
+      const { signerSecretKey, requireUnlock, requirePayoutPassword } = resolveStellarSigner(session.id, unlockCookie, org);
+      if (requirePayoutPassword) {
+        return NextResponse.json(
+          { error: "Your org wallet uses a payout password. Send Stellar payouts one at a time from Recipients or Payouts; you will be prompted for your payout password.", requireUnlock: true },
+          { status: 403 }
+        );
+      }
       if (orgSorobanContractId && !signerSecretKey) {
         return NextResponse.json(
           { error: "Unlock your payout wallet to send Soroban payouts.", requireUnlock: true },
@@ -290,7 +303,46 @@ export async function POST(request: NextRequest) {
     const sorobanContractId = org?.soroban_contract_id ?? null;
     const cookieStore = await cookies();
     const unlockCookie = cookieStore.get(UNLOCK_COOKIE_NAME)?.value;
-    const { signerSecretKey, requireUnlock } = resolveStellarSigner(session.id, unlockCookie, org);
+    const { signerSecretKey, requireUnlock, requirePayoutPassword } = resolveStellarSigner(session.id, unlockCookie, org);
+    const destination = body.destination.trim();
+    const recipientLabel = body.recipientLabel;
+
+    if (requirePayoutPassword && org?.stellar_disbursement_public_key) {
+      const record = createPayout(session.id, amount, {
+        type: "to_stellar",
+        stellarAddress: destination,
+        recipientLabel,
+      });
+      try {
+        const { envelopeXdr, network } = await buildUnsignedUsdcEnvelope(
+          org.stellar_disbursement_public_key,
+          destination,
+          amount
+        );
+        return NextResponse.json(
+          {
+            error: "Enter your payout password to sign this transaction.",
+            requireUnlock: true,
+            requirePayoutPassword: true,
+            payoutId: record.id,
+            unsignedEnvelopeXdr: envelopeXdr,
+            network,
+            amount,
+            destination,
+            recipientLabel,
+          },
+          { status: 403 }
+        );
+      } catch (err) {
+        failPayout(record.id);
+        const msg = err instanceof Error ? err.message : "Failed to build transaction";
+        return NextResponse.json(
+          { error: `Payout failed: ${msg}`, payoutId: record.id },
+          { status: 502 }
+        );
+      }
+    }
+
     if (sorobanContractId && !signerSecretKey) {
       return NextResponse.json(
         { error: "Unlock your payout wallet to send Soroban payouts.", requireUnlock: true },
@@ -309,11 +361,10 @@ export async function POST(request: NextRequest) {
         { status: 503 }
       );
     }
-    const destination = body.destination.trim();
     const record = createPayout(session.id, amount, {
       type: "to_stellar",
       stellarAddress: destination,
-      recipientLabel: body.recipientLabel,
+      recipientLabel,
     });
     try {
       const txHash = await executeStellarPayout(
@@ -333,7 +384,7 @@ export async function POST(request: NextRequest) {
           amount,
           stellarTxHash: txHash,
           destination,
-          recipientLabel: body.recipientLabel,
+          recipientLabel,
         }
       );
     } catch (err) {

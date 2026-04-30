@@ -1,16 +1,19 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 export default function OnboardingChecklist() {
+  const t = useTranslations("onboardingChecklist");
   const items = [
-    { label: "Add a bank account", href: "/dashboard/settings#bank", done: false },
-    { label: "Create a payment wall", href: "/dashboard/walls", done: false },
-    { label: "Link your store", href: "/dashboard/settings#stores", done: false },
+    { label: t("bank"), href: "/dashboard/settings#bank", done: false },
+    { label: t("wall"), href: "/dashboard/walls", done: false },
+    { label: t("store"), href: "/dashboard/settings#stores", done: false },
   ];
 
   return (
     <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-4">
       <h2 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
-        Get started
+        {t("title")}
       </h2>
       <ul className="space-y-2">
         {items.map((item) => (

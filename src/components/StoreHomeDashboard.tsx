@@ -1,0 +1,120 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { useTranslations } from "next-intl";
+import DashboardTransactions from "@/components/DashboardTransactions";
+
+type BalanceData = {
+  usdc: string;
+  available: string;
+  localFiatAmount: string;
+  localFiatCurrency: string;
+  rateSource: string;
+};
+
+export default function StoreHomeDashboard() {
+  const t = useTranslations("storeDashboard");
+  const [balance, setBalance] = useState<BalanceData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/balance")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        setBalance({
+          usdc: d.usdc ?? "0",
+          available: d.available ?? "0",
+          localFiatAmount: d.localFiatAmount ?? d.fiatAmount ?? "0.00",
+          localFiatCurrency: d.localFiatCurrency ?? d.fiatCurrency ?? "USD",
+          rateSource: d.rateSource ?? "",
+        });
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  // USDC is always 1:1 with USD — show as dollars
+  const usdBalance = parseFloat(balance?.usdc ?? "0").toFixed(2);
+  const showLocalFiat = balance && balance.localFiatCurrency !== "USD";
+
+  return (
+    <div className="space-y-8">
+      {/* Balance hero */}
+      <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-8">
+        <p className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+          {t("balanceLabel")}
+        </p>
+        {loading ? (
+          <div className="mt-3 h-10 w-48 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+        ) : (
+          <>
+            <p className="mt-2 text-4xl font-bold tracking-tight tabular-nums">
+              ${usdBalance}{" "}
+              <span className="text-2xl font-medium text-gray-500 dark:text-gray-400">
+                USD
+              </span>
+            </p>
+            {showLocalFiat && (
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {t("estimatedIn", {
+                  amount: balance!.localFiatAmount,
+                  currency: balance!.localFiatCurrency,
+                })}
+              </p>
+            )}
+            {balance?.rateSource && (
+              <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                {balance.rateSource}
+              </p>
+            )}
+          </>
+        )}
+
+        {/* Quick actions */}
+        <div className="mt-6 grid grid-cols-3 gap-3">
+          <Link
+            href="/dashboard/checkout"
+            className="flex flex-col items-center gap-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-5 text-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40">
+              <svg className="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </span>
+            <span className="text-sm font-medium">{t("actionGetPaid")}</span>
+          </Link>
+
+          <Link
+            href="/dashboard/recipients"
+            className="flex flex-col items-center gap-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-5 text-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/40">
+              <svg className="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
+              </svg>
+            </span>
+            <span className="text-sm font-medium">{t("actionPaySupplier")}</span>
+          </Link>
+
+          <Link
+            href="/dashboard/cashout"
+            className="flex flex-col items-center gap-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-5 text-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-900/40">
+              <svg className="h-5 w-5 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+            </span>
+            <span className="text-sm font-medium">{t("actionCashOut")}</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* Recent transactions */}
+      <section>
+        <DashboardTransactions />
+      </section>
+    </div>
+  );
+}

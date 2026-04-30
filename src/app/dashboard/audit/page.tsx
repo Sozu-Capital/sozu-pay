@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 interface PayoutAuditMetadata {
   signerWallet?: string;
@@ -22,6 +23,7 @@ interface AuditEvent {
 }
 
 export default function AuditPage() {
+  const t = useTranslations("auditPage");
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
@@ -40,9 +42,9 @@ export default function AuditPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">Audit log</h1>
+      <h1 className="text-2xl font-bold">{t("title")}</h1>
       <p className="mt-1 text-gray-600 dark:text-gray-400">
-        Bank account added, recovery method changed, payout to X, etc.
+        {t("subtitle")}
       </p>
       {loading ? (
         <div className="mt-6 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -50,7 +52,7 @@ export default function AuditPage() {
           <div className="animate-pulse h-12 bg-gray-50 dark:bg-gray-800/50" />
         </div>
       ) : events.length === 0 ? (
-        <p className="mt-6 text-gray-500 dark:text-gray-400">No audit events yet.</p>
+        <p className="mt-6 text-gray-500 dark:text-gray-400">{t("empty")}</p>
       ) : (
         <div className="mt-6 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
           <ul className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -64,19 +66,19 @@ export default function AuditPage() {
                   {e.metadata && (e.metadata.signerWallet ?? e.metadata.amount ?? e.metadata.recipientId ?? e.metadata.destination ?? e.metadata.recipientLabel) && (
                     <div className="mt-2 text-xs text-gray-600 dark:text-gray-400 space-y-0.5">
                       {e.metadata.signerWallet && (
-                        <p><span className="text-gray-500 dark:text-gray-500">Signer:</span> <span className="font-mono">{e.metadata.signerWallet.slice(0, 8)}…{e.metadata.signerWallet.slice(-4)}</span></p>
+                        <p><span className="text-gray-500 dark:text-gray-500">{t("signer")}:</span> <span className="font-mono">{e.metadata.signerWallet.slice(0, 8)}…{e.metadata.signerWallet.slice(-4)}</span></p>
                       )}
                       {e.metadata.recipientId && (
-                        <p><span className="text-gray-500 dark:text-gray-500">Recipient ID:</span> {e.metadata.recipientId}</p>
+                        <p><span className="text-gray-500 dark:text-gray-500">{t("recipientId")}:</span> {e.metadata.recipientId}</p>
                       )}
                       {e.metadata.amount != null && (
-                        <p><span className="text-gray-500 dark:text-gray-500">Amount:</span> {e.metadata.amount} USDC</p>
+                        <p><span className="text-gray-500 dark:text-gray-500">{t("amount")}:</span> {e.metadata.amount} USDC</p>
                       )}
                       {e.metadata.destination && (
-                        <p><span className="text-gray-500 dark:text-gray-500">Destination:</span> <span className="font-mono">{e.metadata.destination.slice(0, 8)}…{e.metadata.destination.slice(-4)}</span></p>
+                        <p><span className="text-gray-500 dark:text-gray-500">{t("destination")}:</span> <span className="font-mono">{e.metadata.destination.slice(0, 8)}…{e.metadata.destination.slice(-4)}</span></p>
                       )}
                       {e.metadata.recipientLabel && !e.message.includes(e.metadata.recipientLabel) && (
-                        <p><span className="text-gray-500 dark:text-gray-500">Recipient:</span> {e.metadata.recipientLabel}</p>
+                        <p><span className="text-gray-500 dark:text-gray-500">{t("recipient")}:</span> {e.metadata.recipientLabel}</p>
                       )}
                     </div>
                   )}
@@ -86,7 +88,7 @@ export default function AuditPage() {
                     href="/dashboard/admin"
                     className="shrink-0 rounded border border-gray-300 dark:border-gray-600 px-2 py-1 text-xs font-medium hover:bg-gray-100 dark:hover:bg-gray-700"
                   >
-                    Request KYC
+                    {t("requestKyc")}
                   </Link>
                 )}
               </li>

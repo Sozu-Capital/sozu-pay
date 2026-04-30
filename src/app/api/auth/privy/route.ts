@@ -3,6 +3,10 @@ import { cookies } from "next/headers";
 import { verifyAccessToken } from "@privy-io/node";
 import { setSession } from "@/lib/auth/session";
 import { getOrCreateUserByPrivy } from "@/lib/db/users";
+import {
+  parseInviteCookie,
+  SDP_INVITE_COOKIE_NAME,
+} from "@/lib/sdp/invitePayload";
 
 /**
  * Sync Privy auth to our session.
@@ -75,13 +79,18 @@ export async function POST(request: NextRequest) {
       email: user.email,
       twoFactorEnabled: false,
     });
-    await cookies();
   } catch (err) {
     console.error("[auth/privy] setSession failed:", err instanceof Error ? err.message : err, err);
     return NextResponse.json(
       { error: "Failed to set session." },
       { status: 500 }
     );
+  }
+
+  const jar = await cookies();
+  const pendingInvite = parseInviteCookie(jar.get(SDP_INVITE_COOKIE_NAME)?.value);
+  if (pendingInvite) {
+    return NextResponse.json({ ok: true, redirect: "/sdp/register" });
   }
 
   return NextResponse.json({ ok: true });

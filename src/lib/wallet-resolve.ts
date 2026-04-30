@@ -29,7 +29,7 @@ export async function getDashboardBalancePublicKey(): Promise<string | null> {
   if (!session) return null;
 
   const user = await getUserByPrivyId(session.id);
-  const orgId = session.orgId ?? user?.org_id ?? null;
+  const orgId = user?.org_id ?? session.orgId ?? null;
   if (!orgId) return null;
 
   const org = await getOrganizationForUser(orgId);

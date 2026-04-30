@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import SendUsdcForm, { type PayoutSuccess, type StellarPayoutBody } from "@/components/SendUsdcForm";
 import PayoutStatusModal, { type PayoutModalSuccess } from "@/components/PayoutStatusModal";
 import Link from "next/link";
@@ -28,6 +29,8 @@ const STELLAR_EXPERT_BASE =
     : "https://stellar.expert/explorer/testnet";
 
 export default function PayoutsPage() {
+  const t = useTranslations("payoutsPage");
+  const tc = useTranslations("common");
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -54,6 +57,18 @@ export default function PayoutsPage() {
   const [payoutModalBatchCount, setPayoutModalBatchCount] = useState<number | null>(null);
   const [pendingConfirmBody, setPendingConfirmBody] = useState<StellarPayoutBody | null>(null);
   const [pendingBatchBody, setPendingBatchBody] = useState<Record<string, unknown> | null>(null);
+  const [showPayoutPasswordModal, setShowPayoutPasswordModal] = useState(false);
+  const [payoutPasswordValue, setPayoutPasswordValue] = useState("");
+  const [payoutPasswordSubmitting, setPayoutPasswordSubmitting] = useState(false);
+  const [payoutPasswordError, setPayoutPasswordError] = useState<string | null>(null);
+  const [pendingPayoutPasswordData, setPendingPayoutPasswordData] = useState<{
+    payoutId: string;
+    unsignedEnvelopeXdr: string;
+    network: string;
+    amount: string;
+    destination: string;
+    recipientLabel?: string;
+  } | null>(null);
 
   function submitPayoutBody(body: Record<string, unknown>) {
     return fetch("/api/payouts", {
@@ -93,7 +108,7 @@ export default function PayoutsPage() {
       .then((r) => (r.ok ? r.json() : {}))
       .then((p: { org_payout_wallet_public_key?: string | null; org_stellar_disbursement_public_key?: string | null; email?: string }) => {
         setPayoutWalletAddress(p.org_payout_wallet_public_key ?? p.org_stellar_disbursement_public_key ?? null);
-        setUserDisplayName(p.email?.split("@")[0] ?? "You");
+        setUserDisplayName(p.email?.split("@")[0] ?? tc("you"));
       });
   }, []);
 
@@ -117,21 +132,21 @@ export default function PayoutsPage() {
       .then((r) => r.json())
       .then((d) => {
         if (d.error) {
-          alert(d.error + (d.required ? " Enable 2FA in Settings and try again." : ""));
+          alert(String(d.error) + (d.required ? t("alert2fa") : ""));
           return;
         }
         setShowForm(false);
         setAmount("");
         loadPayouts();
       })
-      .catch(() => alert("Payout request failed."));
+      .catch(() => alert(t("alertPayoutFailed")));
   }
 
   function handleBatchSubmit(e: React.FormEvent) {
     e.preventDefault();
     const items = batchRows.filter((row) => row.recipientId && parseFloat(row.amount) > 0);
     if (items.length === 0) {
-      alert("Add at least one recipient with an amount.");
+      alert(t("alertBatchRecipients"));
       return;
     }
     const body = {
@@ -164,9 +179,9 @@ export default function PayoutsPage() {
             return;
           }
           if (!ok) {
-            const msg = [d?.error, d.required ? "2FA required for large payouts." : null]
+            const msg = [d?.error, d.required ? t("twoFaLargePayout") : null]
               .filter(Boolean)
-              .join(" ") || "Request failed.";
+              .join(" ") || tc("requestFailed");
             setPayoutModalStatus("failed");
             setPayoutModalError(msg);
             return;
@@ -179,7 +194,7 @@ export default function PayoutsPage() {
         })
         .catch((err) => {
           setPayoutModalStatus("failed");
-          setPayoutModalError(err instanceof Error ? err.message : "Batch payout failed.");
+          setPayoutModalError(err instanceof Error ? err.message : t("batchPayoutFailed"));
         })
         .finally(() => setBatchSubmitting(false));
       return;
@@ -190,7 +205,23 @@ export default function PayoutsPage() {
       setPendingConfirmBody(null);
       submitPayoutBody(body)
         .then(({ ok, data: d }) => {
-          const data = d as { payout?: { amount?: string; stellarTxHash?: string; stellarAddress?: string; recipientLabel?: string }; error?: string; requireUnlock?: boolean };
+          const data = d as { payout?: { amount?: string; stellarTxHash?: string; stellarAddress?: string; recipientLabel?: string }; error?: string; requireUnlock?: boolean; requirePayoutPassword?: boolean; unsignedEnvelopeXdr?: string; payoutId?: string; network?: string; amount?: string; destination?: string; recipientLabel?: string };
+          if (data.requirePayoutPassword && data.unsignedEnvelopeXdr && data.payoutId) {
+            setPayoutModalOpen(false);
+            setPendingConfirmBody(null);
+            setPendingPayoutPasswordData({
+              payoutId: String(data.payoutId),
+              unsignedEnvelopeXdr: String(data.unsignedEnvelopeXdr),
+              network: String(data.network ?? "testnet"),
+              amount: String(data.amount ?? body.amount),
+              destination: String(data.destination ?? body.destination),
+              recipientLabel: data.recipientLabel ?? body.recipientLabel,
+            });
+            setPayoutPasswordValue("");
+            setPayoutPasswordError(null);
+            setShowPayoutPasswordModal(true);
+            return;
+          }
           if (data.requireUnlock && data.error) {
             setPayoutModalOpen(false);
             setPendingPayoutBody(body);
@@ -210,13 +241,65 @@ export default function PayoutsPage() {
             loadPayouts();
           } else {
             setPayoutModalStatus("failed");
-            setPayoutModalError((data.error as string) ?? "Payout failed.");
+            setPayoutModalError((data.error as string) ?? t("alertPayoutFailed"));
           }
         })
         .catch((err) => {
           setPayoutModalStatus("failed");
-          setPayoutModalError(err instanceof Error ? err.message : "Payout request failed.");
+          setPayoutModalError(err instanceof Error ? err.message : t("alertPayoutFailed"));
         });
+    }
+  }
+
+  async function handlePayoutPasswordSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const data = pendingPayoutPasswordData;
+    if (!data || !payoutPasswordValue.trim()) return;
+    setPayoutPasswordSubmitting(true);
+    setPayoutPasswordError(null);
+    try {
+      const encRes = await fetch("/api/profile/org/encrypted-secret");
+      const encJson = await encRes.json().catch(() => ({}));
+      if (!encRes.ok || !encJson.encryptedSecret) {
+        setPayoutPasswordError(encJson.error ?? tc("requestFailed"));
+        return;
+      }
+      const { decryptOrgSecretClient } = await import("@/lib/org-wallet-client-crypto");
+      const { Keypair, Transaction, Networks } = await import("@stellar/stellar-sdk");
+      const secretKey = await decryptOrgSecretClient(encJson.encryptedSecret, payoutPasswordValue.trim());
+      const keypair = Keypair.fromSecret(secretKey);
+      const networkPassphrase = data.network === "public" ? Networks.PUBLIC : Networks.TESTNET;
+      const tx = new Transaction(data.unsignedEnvelopeXdr, networkPassphrase);
+      tx.sign(keypair);
+      const signedEnvelopeXdr = tx.toEnvelope().toXDR("base64");
+      const submitRes = await fetch("/api/payouts/submit-signed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signedEnvelopeXdr, payoutId: data.payoutId }),
+      });
+      const submitJson = await submitRes.json().catch(() => ({}));
+      if (!submitRes.ok) {
+        setPayoutPasswordError((submitJson.error as string) ?? t("alertPayoutFailed"));
+        return;
+      }
+      setShowPayoutPasswordModal(false);
+      setPendingPayoutPasswordData(null);
+      setPayoutPasswordValue("");
+      const p = submitJson.payout as { amount?: string; stellarTxHash?: string; recipientLabel?: string; stellarAddress?: string };
+      setPayoutModalStatus("success");
+      setPayoutModalSuccess({
+        amount: p?.amount ?? data.amount,
+        stellarTxHash: p?.stellarTxHash,
+        recipientLabel: p?.recipientLabel ?? data.recipientLabel,
+        destination: p?.stellarAddress ?? data.destination,
+      });
+      setLastSuccess({ amount: data.amount, destination: data.destination, recipientLabel: data.recipientLabel, stellarTxHash: p?.stellarTxHash });
+      setPayoutModalOpen(true);
+      loadPayouts();
+    } catch (err) {
+      setPayoutPasswordError(err instanceof Error ? err.message : t("alertPayoutFailed"));
+    } finally {
+      setPayoutPasswordSubmitting(false);
     }
   }
 
@@ -262,11 +345,11 @@ export default function PayoutsPage() {
         } else {
           setPayoutModalOpen(true);
           setPayoutModalStatus("failed");
-          setPayoutModalError((result.data?.error as string) ?? "Payout failed.");
+          setPayoutModalError((result.data?.error as string) ?? t("alertPayoutFailed"));
           setPendingPayoutBody(null);
         }
       })
-      .catch(() => alert("Unlock or payout failed."))
+      .catch(() => alert(t("alertUnlockFailed")))
       .finally(() => setUnlockSubmitting(false));
   }
 
@@ -297,14 +380,14 @@ export default function PayoutsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">Payouts</h1>
+      <h1 className="text-2xl font-bold">{t("title")}</h1>
       <p className="mt-1 text-gray-600 dark:text-gray-400">
-        Withdraw to your bank or to providers/employees. 2FA required for large payouts.
+        {t("subtitle")}
       </p>
 
       {accounts.length === 0 && (
         <p className="mt-4 text-sm text-amber-600 dark:text-amber-400">
-          Add a bank account in Settings first (2FA required).
+          {t("addBankFirst")}
         </p>
       )}
 
@@ -315,7 +398,7 @@ export default function PayoutsPage() {
           disabled={accounts.length === 0}
           className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 font-medium disabled:opacity-50"
         >
-          New payout
+          {t("newPayout")}
         </button>
         <button
           type="button"
@@ -323,64 +406,64 @@ export default function PayoutsPage() {
           disabled={recipients.length === 0}
           className="rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2 font-medium disabled:opacity-50"
         >
-          Batch payout (multiple recipients)
+          {t("batchPayout")}
         </button>
       </div>
 
       {showBatch && (
         <form onSubmit={handleBatchSubmit} className="mt-6 max-w-2xl space-y-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-          <h3 className="font-semibold">Batch payout</h3>
+          <h3 className="font-semibold">{t("batchTitle")}</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Add recipients and amount per recipient. You can add several to the same batch.
+            {t("batchHelp")}
           </p>
           <div className="space-y-2">
             {batchRows.map((row, i) => (
               <div key={i} className="flex flex-wrap items-center gap-2">
                 <select
-                  aria-label={`Recipient ${i + 1}`}
+                  aria-label={`${t("selectRecipient")} ${i + 1}`}
                   value={row.recipientId}
                   onChange={(e) => setBatchRowRecipient(i, e.target.value)}
                   className="rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 min-w-[180px]"
                 >
-                  <option value="">Select recipient</option>
+                  <option value="">{t("selectRecipient")}</option>
                   {recipients.map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.name}
-                      {r.stellarAddress && !r.bankAccountId ? " (Stellar)" : ""}
+                      {r.stellarAddress && !r.bankAccountId ? t("stellarSuffix") : ""}
                     </option>
                   ))}
                 </select>
                 <input
                   type="text"
                   inputMode="decimal"
-                  placeholder="Amount USDC"
-                  aria-label={`Amount USDC for recipient ${i + 1}`}
+                  placeholder={t("amountUsdc")}
+                  aria-label={`${t("amountUsdc")} ${i + 1}`}
                   value={row.amount}
                   onChange={(e) => setBatchRowAmount(i, e.target.value)}
                   className="rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 w-28"
                 />
                 <button type="button" onClick={() => removeBatchRow(i)} className="text-red-600 dark:text-red-400 text-sm">
-                  Remove
+                  {t("remove")}
                 </button>
               </div>
             ))}
             {recipients.length > batchRows.length && (
               <button type="button" onClick={addBatchRow} className="text-sm text-blue-600 dark:text-blue-400">
-                + Add another recipient
+                {t("addRecipient")}
               </button>
             )}
           </div>
           <div className="flex gap-2">
             <button type="submit" disabled={batchSubmitting} className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2">
-              {batchSubmitting ? "Submitting…" : "Submit batch"}
+              {batchSubmitting ? t("submitting") : t("submitBatch")}
             </button>
             <button type="button" onClick={() => { setShowBatch(false); setBatchRows([]); }} className="rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2">
-              Cancel
+              {tc("cancel")}
             </button>
           </div>
           {recipients.length === 0 && (
             <p className="text-sm text-amber-600 dark:text-amber-400">
-              <Link href="/dashboard/recipients" className="underline">Add recipients</Link> first to use batch payout.
+              <Link href="/dashboard/recipients" className="underline">{t("addRecipientsFirst")}</Link>{t("batchNeedRecipients")}
             </p>
           )}
         </form>
@@ -389,7 +472,7 @@ export default function PayoutsPage() {
       {showForm && (
         <form onSubmit={handleSubmit} className="mt-6 max-w-md space-y-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <div>
-            <label htmlFor="payout-amount" className="block text-sm font-medium">Amount (USDC)</label>
+            <label htmlFor="payout-amount" className="block text-sm font-medium">{t("amountLabel")}</label>
             <input
               id="payout-amount"
               type="text"
@@ -401,7 +484,7 @@ export default function PayoutsPage() {
             />
           </div>
           <div>
-            <label htmlFor="payout-bank-account" className="block text-sm font-medium">Bank account</label>
+            <label htmlFor="payout-bank-account" className="block text-sm font-medium">{t("bankAccount")}</label>
             <select
               id="payout-bank-account"
               value={bankAccountId}
@@ -410,17 +493,17 @@ export default function PayoutsPage() {
             >
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.label} (…{a.last4}) {a.isDefault ? "— Default" : ""}
+                  {a.label} (…{a.last4}) {a.isDefault ? t("defaultAccount") : ""}
                 </option>
               ))}
             </select>
           </div>
           <div className="flex gap-2">
             <button type="submit" className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2">
-              Submit
+              {t("submit")}
             </button>
             <button type="button" onClick={() => setShowForm(false)} className="rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2">
-              Cancel
+              {tc("cancel")}
             </button>
           </div>
         </form>
@@ -433,11 +516,15 @@ export default function PayoutsPage() {
         >
           <div>
             <p className="font-medium text-green-800 dark:text-green-200">
-              Payout sent successfully
+              {t("payoutSent")}
             </p>
             <p className="mt-1 text-sm text-green-700 dark:text-green-300">
-              {lastSuccess.amount} USDC sent to {lastSuccess.destination.slice(0, 8)}…{lastSuccess.destination.slice(-4)}
-              {lastSuccess.recipientLabel ? ` (${lastSuccess.recipientLabel})` : ""}
+              {t("sentTo", {
+                amount: lastSuccess.amount,
+                dest: lastSuccess.destination.slice(0, 8),
+                tail: lastSuccess.destination.slice(-4),
+                label: lastSuccess.recipientLabel ? ` (${lastSuccess.recipientLabel})` : "",
+              })}
             </p>
             {lastSuccess.stellarTxHash && (
               <a
@@ -446,7 +533,7 @@ export default function PayoutsPage() {
                 rel="noopener noreferrer"
                 className="mt-2 inline-block text-sm font-medium text-green-700 dark:text-green-400 hover:underline"
               >
-                View on Stellar Expert →
+                {t("viewExpert")}
               </a>
             )}
           </div>
@@ -454,7 +541,7 @@ export default function PayoutsPage() {
             type="button"
             onClick={() => setLastSuccess(null)}
             className="rounded p-1 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-800/40"
-            aria-label="Dismiss"
+            aria-label={tc("dismiss")}
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -464,9 +551,9 @@ export default function PayoutsPage() {
       )}
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold">Send USDC (Stellar)</h2>
+        <h2 className="text-lg font-semibold">{t("sendUsdcTitle")}</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Optional: send USDC to another Stellar address.
+          {t("sendUsdcSubtitle")}
         </p>
         <SendUsdcForm
           onSubmitting={(summary, body) => {
@@ -517,32 +604,84 @@ export default function PayoutsPage() {
         onConfirm={payoutModalStatus === "confirm" ? handleConfirmDisbursement : undefined}
       />
 
+      {showPayoutPasswordModal && pendingPayoutPasswordData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="payout-password-title">
+          <div className="w-full max-w-md rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-lg">
+            <h2 id="payout-password-title" className="text-lg font-semibold">{t("payoutPasswordTitle")}</h2>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {t("payoutPasswordApprove", {
+                amount: pendingPayoutPasswordData.amount,
+                recipient: pendingPayoutPasswordData.recipientLabel
+                  ? ` to ${pendingPayoutPasswordData.recipientLabel}`
+                  : "",
+                destination: pendingPayoutPasswordData.destination
+                  ? ` (${pendingPayoutPasswordData.destination.slice(0, 6)}…${pendingPayoutPasswordData.destination.slice(-4)})`
+                  : "",
+              })}
+            </p>
+            <form onSubmit={handlePayoutPasswordSubmit} className="mt-4 space-y-3">
+              <div>
+                <label htmlFor="payout-password" className="block text-sm font-medium">{t("payoutPasswordLabel")}</label>
+                <input
+                  id="payout-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={payoutPasswordValue}
+                  onChange={(e) => { setPayoutPasswordValue(e.target.value); setPayoutPasswordError(null); }}
+                  placeholder={t("payoutPasswordPlaceholder")}
+                  className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
+                />
+              </div>
+              {payoutPasswordError && (
+                <p className="text-sm text-red-600 dark:text-red-400" role="alert">{payoutPasswordError}</p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={payoutPasswordSubmitting || !payoutPasswordValue.trim()}
+                  className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 font-medium disabled:opacity-50"
+                >
+                  {payoutPasswordSubmitting ? t("signing") : t("signAndSend")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowPayoutPasswordModal(false); setPendingPayoutPasswordData(null); setPayoutPasswordValue(""); setPayoutPasswordError(null); }}
+                  className="rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2"
+                >
+                  {tc("cancel")}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {showUnlockModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="unlock-title">
           <div className="w-full max-w-md rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-lg">
-            <h2 id="unlock-title" className="text-lg font-semibold">Unlock wallet to sign payout</h2>
+            <h2 id="unlock-title" className="text-lg font-semibold">{t("unlockTitle")}</h2>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Payouts are signed with the wallet shown on Profile. Use that wallet&apos;s passphrase or paste its secret key.
+              {t("unlockBody")}
             </p>
             {payoutWalletAddress && (
-              <p className="mt-2 text-xs font-mono text-gray-600 dark:text-gray-300 break-all">Payout wallet: {payoutWalletAddress}</p>
+              <p className="mt-2 text-xs font-mono text-gray-600 dark:text-gray-300 break-all">{t("payoutWalletLabel")} {payoutWalletAddress}</p>
             )}
             <form onSubmit={handleUnlockSubmit} className="mt-4 space-y-3">
               <div>
-                <label htmlFor="unlock-passphrase" className="block text-sm font-medium">Passphrase (if you set one)</label>
+                <label htmlFor="unlock-passphrase" className="block text-sm font-medium">{t("passphraseLabel")}</label>
                 <input
                   id="unlock-passphrase"
                   type="password"
                   autoComplete="current-password"
                   value={unlockPassphrase}
                   onChange={(e) => setUnlockPassphrase(e.target.value)}
-                  placeholder="Passphrase"
+                  placeholder={t("passphrasePlaceholder")}
                   className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
                 />
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">or</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{tc("or")}</p>
               <div>
-                <label htmlFor="unlock-secret" className="block text-sm font-medium">Wallet secret key</label>
+                <label htmlFor="unlock-secret" className="block text-sm font-medium">{t("walletSecretLabel")}</label>
                 <input
                   id="unlock-secret"
                   type="password"
@@ -559,7 +698,7 @@ export default function PayoutsPage() {
                   disabled={unlockSubmitting || (!unlockPassphrase.trim() && !unlockSecretKey.trim())}
                   className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 font-medium disabled:opacity-50"
                 >
-                  {unlockSubmitting ? "Unlocking…" : "Unlock and pay"}
+                  {unlockSubmitting ? t("unlocking") : t("unlockAndPay")}
                 </button>
                 <button
                   type="button"
@@ -571,7 +710,7 @@ export default function PayoutsPage() {
                   }}
                   className="rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2"
                 >
-                  Cancel
+                  {tc("cancel")}
                 </button>
               </div>
             </form>
@@ -579,21 +718,21 @@ export default function PayoutsPage() {
         </div>
       )}
 
-      <h2 className="mt-8 text-lg font-semibold">Payout history</h2>
+      <h2 className="mt-8 text-lg font-semibold">{t("historyTitle")}</h2>
       {loading ? (
         <div className="mt-4 animate-pulse h-24 rounded-lg border border-gray-200 dark:border-gray-700" />
       ) : payouts.length === 0 ? (
-        <p className="mt-4 text-gray-500 dark:text-gray-400">No payouts yet.</p>
+        <p className="mt-4 text-gray-500 dark:text-gray-400">{t("noPayouts")}</p>
       ) : (
         <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-800/50">
               <tr>
-                <th className="text-left p-3 font-medium">Date</th>
-                <th className="text-left p-3 font-medium">Amount</th>
-                <th className="text-left p-3 font-medium">Type</th>
-                <th className="text-left p-3 font-medium">Status</th>
-                <th className="text-left p-3 font-medium">Stellar Expert</th>
+                <th className="text-left p-3 font-medium">{t("colDate")}</th>
+                <th className="text-left p-3 font-medium">{t("colAmount")}</th>
+                <th className="text-left p-3 font-medium">{t("colType")}</th>
+                <th className="text-left p-3 font-medium">{t("colStatus")}</th>
+                <th className="text-left p-3 font-medium">{t("colExpert")}</th>
               </tr>
             </thead>
             <tbody>
@@ -601,7 +740,7 @@ export default function PayoutsPage() {
                 <tr key={p.id} className="border-t border-gray-200 dark:border-gray-700">
                   <td className="p-3">{new Date(p.createdAt).toLocaleString()}</td>
                   <td className="p-3">{p.amount} USDC</td>
-                  <td className="p-3">Payout{p.recipientLabel ? ` – ${p.recipientLabel}` : ""}</td>
+                  <td className="p-3">{t("payoutType")}{p.recipientLabel ? ` – ${p.recipientLabel}` : ""}</td>
                   <td className="p-3 capitalize">{p.status}</td>
                   <td className="p-3">
                     {p.stellarTxHash ? (
@@ -611,7 +750,7 @@ export default function PayoutsPage() {
                         rel="noopener noreferrer"
                         className="text-blue-600 dark:text-blue-400 hover:underline"
                       >
-                        View
+                        {t("view")}
                       </a>
                     ) : (
                       "—"

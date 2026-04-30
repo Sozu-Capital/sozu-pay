@@ -11,10 +11,12 @@ import {
 
 export type DashboardProfile = {
   needsPayoutWalletSetup?: boolean;
+  needsSmartWalletSetup?: boolean;
   needsOrgCreation?: boolean;
   needsOrganization?: boolean;
   admin_level?: string | null;
   org_id?: string | null;
+  org_type?: "store" | "ngo" | null;
 };
 
 const DashboardProfileContext = createContext<{

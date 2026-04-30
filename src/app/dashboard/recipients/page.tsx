@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import PayoutStatusModal, { type PayoutModalSuccess } from "@/components/PayoutStatusModal";
 
 const STELLAR_EXPERT_BASE =
@@ -25,6 +26,9 @@ interface BankAccount {
 }
 
 export default function RecipientsPage() {
+  const t = useTranslations("recipientsPage");
+  const tc = useTranslations("common");
+  const tp = useTranslations("payoutsPage");
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +63,18 @@ export default function RecipientsPage() {
   const [pendingConfirmBody, setPendingConfirmBody] = useState<Record<string, unknown> | null>(null);
   const [pendingBatchBody, setPendingBatchBody] = useState<Record<string, unknown> | null>(null);
   const [pendingRecipient, setPendingRecipient] = useState<Recipient | null>(null);
+  const [showPayoutPasswordModal, setShowPayoutPasswordModal] = useState(false);
+  const [payoutPasswordValue, setPayoutPasswordValue] = useState("");
+  const [payoutPasswordSubmitting, setPayoutPasswordSubmitting] = useState(false);
+  const [payoutPasswordError, setPayoutPasswordError] = useState<string | null>(null);
+  const [pendingPayoutPasswordData, setPendingPayoutPasswordData] = useState<{
+    payoutId: string;
+    unsignedEnvelopeXdr: string;
+    network: string;
+    amount: string;
+    destination: string;
+    recipientLabel?: string;
+  } | null>(null);
 
   function copyStellarToClipboard(recipientId: string, address: string) {
     navigator.clipboard.writeText(address).then(
@@ -66,7 +82,7 @@ export default function RecipientsPage() {
         setCopiedId(recipientId);
         setTimeout(() => setCopiedId(null), 2000);
       },
-      () => alert("Failed to copy")
+      () => alert(t("copyFailed"))
     );
   }
 
@@ -93,7 +109,7 @@ export default function RecipientsPage() {
       .then((p: { admin_level?: string; org_payout_wallet_public_key?: string | null; org_stellar_disbursement_public_key?: string | null; email?: string }) => {
         setAdminLevel(p.admin_level ?? "");
         setPayoutWalletAddress(p.org_payout_wallet_public_key ?? p.org_stellar_disbursement_public_key ?? null);
-        setUserDisplayName(p.email?.split("@")[0] ?? "You");
+        setUserDisplayName(p.email?.split("@")[0] ?? tc("you"));
       });
   }, []);
 
@@ -102,11 +118,11 @@ export default function RecipientsPage() {
     const bank = bankAccountId || (accounts[0]?.id ?? "");
     const stellar = stellarAddress.trim() || undefined;
     if (!name.trim()) {
-      alert("Name is required.");
+      alert(t("nameRequired"));
       return;
     }
     if (!bank && !stellar) {
-      alert("Add a bank account in Settings, or enter a Stellar address for this recipient.");
+      alert(t("bankOrStellarRequired"));
       return;
     }
     fetch("/api/recipients", {
@@ -132,7 +148,7 @@ export default function RecipientsPage() {
         setPhone("");
         load();
       })
-      .catch(() => alert("Failed to add recipient."));
+      .catch(() => alert(t("addFailed")));
   }
 
   function submitPayoutBody(body: Record<string, unknown>) {
@@ -153,7 +169,7 @@ export default function RecipientsPage() {
   }
 
   function handlePayout(recipient: Recipient) {
-    const amount = prompt("Amount (USDC):");
+    const amount = prompt(t("promptAmount"));
     if (!amount) return;
     const isStellar = !!recipient.stellarAddress && !recipient.bankAccountId;
     const body = isStellar
@@ -192,9 +208,9 @@ export default function RecipientsPage() {
             return;
           }
           if (!ok) {
-            const msg = [data?.error, data.required ? "2FA may be required for large payouts." : null]
+            const msg = [data?.error, data.required ? t("twoFaLarge") : null]
               .filter(Boolean)
-              .join(" ") || "Request failed.";
+              .join(" ") || tc("requestFailed");
             setPayoutModalStatus("failed");
             setPayoutModalError(msg);
             return;
@@ -208,7 +224,7 @@ export default function RecipientsPage() {
         })
         .catch((err) => {
           setPayoutModalStatus("failed");
-          setPayoutModalError(err instanceof Error ? err.message : "Batch payout request failed.");
+          setPayoutModalError(err instanceof Error ? err.message : t("batchPayoutRequestFailed"));
         })
         .finally(() => setPayMultipleSubmitting(false));
       return;
@@ -221,6 +237,23 @@ export default function RecipientsPage() {
       setPendingRecipient(null);
       submitPayoutBody(body)
         .then(({ ok, data }) => {
+          if (data.requirePayoutPassword && data.unsignedEnvelopeXdr && data.payoutId) {
+            setPayoutModalOpen(false);
+            setPendingConfirmBody(null);
+            setPendingRecipient(null);
+            setPendingPayoutPasswordData({
+              payoutId: String(data.payoutId),
+              unsignedEnvelopeXdr: String(data.unsignedEnvelopeXdr),
+              network: String(data.network ?? "testnet"),
+              amount: String(data.amount ?? body.amount),
+              destination: String(data.destination ?? recipient.stellarAddress),
+              recipientLabel: String(data.recipientLabel ?? recipient.name),
+            });
+            setPayoutPasswordValue("");
+            setPayoutPasswordError(null);
+            setShowPayoutPasswordModal(true);
+            return;
+          }
           if (data.requireUnlock && data.error) {
             setPayoutModalOpen(false);
             setPendingPayoutBody(body);
@@ -228,9 +261,9 @@ export default function RecipientsPage() {
             return;
           }
           if (!ok) {
-            const msg = [data?.error, data.required ? "2FA may be required for large payouts." : null]
+            const msg = [data?.error, data.required ? t("twoFaLarge") : null]
               .filter(Boolean)
-              .join(" ") || "Payout request failed.";
+              .join(" ") || t("payoutRequestFailed");
             setPayoutModalStatus("failed");
             setPayoutModalError(msg);
             return;
@@ -248,8 +281,63 @@ export default function RecipientsPage() {
         })
         .catch((err) => {
           setPayoutModalStatus("failed");
-          setPayoutModalError(err instanceof Error ? err.message : "Payout request failed.");
+          setPayoutModalError(err instanceof Error ? err.message : t("payoutRequestFailed"));
         });
+    }
+  }
+
+  async function handlePayoutPasswordSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const data = pendingPayoutPasswordData;
+    if (!data || !payoutPasswordValue.trim()) return;
+    setPayoutPasswordSubmitting(true);
+    setPayoutPasswordError(null);
+    try {
+      const encRes = await fetch("/api/profile/org/encrypted-secret");
+      const encJson = await encRes.json().catch(() => ({}));
+      if (!encRes.ok || !encJson.encryptedSecret) {
+        setPayoutPasswordError(encJson.error ?? tc("requestFailed"));
+        return;
+      }
+      const { decryptOrgSecretClient } = await import("@/lib/org-wallet-client-crypto");
+      const { Keypair, Transaction, Networks } = await import("@stellar/stellar-sdk");
+      const secretKey = await decryptOrgSecretClient(encJson.encryptedSecret, payoutPasswordValue.trim());
+      const keypair = Keypair.fromSecret(secretKey);
+      const networkPassphrase = data.network === "public" ? Networks.PUBLIC : Networks.TESTNET;
+      const tx = new Transaction(data.unsignedEnvelopeXdr, networkPassphrase);
+      tx.sign(keypair);
+      const signedEnvelopeXdr = tx.toEnvelope().toXDR("base64");
+      const submitRes = await fetch("/api/payouts/submit-signed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signedEnvelopeXdr, payoutId: data.payoutId }),
+      });
+      const submitJson = await submitRes.json().catch(() => ({}));
+      if (!submitRes.ok) {
+        setPayoutPasswordError((submitJson.error as string) ?? tp("alertPayoutFailed"));
+        return;
+      }
+      setShowPayoutPasswordModal(false);
+      setPendingPayoutPasswordData(null);
+      setPayoutPasswordValue("");
+      const p = submitJson.payout as { amount?: string; stellarTxHash?: string; recipientLabel?: string; stellarAddress?: string };
+      setPayoutModalStatus("success");
+      setPayoutModalSuccess({
+        amount: p?.amount ?? data.amount,
+        stellarTxHash: p?.stellarTxHash,
+        recipientLabel: p?.recipientLabel ?? data.recipientLabel,
+        destination: p?.stellarAddress ?? data.destination,
+      });
+      setPayoutModalOpen(true);
+      setPayoutSuccess({
+        amount: data.amount,
+        stellarTxHash: p?.stellarTxHash,
+        recipientLabel: data.recipientLabel,
+      });
+    } catch (err) {
+      setPayoutPasswordError(err instanceof Error ? err.message : tp("alertPayoutFailed"));
+    } finally {
+      setPayoutPasswordSubmitting(false);
     }
   }
 
@@ -257,11 +345,11 @@ export default function RecipientsPage() {
     setDeletingId(id);
     fetch(`/api/recipients/${id}`, { method: "DELETE" })
       .then((r) => {
-        if (!r.ok) return r.json().then((d) => { alert(d?.error ?? "Failed to delete"); });
+        if (!r.ok) return r.json().then((d) => { alert(d?.error ?? t("failedToDelete")); });
         setExpandedId((current) => (current === id ? null : current));
         load();
       })
-      .catch(() => alert("Failed to delete recipient."))
+      .catch(() => alert(t("failedDeleteRecipient")))
       .finally(() => setDeletingId(null));
   }
 
@@ -278,7 +366,7 @@ export default function RecipientsPage() {
     e.preventDefault();
     const ids = Array.from(selectedIds);
     if (ids.length === 0) {
-      alert("Select at least one recipient.");
+      alert(t("selectOneRecipient"));
       return;
     }
     const useSameAmount = batchAmount.trim() !== "";
@@ -286,7 +374,7 @@ export default function RecipientsPage() {
     for (const rid of ids) {
       const amount = useSameAmount ? batchAmount.trim() : (amountPerRecipient[rid] ?? "").trim();
       if (!amount || parseFloat(amount) <= 0) {
-        alert(`Enter a valid amount for ${recipients.find((r) => r.id === rid)?.name ?? rid}.`);
+        alert(t("validAmount", { name: recipients.find((r) => r.id === rid)?.name ?? rid }));
         return;
       }
       payouts.push({ recipientId: rid, amount });
@@ -344,11 +432,11 @@ export default function RecipientsPage() {
         } else {
           setPayoutModalOpen(true);
           setPayoutModalStatus("failed");
-          setPayoutModalError((result.data?.error as string) ?? "Payout failed.");
+          setPayoutModalError((result.data?.error as string) ?? tp("alertPayoutFailed"));
           setPendingPayoutBody(null);
         }
       })
-      .catch((err) => alert(err instanceof Error ? err.message : "Unlock or payout failed."))
+      .catch((err) => alert(err instanceof Error ? err.message : t("unlockOrPayoutFailed")))
       .finally(() => setUnlockSubmitting(false));
   }
 
@@ -375,9 +463,9 @@ export default function RecipientsPage() {
         onConfirm={payoutModalStatus === "confirm" ? handleConfirmDisbursement : undefined}
       />
 
-      <h1 className="text-2xl font-bold">Recipients</h1>
+      <h1 className="text-2xl font-bold">{t("title")}</h1>
       <p className="mt-1 text-gray-600 dark:text-gray-400">
-        Providers and employees. One-off or scheduled payouts from the same wallet.
+        {t("subtitle")}
       </p>
 
       {payoutSuccess && (
@@ -386,9 +474,12 @@ export default function RecipientsPage() {
           className="mt-6 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-4 flex items-start justify-between gap-4"
         >
           <div>
-            <p className="font-medium text-green-800 dark:text-green-200">Payout sent successfully</p>
+            <p className="font-medium text-green-800 dark:text-green-200">{t("payoutSent")}</p>
             <p className="mt-1 text-sm text-green-700 dark:text-green-300">
-              {payoutSuccess.amount} USDC sent {payoutSuccess.recipientLabel ? `to ${payoutSuccess.recipientLabel}` : ""}
+              {t("sentLine", {
+                amount: payoutSuccess.amount,
+                to: payoutSuccess.recipientLabel ? t("toRecipient", { name: payoutSuccess.recipientLabel }) : "",
+              })}
             </p>
             {payoutSuccess.stellarTxHash ? (
               <a
@@ -397,7 +488,7 @@ export default function RecipientsPage() {
                 rel="noopener noreferrer"
                 className="mt-2 inline-block text-sm font-medium text-green-700 dark:text-green-400 hover:underline"
               >
-                View on Stellar Expert →
+                {t("viewExpert")}
               </a>
             ) : null}
           </div>
@@ -406,13 +497,13 @@ export default function RecipientsPage() {
               href="/dashboard/payouts"
               className="rounded-md bg-green-700 dark:bg-green-600 text-white px-3 py-1.5 text-sm font-medium hover:opacity-90"
             >
-              Payout history
+              {t("payoutHistory")}
             </Link>
             <button
               type="button"
               onClick={() => setPayoutSuccess(null)}
               className="rounded p-1 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-800/40"
-              aria-label="Dismiss"
+              aria-label={tc("dismiss")}
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -428,28 +519,28 @@ export default function RecipientsPage() {
           onClick={() => setShowAdd(true)}
           className="mt-6 rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 font-medium"
         >
-          Add recipient
+          {t("addRecipient")}
         </button>
       ) : (
         <form onSubmit={handleAdd} className="mt-6 max-w-md space-y-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <div>
-            <label className="block text-sm font-medium">Name</label>
+            <label className="block text-sm font-medium">{t("nameLabel")}</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Recipient name"
+              placeholder={t("namePlaceholder")}
               className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
             />
           </div>
           <div>
-            <label htmlFor="recipient-bank-account" className="block text-sm font-medium">Bank account (optional)</label>
+            <label htmlFor="recipient-bank-account" className="block text-sm font-medium">{t("bankOptional")}</label>
             <select
               id="recipient-bank-account"
               value={bankAccountId}
               onChange={(e) => setBankAccountId(e.target.value)}
               className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
             >
-              <option value="">No bank – Stellar only</option>
+              <option value="">{t("bankStellarOnly")}</option>
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.label} (…{a.last4})
@@ -458,43 +549,43 @@ export default function RecipientsPage() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium">Stellar address (optional)</label>
+            <label className="block text-sm font-medium">{t("stellarLabel")}</label>
             <input
               value={stellarAddress}
               onChange={(e) => setStellarAddress(e.target.value)}
-              placeholder="G..."
+              placeholder={t("stellarPlaceholder")}
               className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 font-mono text-sm"
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Provide at least one: bank account or Stellar address.
+              {t("bankOrStellarHint")}
             </p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone (optional)</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t("phoneLabel")}</label>
             <input
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="+1 234 567 8900"
+              placeholder={t("phonePlaceholder")}
               className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
             />
           </div>
           <div className="flex gap-2">
             <button type="submit" className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2">
-              Add
+              {t("add")}
             </button>
             <button type="button" onClick={() => setShowAdd(false)} className="rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2">
-              Cancel
+              {tc("cancel")}
             </button>
           </div>
         </form>
       )}
 
-      <h2 className="mt-8 text-lg font-semibold">Recipients</h2>
+      <h2 className="mt-8 text-lg font-semibold">{t("listTitle")}</h2>
       {loading ? (
         <div className="mt-4 animate-pulse h-24 rounded-lg border border-gray-200 dark:border-gray-700" />
       ) : recipients.length === 0 ? (
-        <p className="mt-4 text-gray-500 dark:text-gray-400">No recipients yet.</p>
+        <p className="mt-4 text-gray-500 dark:text-gray-400">{t("noRecipients")}</p>
       ) : (
         <>
           {!showPayMultiple ? (
@@ -504,23 +595,23 @@ export default function RecipientsPage() {
                 onClick={() => setShowPayMultiple(true)}
                 className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm font-medium"
               >
-                Pay multiple
+                {t("payMultiple")}
               </button>
             </div>
           ) : (
             <form onSubmit={handlePayMultiple} className="mt-4 max-w-2xl rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-4">
-              <h3 className="font-medium">Select recipients and amounts (USDC)</h3>
+              <h3 className="font-medium">{t("selectAmountsTitle")}</h3>
               <div>
-                <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">Same amount for all (optional)</label>
+                <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">{t("sameAmountAll")}</label>
                 <input
                   type="text"
                   inputMode="decimal"
-                  placeholder="e.g. 10"
+                  placeholder={t("sameAmountPlaceholder")}
                   value={batchAmount}
                   onChange={(e) => setBatchAmount(e.target.value)}
                   className="w-full max-w-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
                 />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Leave empty to set amount per recipient.</p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("sameAmountHint")}</p>
               </div>
               <ul className="space-y-2">
                 {recipients.map((r) => (
@@ -538,7 +629,7 @@ export default function RecipientsPage() {
                       <span className="font-medium">{r.name}</span>
                       {(r.stellarAddress || !r.bankAccountId) && (
                         <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {r.stellarAddress ? "Stellar" : "No bank"}
+                          {r.stellarAddress ? t("stellarBadge") : t("noBankBadge")}
                         </span>
                       )}
                     </label>
@@ -546,7 +637,7 @@ export default function RecipientsPage() {
                       <input
                         type="text"
                         inputMode="decimal"
-                        placeholder="Amount"
+                        placeholder={t("amountPlaceholder")}
                         value={amountPerRecipient[r.id] ?? ""}
                         onChange={(e) => setAmountPerRecipient((prev) => ({ ...prev, [r.id]: e.target.value }))}
                         className="w-24 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-sm"
@@ -561,7 +652,7 @@ export default function RecipientsPage() {
                   disabled={payMultipleSubmitting || selectedIds.size === 0}
                   className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 font-medium disabled:opacity-50"
                 >
-                  {payMultipleSubmitting ? "Sending…" : "Pay selected"}
+                  {payMultipleSubmitting ? t("sending") : t("paySelected")}
                 </button>
                 <button
                   type="button"
@@ -573,7 +664,7 @@ export default function RecipientsPage() {
                   }}
                   className="rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2"
                 >
-                  Cancel
+                  {tc("cancel")}
                 </button>
               </div>
             </form>
@@ -592,7 +683,7 @@ export default function RecipientsPage() {
                       onClick={() => setExpandedId(isExpanded ? null : r.id)}
                       className="flex items-center gap-2 text-left flex-1 min-w-0 rounded focus:ring-2 focus:ring-offset-1 focus:ring-gray-400"
                       aria-expanded={isExpanded}
-                      aria-label={isExpanded ? "Collapse details" : "Expand details"}
+                      aria-label={isExpanded ? t("collapseDetails") : t("expandDetails")}
                     >
                       <span
                         className={`inline-flex w-5 h-5 flex-shrink-0 items-center justify-center text-gray-500 transition-transform ${isExpanded ? "rotate-90" : ""}`}
@@ -602,7 +693,7 @@ export default function RecipientsPage() {
                       <span className="font-medium truncate">{r.name}</span>
                       {(r.stellarAddress || !r.bankAccountId) && (
                         <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
-                          {r.stellarAddress ? "Stellar" : "No bank"}
+                          {r.stellarAddress ? t("stellarBadge") : t("noBankBadge")}
                         </span>
                       )}
                     </button>
@@ -611,7 +702,7 @@ export default function RecipientsPage() {
                       onClick={() => handlePayout(r)}
                       className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 shrink-0"
                     >
-                      Pay now
+                      {t("payNow")}
                     </button>
                   </div>
                   {isExpanded && (
@@ -619,33 +710,33 @@ export default function RecipientsPage() {
                       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-600 dark:text-gray-400">
                         {r.stellarAddress && (
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="font-medium text-gray-500 dark:text-gray-500 shrink-0">Stellar</span>
+                            <span className="font-medium text-gray-500 dark:text-gray-500 shrink-0">{t("stellarBadge")}</span>
                             <button
                               type="button"
                               onClick={() => copyStellarToClipboard(r.id, r.stellarAddress!)}
                               className="text-xs font-mono truncate max-w-[12rem] sm:max-w-xs text-left hover:underline focus:ring-2 focus:ring-offset-1 rounded cursor-pointer"
-                              title="Click to copy"
+                              title={t("clickToCopy")}
                             >
                               {r.stellarAddress}
                             </button>
                             {copiedId === r.id && (
-                              <span className="text-xs text-green-600 dark:text-green-400 shrink-0">Copied!</span>
+                              <span className="text-xs text-green-600 dark:text-green-400 shrink-0">{t("copied")}</span>
                             )}
                           </div>
                         )}
                         {(r.phone ?? "").trim() && (
                           <div className="flex items-center gap-1.5">
-                            <span className="font-medium text-gray-500 dark:text-gray-500 shrink-0">Phone</span>
+                            <span className="font-medium text-gray-500 dark:text-gray-500 shrink-0">{t("phone")}</span>
                             <span>{r.phone}</span>
                           </div>
                         )}
                         <div className="flex items-center gap-1.5">
-                          <span className="font-medium text-gray-500 dark:text-gray-500 shrink-0">Bank</span>
-                          <span>{r.bankAccountId ? "Linked" : "—"}</span>
+                          <span className="font-medium text-gray-500 dark:text-gray-500 shrink-0">{t("bank")}</span>
+                          <span>{r.bankAccountId ? t("bankLinked") : t("bankNone")}</span>
                         </div>
                         {r.createdAt && (
                           <div className="flex items-center gap-1.5">
-                            <span className="font-medium text-gray-500 dark:text-gray-500 shrink-0">Added</span>
+                            <span className="font-medium text-gray-500 dark:text-gray-500 shrink-0">{t("added")}</span>
                             <span>{new Date(r.createdAt).toLocaleDateString()}</span>
                           </div>
                         )}
@@ -654,12 +745,12 @@ export default function RecipientsPage() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (confirm(`Remove ${r.name}?`)) handleDelete(r.id);
+                              if (confirm(t("confirmRemove", { name: r.name }))) handleDelete(r.id);
                             }}
                             disabled={deletingId === r.id}
                             className="rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 px-3 py-1.5 text-sm font-medium hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50"
                           >
-                            {deletingId === r.id ? "Removing…" : "Delete"}
+                            {deletingId === r.id ? t("removing") : t("delete")}
                           </button>
                         </div>
                       </div>
@@ -672,44 +763,101 @@ export default function RecipientsPage() {
         </>
       )}
       <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
-        Payouts appear as &quot;Payout – [Recipient]&quot; in the transaction list with Stellar Expert link.
+        {t("footerNote")}
       </p>
       {adminLevel === "super_admin" && (
         <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-          Stellar payouts are sent from your organization&apos;s wallet (see Profile). Fund the org wallet with XLM and USDC; you authorize each payout as super-admin.
+          {t("superAdminNote")}
         </p>
+      )}
+
+      {showPayoutPasswordModal && pendingPayoutPasswordData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="payout-password-title">
+          <div className="w-full max-w-md rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-lg">
+            <h2 id="payout-password-title" className="text-lg font-semibold">{tp("payoutPasswordTitle")}</h2>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {tp("payoutPasswordApprove", {
+                amount: pendingPayoutPasswordData.amount,
+                recipient: pendingPayoutPasswordData.recipientLabel
+                  ? ` to ${pendingPayoutPasswordData.recipientLabel}`
+                  : "",
+                destination: pendingPayoutPasswordData.destination
+                  ? ` (${pendingPayoutPasswordData.destination.slice(0, 6)}…${pendingPayoutPasswordData.destination.slice(-4)})`
+                  : "",
+              })}
+            </p>
+            <form onSubmit={handlePayoutPasswordSubmit} className="mt-4 space-y-3">
+              <div>
+                <label htmlFor="payout-password" className="block text-sm font-medium">{tp("payoutPasswordLabel")}</label>
+                <input
+                  id="payout-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={payoutPasswordValue}
+                  onChange={(e) => { setPayoutPasswordValue(e.target.value); setPayoutPasswordError(null); }}
+                  placeholder={tp("payoutPasswordPlaceholder")}
+                  className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
+                />
+              </div>
+              {payoutPasswordError && (
+                <p className="text-sm text-red-600 dark:text-red-400" role="alert">{payoutPasswordError}</p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={payoutPasswordSubmitting || !payoutPasswordValue.trim()}
+                  className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 font-medium disabled:opacity-50"
+                >
+                  {payoutPasswordSubmitting ? tp("signing") : tp("signAndSend")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPayoutPasswordModal(false);
+                    setPendingPayoutPasswordData(null);
+                    setPayoutPasswordValue("");
+                    setPayoutPasswordError(null);
+                  }}
+                  className="rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2"
+                >
+                  {tc("cancel")}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {showUnlockModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="unlock-title">
           <div className="w-full max-w-md rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-lg">
-            <h2 id="unlock-title" className="text-lg font-semibold">Unlock wallet to sign payout</h2>
+            <h2 id="unlock-title" className="text-lg font-semibold">{tp("unlockTitle")}</h2>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Payouts are signed with the wallet shown on Profile. Use that wallet&apos;s passphrase (if you set one) or paste its secret key.
+              {tp("unlockBody")}
             </p>
             {payoutWalletAddress && (
               <p className="mt-2 text-xs font-mono text-gray-600 dark:text-gray-300 break-all">
-                Payout wallet: {payoutWalletAddress}
+                {tp("payoutWalletLabel")} {payoutWalletAddress}
               </p>
             )}
             <form onSubmit={handleUnlockSubmit} className="mt-4 space-y-3">
               <div>
-                <label htmlFor="unlock-passphrase" className="block text-sm font-medium">Passphrase (if you set one)</label>
+                <label htmlFor="unlock-passphrase" className="block text-sm font-medium">{tp("passphraseLabel")}</label>
                 <input
                   id="unlock-passphrase"
                   type="password"
                   autoComplete="current-password"
                   value={unlockPassphrase}
                   onChange={(e) => setUnlockPassphrase(e.target.value)}
-                  placeholder="Passphrase"
+                  placeholder={tp("passphrasePlaceholder")}
                   className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
                 />
               </div>
               <div className="relative">
-                <span className="text-xs text-gray-500 dark:text-gray-400">or</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">{tc("or")}</span>
               </div>
               <div>
-                <label htmlFor="unlock-secret" className="block text-sm font-medium">Wallet secret key</label>
+                <label htmlFor="unlock-secret" className="block text-sm font-medium">{tp("walletSecretLabel")}</label>
                 <input
                   id="unlock-secret"
                   type="password"
@@ -726,7 +874,7 @@ export default function RecipientsPage() {
                   disabled={unlockSubmitting || (!unlockPassphrase.trim() && !unlockSecretKey.trim())}
                   className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 font-medium disabled:opacity-50"
                 >
-                  {unlockSubmitting ? "Unlocking…" : "Unlock and pay"}
+                  {unlockSubmitting ? tp("unlocking") : tp("unlockAndPay")}
                 </button>
                 <button
                   type="button"
@@ -738,7 +886,7 @@ export default function RecipientsPage() {
                   }}
                   className="rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2"
                 >
-                  Cancel
+                  {tc("cancel")}
                 </button>
               </div>
             </form>

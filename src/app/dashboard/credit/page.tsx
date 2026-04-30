@@ -1,25 +1,15 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-
-/** Mock data – replace with API later. */
-const MOCK_POOL = {
-  totalVolume: 125_000,
-  available: 48_000,
-  allocated: 62_000,
-  inRepayment: 52_000,
-  overdue: 3_200,
-};
-
-const MOCK_ALLOCATIONS = [
-  { recipientName: "María López", amount: 12_000, trustpoints: 85, status: "on_track", nextDue: "2025-03-15" },
-  { recipientName: "Ana García", amount: 8_500, trustpoints: 72, status: "on_track", nextDue: "2025-03-22" },
-  { recipientName: "Carmen Ruiz", amount: 15_000, trustpoints: 90, status: "on_track", nextDue: "2025-03-08" },
-  { recipientName: "Rosa Martínez", amount: 6_200, trustpoints: 65, status: "at_risk", nextDue: "2025-02-28" },
-  { recipientName: "Elena Díaz", amount: 9_800, trustpoints: 78, status: "on_track", nextDue: "2025-03-18" },
-  { recipientName: "Laura Fernández", amount: 4_500, trustpoints: 58, status: "overdue", nextDue: "2025-02-15" },
-];
+import { useTranslations } from "next-intl";
+import { CreditPoolDonut } from "@/components/CreditPoolDonut";
+import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
+import { CREDIT_DASHBOARD_USE_MOCK } from "@/lib/credit/credit-dashboard-mock-flag";
+import {
+  MOCK_ORG_CREDIT_LOANS,
+  MOCK_ORG_CREDIT_SUMMARY,
+} from "@/lib/credit/mock-org-dashboard";
 
 function formatUsd(n: number) {
   return new Intl.NumberFormat("en-US", {
@@ -30,203 +20,226 @@ function formatUsd(n: number) {
   }).format(n);
 }
 
-/** SVG segment for a donut slice (0–1 is full circle). */
-function DonutSegment({
-  startFrac,
-  endFrac,
-  color,
-  label,
-  value,
-  isActive,
-  onClick,
-}: {
-  startFrac: number;
-  endFrac: number;
-  color: string;
-  label: string;
-  value: string;
-  isActive: boolean;
-  onClick: () => void;
-}) {
-  const r = 42;
-  const R = 52;
-  const cx = 60;
-  const cy = 60;
-  const toRad = (f: number) => 2 * Math.PI * (f - 0.25);
-  const x1 = cx + R * Math.cos(toRad(startFrac));
-  const y1 = cy + R * Math.sin(toRad(startFrac));
-  const x2 = cx + R * Math.cos(toRad(endFrac));
-  const y2 = cy + R * Math.sin(toRad(endFrac));
-  const x3 = cx + r * Math.cos(toRad(endFrac));
-  const y3 = cy + r * Math.sin(toRad(endFrac));
-  const x4 = cx + r * Math.cos(toRad(startFrac));
-  const y4 = cy + r * Math.sin(toRad(startFrac));
-  const large = endFrac - startFrac > 0.5 ? 1 : 0;
-  const d = [
-    `M ${x1} ${y1}`,
-    `A ${R} ${R} 0 ${large} 1 ${x2} ${y2}`,
-    `L ${x3} ${y3}`,
-    `A ${r} ${r} 0 ${large} 0 ${x4} ${y4}`,
-    "Z",
-  ].join(" ");
-  return (
-    <g>
-      <path
-        d={d}
-        fill={color}
-        className="cursor-pointer transition opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-900 rounded-full"
-        style={{ opacity: isActive ? 1 : 0.85 }}
-        onClick={onClick}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClick()}
-        role="button"
-        tabIndex={0}
-        aria-label={`${label}: ${value}`}
-      />
-    </g>
-  );
-}
+type Summary = {
+  pendingApplicationCount: number;
+  activeLoanCount: number;
+  totalPrincipalDisbursed: number;
+  totalOutstandingApprox: number;
+  overdueApprox: number;
+  applicationCounts: {
+    draft: number;
+    submitted: number;
+    approved: number;
+    rejected: number;
+  };
+};
+
+type LoanRow = {
+  loan: { id: string; principal: number };
+  applicantEmail: string;
+  outstanding: number;
+  nextDue: string | null;
+  health: "on_track" | "at_risk" | "overdue";
+};
 
 export default function CreditPage() {
-  const [activeSegment, setActiveSegment] = useState<string | null>(null);
+  const t = useTranslations("creditPage");
+  const { profile, loading: profileLoading } = useDashboardProfile() ?? {
+    profile: null,
+    loading: true,
+  };
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [loans, setLoans] = useState<LoanRow[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const segments = useMemo(() => {
-    const { totalVolume, available, allocated, inRepayment, overdue } = MOCK_POOL;
-    const a = available / totalVolume;
-    const b = (allocated - inRepayment - overdue) / totalVolume;
-    const c = inRepayment / totalVolume;
-    return [
-      { id: "available", start: 0, end: a, color: "#22c55e", label: "Available in pool", value: formatUsd(available) },
-      { id: "allocated", start: a, end: a + b, color: "#3b82f6", label: "Allocated (pending)", value: formatUsd(allocated - inRepayment - overdue) },
-      { id: "repayment", start: a + b, end: a + b + c, color: "#eab308", label: "In repayment", value: formatUsd(inRepayment) },
-      { id: "overdue", start: a + b + c, end: 1, color: "#ef4444", label: "Overdue", value: formatUsd(overdue) },
-    ].filter((s) => s.end > s.start);
-  }, []);
+  const isStaff =
+    profile?.admin_level === "admin" ||
+    profile?.admin_level === "super_admin";
+
+  useEffect(() => {
+    if (!isStaff || profileLoading) {
+      setLoading(false);
+      return;
+    }
+    if (CREDIT_DASHBOARD_USE_MOCK) {
+      setSummary(MOCK_ORG_CREDIT_SUMMARY);
+      setLoans(MOCK_ORG_CREDIT_LOANS);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const [sRes, lRes] = await Promise.all([
+          fetch("/api/credit/org/summary", { credentials: "include" }),
+          fetch("/api/credit/org/loans", { credentials: "include" }),
+        ]);
+        if (sRes.ok) {
+          const d = await sRes.json();
+          if (!cancelled) setSummary(d);
+        }
+        if (lRes.ok) {
+          const d = await lRes.json();
+          if (!cancelled) setLoans(d.loans ?? []);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isStaff, profileLoading]);
+
+  const healthLabel = (status: string) => {
+    if (status === "on_track") return t("healthOnTrack");
+    if (status === "at_risk") return t("healthAtRisk");
+    return t("healthOverdue");
+  };
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-        Credit
+        {t("title")}
       </h1>
       <p className="mt-2 text-gray-600 dark:text-gray-400 max-w-2xl">
-        Credit eligibility is based on a <strong className="text-gray-900 dark:text-white">trustpoint</strong> system.
-        Recipients build trustpoints through repayment history and engagement. The pool below shows total volume
-        available for microcredits, how much is allocated to recipients, and the health of payback cycles.
+        {t("intro")}
       </p>
 
-      <div className="mt-8 flex flex-col lg:flex-row gap-8 items-start">
-        {/* Daisy-disk style circular graphic */}
-        <div className="flex-shrink-0">
-          <div
-            className="relative w-[320px] h-[320px] rounded-full bg-gray-900 dark:bg-gray-950 border-4 border-gray-700 dark:border-gray-700 shadow-xl animate-pulse"
-            style={{ animationDuration: "2.5s" }}
+      {isStaff && (
+        <p className="mt-3">
+          <Link
+            href="/dashboard/credit-applications"
+            className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
           >
-            <svg
-              viewBox="0 0 120 120"
-              className="absolute inset-0 w-full h-full rounded-full"
-              aria-hidden
-            >
-              {segments.map((s) => (
-                <DonutSegment
-                  key={s.id}
-                  startFrac={s.start}
-                  endFrac={s.end}
-                  color={s.color}
-                  label={s.label}
-                  value={s.value}
-                  isActive={activeSegment === null || activeSegment === s.id}
-                  onClick={() => setActiveSegment(activeSegment === s.id ? null : s.id)}
-                />
-              ))}
-              <circle cx="60" cy="60" r="32" fill="rgb(17 24 39)" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
-              <text x="60" y="56" textAnchor="middle" className="fill-white text-[8px] font-bold">
-                {formatUsd(MOCK_POOL.totalVolume)}
-              </text>
-              <text x="60" y="66" textAnchor="middle" className="fill-gray-400 text-[6px]">
-                total pool
-              </text>
-            </svg>
-            {activeSegment && (
-              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-md bg-gray-800/95 text-white text-xs font-medium whitespace-nowrap">
-                {segments.find((s) => s.id === activeSegment)?.label}: {segments.find((s) => s.id === activeSegment)?.value}
+            Review credit applications
+          </Link>
+        </p>
+      )}
+
+      {loading || profileLoading ? (
+        <div className="mt-8 animate-pulse h-40 rounded-lg bg-gray-100 dark:bg-gray-800" />
+      ) : isStaff && summary ? (
+        <>
+          {CREDIT_DASHBOARD_USE_MOCK && (
+            <>
+              <p className="mt-4 text-xs font-medium text-amber-800 dark:text-amber-200/90">
+                Demo metrics — set NEXT_PUBLIC_CREDIT_DASHBOARD_MOCK=false for live org data.
+              </p>
+              <div className="mt-6">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {t("poolSummary")}
+                </h2>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  {t("totalVolume")} · {t("availableCredit")} · {t("allocated")} · {t("inRepayment")} ·{" "}
+                  {t("overdue")}
+                </p>
+                <div className="mt-4">
+                  <CreditPoolDonut />
+                </div>
               </div>
-            )}
+            </>
+          )}
+          <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-4">
+              <div className="text-xs font-semibold uppercase text-gray-500">
+                Pending applications
+              </div>
+              <div className="mt-1 text-2xl font-bold tabular-nums">
+                {summary.pendingApplicationCount}
+              </div>
+            </div>
+            <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-4">
+              <div className="text-xs font-semibold uppercase text-gray-500">
+                Active loans
+              </div>
+              <div className="mt-1 text-2xl font-bold tabular-nums">
+                {summary.activeLoanCount}
+              </div>
+            </div>
+            <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-4">
+              <div className="text-xs font-semibold uppercase text-gray-500">
+                Principal disbursed
+              </div>
+              <div className="mt-1 text-2xl font-bold tabular-nums">
+                {formatUsd(summary.totalPrincipalDisbursed)}
+              </div>
+            </div>
+            <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-4">
+              <div className="text-xs font-semibold uppercase text-gray-500">
+                Outstanding (approx)
+              </div>
+              <div className="mt-1 text-2xl font-bold tabular-nums text-amber-600 dark:text-amber-400">
+                {formatUsd(summary.totalOutstandingApprox)}
+              </div>
+            </div>
           </div>
-          <p className="mt-3 text-center text-sm text-gray-500 dark:text-gray-400">
-            Click a segment to see detail
-          </p>
-        </div>
+        </>
+      ) : (
+        <p className="mt-6 text-sm text-gray-500 dark:text-gray-400">
+          Connect as NGO staff to see live credit pool metrics, or use the public portal at{" "}
+          <Link href="/credit" className="text-blue-600 dark:text-blue-400 underline">
+            /credit
+          </Link>
+          .
+        </p>
+      )}
 
-        {/* Key stats list */}
-        <div className="flex-1 min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6 space-y-4">
-          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-            Pool summary
-          </h2>
-          <ul className="space-y-3">
-            <li className="flex justify-between items-center">
-              <span className="text-gray-600 dark:text-gray-400">Total volume in pool</span>
-              <span className="font-semibold tabular-nums">{formatUsd(MOCK_POOL.totalVolume)}</span>
-            </li>
-            <li className="flex justify-between items-center">
-              <span className="text-gray-600 dark:text-gray-400">Available for new credit</span>
-              <span className="font-semibold tabular-nums text-green-600 dark:text-green-400">{formatUsd(MOCK_POOL.available)}</span>
-            </li>
-            <li className="flex justify-between items-center">
-              <span className="text-gray-600 dark:text-gray-400">Allocated to recipients</span>
-              <span className="font-semibold tabular-nums">{formatUsd(MOCK_POOL.allocated)}</span>
-            </li>
-            <li className="flex justify-between items-center">
-              <span className="text-gray-600 dark:text-gray-400">In repayment (on track)</span>
-              <span className="font-semibold tabular-nums text-amber-600 dark:text-amber-400">{formatUsd(MOCK_POOL.inRepayment)}</span>
-            </li>
-            <li className="flex justify-between items-center">
-              <span className="text-gray-600 dark:text-gray-400">Overdue</span>
-              <span className="font-semibold tabular-nums text-red-600 dark:text-red-400">{formatUsd(MOCK_POOL.overdue)}</span>
-            </li>
-          </ul>
-        </div>
-      </div>
-
-      {/* Allocation by recipient */}
       <section className="mt-10">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-          Allocation by recipient
+          {t("allocationTitle")}
         </h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Microcredits disbursed and trustpoints. Health indicates payback cycle status.
+          {t("allocationSubtitle")}
         </p>
         <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-800/50">
               <tr>
-                <th className="text-left p-3 font-medium">Recipient</th>
-                <th className="text-left p-3 font-medium">Allocated</th>
-                <th className="text-left p-3 font-medium">Trustpoints</th>
-                <th className="text-left p-3 font-medium">Health</th>
-                <th className="text-left p-3 font-medium">Next due</th>
+                <th className="text-left p-3 font-medium">{t("colRecipient")}</th>
+                <th className="text-left p-3 font-medium">{t("colAllocated")}</th>
+                <th className="text-left p-3 font-medium">{t("colHealth")}</th>
+                <th className="text-left p-3 font-medium">{t("colNextDue")}</th>
               </tr>
             </thead>
             <tbody>
-              {MOCK_ALLOCATIONS.map((row) => (
-                <tr key={row.recipientName} className="border-t border-gray-200 dark:border-gray-700">
-                  <td className="p-3 font-medium">{row.recipientName}</td>
-                  <td className="p-3 tabular-nums">{formatUsd(row.amount)}</td>
-                  <td className="p-3">{row.trustpoints}</td>
-                  <td className="p-3">
-                    <span
-                      className={
-                        row.status === "on_track"
-                          ? "text-green-600 dark:text-green-400"
-                          : row.status === "at_risk"
-                            ? "text-amber-600 dark:text-amber-400"
-                            : "text-red-600 dark:text-red-400"
-                      }
-                    >
-                      {row.status === "on_track" ? "On track" : row.status === "at_risk" ? "At risk" : "Overdue"}
-                    </span>
+              {!isStaff || loans.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-6 text-gray-500 text-center">
+                    {isStaff
+                      ? "No active loans yet."
+                      : "Staff view shows live allocations."}
                   </td>
-                  <td className="p-3 text-gray-600 dark:text-gray-400">{row.nextDue}</td>
                 </tr>
-              ))}
+              ) : (
+                loans.map((row) => (
+                  <tr
+                    key={row.loan.id}
+                    className="border-t border-gray-200 dark:border-gray-700"
+                  >
+                    <td className="p-3 font-medium">{row.applicantEmail}</td>
+                    <td className="p-3 tabular-nums">
+                      {formatUsd(row.loan.principal)}
+                    </td>
+                    <td className="p-3">
+                      <span
+                        className={
+                          row.health === "on_track"
+                            ? "text-green-600 dark:text-green-400"
+                            : row.health === "at_risk"
+                              ? "text-amber-600 dark:text-amber-400"
+                              : "text-red-600 dark:text-red-400"
+                        }
+                      >
+                        {healthLabel(row.health)}
+                      </span>
+                    </td>
+                    <td className="p-3 text-gray-600 dark:text-gray-400">
+                      {row.nextDue ?? "—"}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -234,11 +247,11 @@ export default function CreditPage() {
 
       <p className="mt-6 text-sm text-gray-500 dark:text-gray-400">
         <Link href="/dashboard/recipients" className="underline hover:no-underline">
-          Manage recipients
+          {t("manageRecipients")}
         </Link>
         {" · "}
         <Link href="/dashboard/payouts" className="underline hover:no-underline">
-          Payouts
+          {t("payoutsLink")}
         </Link>
       </p>
     </div>

@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useTranslations } from "next-intl";
 
 export default function VaultPage() {
+  const t = useTranslations("vaultPage");
+  const [feeNoteOpen, setFeeNoteOpen] = useState(false);
+  const feeNoteWrapRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<{
     balanceInVault: string;
     apy: string;
@@ -18,38 +22,70 @@ export default function VaultPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (!feeNoteOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (
+        feeNoteWrapRef.current &&
+        !feeNoteWrapRef.current.contains(e.target as Node)
+      ) {
+        setFeeNoteOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [feeNoteOpen]);
+
   return (
     <div>
-      <h1 className="text-2xl font-bold">Vault / yield</h1>
+      <h1 className="text-2xl font-bold">{t("title")}</h1>
       <p className="mt-1 text-gray-600 dark:text-gray-400">
-        Organization wallet DeFi allocation: balance in vault, APY, accrued yield.
+        {t("subtitle")}
       </p>
-
-      <div className="mt-6 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4 max-w-xl">
-        <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-          We earn 10% of your yield. You keep 90%. No lockup.
-        </p>
-      </div>
 
       {loading ? (
         <div className="mt-6 rounded-lg border border-gray-200 dark:border-gray-700 p-6 animate-pulse h-32" />
       ) : data ? (
-        <div className="mt-6 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6 max-w-xl space-y-4">
+        <div className="relative mt-6 max-w-xl space-y-4 rounded-lg border border-gray-200 bg-white p-6 pr-14 dark:border-gray-700 dark:bg-gray-800/50">
+          <div
+            ref={feeNoteWrapRef}
+            className="absolute top-4 right-4 z-10"
+          >
+            <button
+              type="button"
+              onClick={() => setFeeNoteOpen((o) => !o)}
+              aria-expanded={feeNoteOpen}
+              aria-controls="vault-fee-note"
+              aria-label={t("feeNoteTooltipAria")}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-xs font-semibold text-gray-600 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              ?
+            </button>
+            {feeNoteOpen && (
+              <div
+                id="vault-fee-note"
+                role="region"
+                className="absolute right-0 top-full z-20 mt-2 w-[min(calc(100vw-3rem),18rem)] rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800 shadow-lg dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+              >
+                {t("feeNote")}
+              </div>
+            )}
+          </div>
           <div>
             <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase">
-              Balance in vault
+              {t("balanceInVault")}
             </h2>
             <p className="text-xl font-bold mt-1">{data.balanceInVault} USDC</p>
           </div>
           <div>
             <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase">
-              Current APY
+              {t("currentApy")}
             </h2>
             <p className="text-xl font-bold mt-1">{data.apy || "—"}%</p>
           </div>
           <div>
             <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase">
-              Accrued yield
+              {t("accruedYield")}
             </h2>
             <p className="text-xl font-bold mt-1">{data.accruedYield} USDC</p>
           </div>

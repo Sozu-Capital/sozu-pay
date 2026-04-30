@@ -10,6 +10,7 @@ import {
   Keypair,
   Operation,
   TransactionBuilder,
+  Transaction,
   Horizon,
   Networks,
 } from "@stellar/stellar-sdk";
@@ -31,6 +32,65 @@ function getNetworkPassphrase(): string {
   return process.env.STELLAR_NETWORK === "public"
     ? Networks.PUBLIC
     : Networks.TESTNET;
+}
+
+export function getNetworkName(): "public" | "testnet" {
+  return process.env.STELLAR_NETWORK === "public" ? "public" : "testnet";
+}
+
+/**
+ * Build an unsigned USDC payment envelope (no signature).
+ * Used when the client will sign with the org key (e.g. payout password flow).
+ */
+export async function buildUnsignedUsdcEnvelope(
+  sourcePublicKey: string,
+  destinationAccountId: string,
+  amount: string,
+  server?: Horizon.Server
+): Promise<{ envelopeXdr: string; networkPassphrase: string; network: "public" | "testnet" }> {
+  const horizon = server ?? getHorizon();
+  const networkPassphrase = getNetworkPassphrase();
+  const usdcAsset = new Asset("USDC", getUsdcIssuer());
+
+  let sourceAccount;
+  try {
+    sourceAccount = await horizon.loadAccount(sourcePublicKey);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("Not Found") || msg.includes("404")) {
+      const network = getNetworkName();
+      const friendbot =
+        network === "testnet"
+          ? ` Fund with one click (testnet): https://friendbot.stellar.org/?addr=${sourcePublicKey}`
+          : "";
+      throw new Error(
+        `Org payout wallet account does not exist on Stellar ${network}. ` +
+          `Fund the org disbursement wallet (${sourcePublicKey}) with XLM and USDC first (see Profile).${friendbot}`
+      );
+    }
+    throw err;
+  }
+
+  const txBuilder = new TransactionBuilder(sourceAccount, {
+    fee: "100",
+    networkPassphrase,
+  })
+    .addOperation(
+      Operation.payment({
+        destination: destinationAccountId,
+        asset: usdcAsset,
+        amount: String(amount),
+      })
+    )
+    .setTimeout(30);
+
+  const transaction = txBuilder.build();
+  const envelopeXdr = transaction.toEnvelope().toXDR("base64");
+  return {
+    envelopeXdr,
+    networkPassphrase,
+    network: getNetworkName(),
+  };
 }
 
 /** Env vars for org disbursement wallet (order of precedence). */
@@ -167,6 +227,50 @@ export async function sendUsdc(
     throw new Error(`Stellar transaction rejected: ${detail}${hint}`);
   }
 
+  if (result.successful) {
+    return result.hash ?? "";
+  }
+  const codes = (result as { result_codes?: unknown }).result_codes;
+  throw new Error(
+    codes != null
+      ? `Stellar transaction failed: ${JSON.stringify(codes)}`
+      : "Stellar transaction failed"
+  );
+}
+
+/**
+ * Submit a signed transaction envelope (client-signed) to Horizon.
+ * Used after client signs with payout password.
+ */
+export async function submitSignedEnvelope(
+  envelopeXdr: string,
+  networkPassphrase: string,
+  server?: Horizon.Server
+): Promise<string> {
+  const horizon = server ?? getHorizon();
+  const transaction = new Transaction(envelopeXdr, networkPassphrase);
+  let result: { successful?: boolean; hash?: string; result_codes?: unknown };
+  try {
+    result = await horizon.submitTransaction(transaction);
+  } catch (err: unknown) {
+    const axiosErr = err as { response?: { status?: number; data?: Record<string, unknown> }; message?: string };
+    const body = axiosErr.response?.data;
+    let detail = axiosErr.message ?? String(err);
+    if (body != null && typeof body === "object") {
+      const d = body.detail;
+      const extras = body.extras as { result_codes?: { transaction?: string; operations?: string[] } } | undefined;
+      const codes = extras?.result_codes;
+      if (typeof d === "string") detail = d;
+      if (codes) detail += ` [${codes.transaction ?? "tx_failed"}${codes.operations?.length ? `, ops: ${codes.operations.join(", ")}` : ""}]`;
+    }
+    let hint = "";
+    if (detail.includes("op_no_trust")) {
+      hint = " Add a USDC trustline to the org disbursement wallet (Stellar Laboratory or a wallet).";
+    } else if (detail.includes("op_line_full") || detail.includes("insufficient")) {
+      hint = " Not enough USDC balance or trustline limit.";
+    }
+    throw new Error(`Stellar transaction rejected: ${detail}${hint}`);
+  }
   if (result.successful) {
     return result.hash ?? "";
   }

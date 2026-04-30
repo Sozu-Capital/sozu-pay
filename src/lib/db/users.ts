@@ -5,16 +5,12 @@ export type User = {
   privy_user_id: string;
   email: string;
   stellar_public_key: string | null;
-  /** Smart account (C...) address when using Soroban smart accounts; primary wallet for display/funding when set. */
-  stellar_smart_account_address: string | null;
   /** Public key of keypair derived from user's payout passphrase (set at onboarding). */
   stellar_payout_public_key: string | null;
   allowed: boolean;
   admin_level: "user" | "admin" | "super_admin";
   org_id: string | null;
   activation_requested_at: string | null;
-  /** Org the user was viewing when they requested activation (for "request as org admin"). */
-  activation_requested_org_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -62,19 +58,21 @@ export async function getUserByPrivyId(
   return (data as User) ?? null;
 }
 
-export async function setActivationRequested(
-  privyUserId: string,
-  orgId?: string | null
-): Promise<User | null> {
-  const payload: { activation_requested_at: string; activation_requested_org_id?: string | null } = {
-    activation_requested_at: new Date().toISOString(),
-  };
-  if (orgId !== undefined) {
-    payload.activation_requested_org_id = orgId || null;
-  }
+export async function getUserById(id: number): Promise<User | null> {
+  const { data } = await getSupabase()
+    .from("users")
+    .select("*")
+    .eq("id", id)
+    .limit(1)
+    .maybeSingle();
+
+  return (data as User) ?? null;
+}
+
+export async function setActivationRequested(privyUserId: string): Promise<User | null> {
   const { data, error } = await getSupabase()
     .from("users")
-    .update(payload)
+    .update({ activation_requested_at: new Date().toISOString() })
     .eq("privy_user_id", privyUserId)
     .select()
     .single();
@@ -90,24 +88,6 @@ export async function updateUserStellarPublicKey(
   const { data, error } = await getSupabase()
     .from("users")
     .update({ stellar_public_key: stellarPublicKey, updated_at: new Date().toISOString() })
-    .eq("privy_user_id", privyUserId)
-    .select()
-    .single();
-
-  if (error) return null;
-  return data as User;
-}
-
-export async function updateUserSmartAccountAddress(
-  privyUserId: string,
-  smartAccountAddress: string
-): Promise<User | null> {
-  const { data, error } = await getSupabase()
-    .from("users")
-    .update({
-      stellar_smart_account_address: smartAccountAddress,
-      updated_at: new Date().toISOString(),
-    })
     .eq("privy_user_id", privyUserId)
     .select()
     .single();
@@ -177,19 +157,11 @@ export async function updateUserOrgId(
   return data as User;
 }
 
-/** Set org_id and admin_level for a user (e.g. when super_admin approves "request as org admin"). */
-export async function updateUserOrgIdAndAdmin(
-  privyUserId: string,
-  orgId: string,
-  adminLevel: "user" | "admin" | "super_admin"
-): Promise<User | null> {
+/** Clears org_id (e.g. org row deleted or broken FK). */
+export async function clearUserOrgId(privyUserId: string): Promise<User | null> {
   const { data, error } = await getSupabase()
     .from("users")
-    .update({
-      org_id: orgId,
-      admin_level: adminLevel,
-      updated_at: new Date().toISOString(),
-    })
+    .update({ org_id: null, updated_at: new Date().toISOString() })
     .eq("privy_user_id", privyUserId)
     .select()
     .single();

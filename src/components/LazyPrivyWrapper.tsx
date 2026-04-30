@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, type ReactNode } from "react";
+import { SmartAccountKitProvider } from "@/components/SmartAccountKitProvider";
 
 /**
  * Renders children immediately; loads PrivyProviderWrapper after mount so the app shell
@@ -18,5 +19,9 @@ export function LazyPrivyWrapper({ children }: { children: ReactNode }) {
   }, []);
 
   if (!PrivyWrapper) return <>{children}</>;
-  return <PrivyWrapper>{children}</PrivyWrapper>;
+  return (
+    <PrivyWrapper>
+      <SmartAccountKitProvider>{children}</SmartAccountKitProvider>
+    </PrivyWrapper>
+  );
 }

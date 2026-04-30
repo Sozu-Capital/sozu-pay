@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSession, setSession } from "@/lib/auth/session";
 import { getUserByPrivyId, getOrCreateUserByPrivy } from "@/lib/db/users";
-import { getOrganizationForUser, getDefaultOrganization } from "@/lib/db/organizations";
+import { getOrganizationForUser } from "@/lib/db/organizations";
+import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
+import { isUserDerivedEncrypted } from "@/lib/org-wallet-encryption";
 
 /**
  * GET /api/profile – current user's profile from DB (for Profile page).
@@ -37,21 +39,21 @@ export async function GET() {
   const needsOrgCreation =
     user.admin_level === "super_admin" && !user.org_id;
 
-  /** Default org (e.g. Mujeres2000) that any user can select to view dashboard. */
-  const defaultOrg = await getDefaultOrganization();
-  const hasValidSessionOrg =
-    !!session.orgId &&
-    (user.org_id === session.orgId || defaultOrg?.id === session.orgId);
+  /** Any user without an org must go through organization step (create or get added). */
+  const needsOrganization = !user.org_id;
 
-  /**
-   * User must go to org picker only if they have no assigned org AND no valid org in session.
-   * Once they select the default org (or their assigned org), session.orgId is set and they
-   * can stay on dashboard — avoids redirect loop for new users viewing the public NGO.
-   */
-  const needsOrganization = !user.org_id && !hasValidSessionOrg;
+  const needsSmartWalletSetup =
+    !!user.org_id && !!user.allowed && (await getMemberSmartAccount(user.org_id, user.id)) == null;
 
   const org_stellar_disbursement_public_key = org?.stellar_disbursement_public_key ?? null;
   const org_has_stored_secret = !!(org?.stellar_disbursement_secret_encrypted);
+  const org_encryption_type =
+    org?.stellar_disbursement_secret_encrypted && isUserDerivedEncrypted(org.stellar_disbursement_secret_encrypted)
+      ? "user_derived"
+      : org?.stellar_disbursement_secret_encrypted
+        ? "legacy"
+        : null;
+  const org_has_recovery = !!(org?.recovery_encrypted_secret);
 
   // If user has an org but session has no orgId (e.g. old session), set it so dashboard works
   if (user.org_id && session.orgId !== user.org_id) {
@@ -62,23 +64,23 @@ export async function GET() {
     }
   }
 
-  const network = process.env.STELLAR_NETWORK === "public" ? "mainnet" : "testnet";
-
   return NextResponse.json({
     email: user.email,
     stellar_public_key: user.stellar_public_key,
-    stellar_smart_account_address: user.stellar_smart_account_address ?? null,
     stellar_payout_public_key: user.stellar_payout_public_key ?? null,
     org_payout_wallet_public_key: org_payout_wallet_public_key ?? null,
     org_id: user.org_id ?? null,
+    org_type: org?.type ?? null,
     org_stellar_disbursement_public_key,
     org_has_stored_secret,
+    org_encryption_type,
+    org_has_recovery,
     allowed: user.allowed,
     admin_level: user.admin_level,
     activation_requested_at: user.activation_requested_at,
     needsPayoutWalletSetup,
     needsOrgCreation,
     needsOrganization,
-    network,
+    needsSmartWalletSetup,
   });
 }

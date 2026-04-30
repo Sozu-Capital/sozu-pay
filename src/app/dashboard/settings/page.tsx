@@ -4,13 +4,21 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import BankAccountsSection from "@/components/BankAccountsSection";
 import { usePrivy } from "@privy-io/react-auth";
+import { useTranslations } from "next-intl";
 
 export default function SettingsPage() {
+  const t = useTranslations("settingsPage");
+  const tc = useTranslations("common");
   const [user, setUser] = useState<{ email: string; twoFactorEnabled?: boolean } | null>(null);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [totpCode, setTotpCode] = useState("");
   const [showTotpSetup, setShowTotpSetup] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [orgTag, setOrgTag] = useState<string | null>(null);
+  const [orgTagInput, setOrgTagInput] = useState("");
+  const [orgTagBusy, setOrgTagBusy] = useState(false);
+  const [orgTagError, setOrgTagError] = useState<string | null>(null);
+  const [orgTagSaved, setOrgTagSaved] = useState(false);
   const privy = usePrivy();
   const usePrivyAuth = typeof window !== "undefined" && !!process.env.NEXT_PUBLIC_PRIVY_APP_ID;
 
@@ -22,6 +30,17 @@ export default function SettingsPage() {
         setTwoFactorEnabled(data.user?.twoFactorEnabled ?? false);
       })
       .catch(() => setUser(null));
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/profile/org/sozu-tag", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { username?: string | null } | null) => {
+        const username = typeof d?.username === "string" ? d.username : null;
+        setOrgTag(username);
+        setOrgTagInput(username ? `$${username}` : "");
+      })
+      .catch(() => {});
   }, []);
 
   function handleToggle2FA() {
@@ -43,12 +62,12 @@ export default function SettingsPage() {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Settings</h1>
+        <h1 className="text-2xl font-bold">{t("title")}</h1>
         <Link
           href="/dashboard/profile"
           className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
         >
-          Profile
+          {t("profileLink")}
         </Link>
       </div>
       {user && (
@@ -56,23 +75,23 @@ export default function SettingsPage() {
       )}
 
       <section className="mt-8" id="security">
-        <h2 className="text-lg font-semibold">Security</h2>
+        <h2 className="text-lg font-semibold">{t("security")}</h2>
         <div className="mt-4 flex items-center gap-4">
           <span className="text-sm text-gray-700 dark:text-gray-300">
-            Two-factor authentication (TOTP): {twoFactorEnabled ? "On" : "Off"}
+            {t("totpLabel", { state: twoFactorEnabled ? t("totpOn") : t("totpOff") })}
           </span>
           <button
             type="button"
             onClick={handleToggle2FA}
             className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm font-medium"
           >
-            {twoFactorEnabled ? "Disable" : "Enable"}
+            {twoFactorEnabled ? t("disable") : t("enable")}
           </button>
         </div>
         {showTotpSetup && (
           <form onSubmit={handleConfirmTotp} className="mt-4 p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 max-w-xs">
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-              Enter the 6-digit code from your authenticator app to enable 2FA.
+              {t("totpHelp")}
             </p>
             <input
               type="text"
@@ -82,69 +101,128 @@ export default function SettingsPage() {
               onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
               placeholder="000000"
               className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
-              aria-label="TOTP code"
+              aria-label={t("totpAria")}
             />
             <div className="mt-2 flex gap-2">
               <button type="submit" className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-1.5 text-sm">
-                Confirm
+                {tc("confirm")}
               </button>
               <button
                 type="button"
                 onClick={() => { setShowTotpSetup(false); setTotpCode(""); }}
                 className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm"
               >
-                Cancel
+                {tc("cancel")}
               </button>
             </div>
           </form>
         )}
       </section>
 
+      <section className="mt-8" id="sozu-tag">
+        <h2 className="text-lg font-semibold">{t("sozuTagTitle")}</h2>
+        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{t("sozuTagBody")}</p>
+        <form
+          className="mt-4 max-w-md space-y-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setOrgTagBusy(true);
+            setOrgTagError(null);
+            setOrgTagSaved(false);
+            try {
+              const res = await fetch("/api/profile/org/sozu-tag", {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username: orgTagInput }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) {
+                setOrgTagError((data.error as string) ?? t("sozuTagSaveFailed"));
+                return;
+              }
+              const username = typeof data.username === "string" ? data.username : null;
+              setOrgTag(username);
+              setOrgTagInput(username ? `$${username}` : orgTagInput);
+              setOrgTagSaved(true);
+              setTimeout(() => setOrgTagSaved(false), 2000);
+            } finally {
+              setOrgTagBusy(false);
+            }
+          }}
+        >
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            {t("sozuTagLabel")}
+          </label>
+          <input
+            value={orgTagInput}
+            onChange={(e) => setOrgTagInput(e.target.value)}
+            placeholder="$myorg"
+            className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
+            aria-label={t("sozuTagAria")}
+          />
+          {orgTag && (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {t("sozuTagCurrent", { tag: `$${orgTag}` })}
+            </p>
+          )}
+          {orgTagError && <p className="text-sm text-red-600 dark:text-red-400">{orgTagError}</p>}
+          <button
+            type="submit"
+            disabled={orgTagBusy}
+            className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-1.5 text-sm disabled:opacity-60"
+          >
+            {orgTagBusy ? t("sozuTagSaving") : t("sozuTagSave")}
+          </button>
+          {orgTagSaved && <p className="text-xs text-emerald-600 dark:text-emerald-400">{t("sozuTagSaved")}</p>}
+        </form>
+      </section>
+
       <section className="mt-8" id="recovery">
-        <h2 className="text-lg font-semibold">Recovery & wallet</h2>
+        <h2 className="text-lg font-semibold">{t("recoveryWallet")}</h2>
         <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-          Manage recovery methods for your account and smart wallet. 2FA is in Security above; here you can back up your wallet recovery phrase or set a recovery email.
+          {t("recoveryWalletBody")}
         </p>
         <div className="mt-4 space-y-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4">
           <div>
-            <p className="font-medium text-sm">Recovery phrase backup</p>
+            <p className="font-medium text-sm">{t("recoveryPhraseTitle")}</p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              Export or back up your wallet secret phrase (shown only when you create a new wallet). Never share it.
+              {t("recoveryPhraseBody")}
             </p>
-            <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">Available after you create a wallet in Profile.</p>
+            <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">{t("recoveryPhraseAfter")}</p>
           </div>
           <div>
-            <p className="font-medium text-sm">Recovery email</p>
+            <p className="font-medium text-sm">{t("recoveryEmailTitle")}</p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              Optional email used for account recovery. Your login email is already used for Privy recovery.
+              {t("recoveryEmailBody")}
             </p>
-            <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">Coming soon.</p>
+            <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">{t("recoveryEmailSoon")}</p>
           </div>
         </div>
       </section>
 
       <section className="mt-8" id="verification">
-        <h2 className="text-lg font-semibold">Verification</h2>
+        <h2 className="text-lg font-semibold">{t("verification")}</h2>
         <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-          Optional: for off-ramp and higher limits, we may collect minimal business or bank details as required by our off-ramp partner. You can complete this when you first add a bank account.
+          {t("verificationBody")}
         </p>
-        <p className="mt-2 text-sm text-gray-400 dark:text-gray-500">Verification flow plug-in (per compliance requirements).</p>
+        <p className="mt-2 text-sm text-gray-400 dark:text-gray-500">{t("verificationPlugin")}</p>
       </section>
 
       <section className="mt-8" id="bank">
-        <h2 className="text-lg font-semibold">Bank accounts</h2>
+        <h2 className="text-lg font-semibold">{t("bankAccounts")}</h2>
         <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-          Add or edit bank accounts (2FA required). Default for your withdrawals; others for payouts to providers.
+          {t("bankAccountsBody")}
         </p>
         <BankAccountsSection />
       </section>
 
       <section className="mt-8" id="stores">
-        <h2 className="text-lg font-semibold">Stores</h2>
+        <h2 className="text-lg font-semibold">{t("stores")}</h2>
         <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-          Connect Shopify, WooCommerce, or custom stores. Same wallet and transaction list.
+          {t("storesBody")}
         </p>
-        <p className="mt-2 text-sm text-gray-400 dark:text-gray-500">See docs/ecommerce-integration.md for widget and API.</p>
+        <p className="mt-2 text-sm text-gray-400 dark:text-gray-500">{t("storesDocs")}</p>
       </section>
 
       <div className="mt-8">
@@ -164,7 +242,7 @@ export default function SettingsPage() {
             }}
             className="rounded-md border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 px-3 py-1.5 text-sm disabled:opacity-50"
           >
-            {signingOut ? "Signing out…" : "Sign out"}
+            {signingOut ? tc("signingOut") : tc("signOut")}
           </button>
         ) : (
           <form action="/api/auth/logout" method="POST">
@@ -172,7 +250,7 @@ export default function SettingsPage() {
               type="submit"
               className="rounded-md border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 px-3 py-1.5 text-sm"
             >
-              Sign out
+              {tc("signOut")}
             </button>
           </form>
         )}

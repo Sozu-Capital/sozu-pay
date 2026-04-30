@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserByPrivyId } from "@/lib/db/users";
-import { getOrganizationById, getDefaultOrganization } from "@/lib/db/organizations";
+import { getOrganizationById } from "@/lib/db/organizations";
 
 /**
  * GET /api/profile/organizations – list organizations the current user can access.
- * Every user sees the default org (e.g. Mujeres2000) so they can open the dashboard; only super_admin can perform payouts.
+ * For now: single org (user.org_id). Later: expand with organization_members for multi-org.
  */
 export async function GET() {
   const session = await getSession();
@@ -15,23 +15,22 @@ export async function GET() {
 
   try {
     const user = await getUserByPrivyId(session.id);
-    const canCreate = user?.admin_level === "super_admin";
+    if (!user) {
+      // Session exists but user row missing (should be rare). Still allow creating an org.
+      return NextResponse.json({ organizations: [], canCreate: true });
+    }
 
-    const seenIds = new Set<string>();
     const organizations: { id: string; name: string }[] = [];
-
-    if (user?.org_id) {
+    if (user.org_id) {
       const org = await getOrganizationById(user.org_id);
       if (org) {
         organizations.push({ id: org.id, name: org.name });
-        seenIds.add(org.id);
       }
     }
 
-    const defaultOrg = await getDefaultOrganization();
-    if (defaultOrg && !seenIds.has(defaultOrg.id)) {
-      organizations.push({ id: defaultOrg.id, name: defaultOrg.name });
-    }
+    // We allow creating a new organization even if the user already has access to one.
+    // (Creating will switch the user's active org to the newly created one.)
+    const canCreate = true;
 
     return NextResponse.json({
       organizations,

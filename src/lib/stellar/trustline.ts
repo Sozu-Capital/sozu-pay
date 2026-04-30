@@ -1,9 +1,7 @@
 /**
- * Build a USDC changeTrust transaction for a classic account (G).
- * The transaction must be signed by the account owner (client-side).
- * Server-only; used to return an unsigned envelope for the user to sign.
+ * Build unsigned Stellar changeTrust (USDC trustline) for a given account.
+ * Used so the user can sign client-side with their wallet (no server-held secret).
  */
-
 import {
   Asset,
   Operation,
@@ -11,7 +9,17 @@ import {
   Networks,
 } from "@stellar/stellar-sdk";
 import { getHorizon } from "./server";
-import { getUsdcIssuer } from "./balance";
+
+const USDC_ISSUER_TESTNET =
+  "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
+const USDC_ISSUER_PUBLIC =
+  "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4EZN";
+
+function getUsdcIssuer(): string {
+  return process.env.STELLAR_NETWORK === "public"
+    ? USDC_ISSUER_PUBLIC
+    : USDC_ISSUER_TESTNET;
+}
 
 function getNetworkPassphrase(): string {
   return process.env.STELLAR_NETWORK === "public"
@@ -19,56 +27,40 @@ function getNetworkPassphrase(): string {
     : Networks.TESTNET;
 }
 
+export type BuildTrustlineTxResult = {
+  envelopeXdr: string;
+  network: "testnet" | "public";
+  networkPassphrase: string;
+};
+
 /**
- * Build an unsigned ChangeTrust transaction for USDC for the given account (G...).
- * The account must exist (be funded). Caller submits the returned envelope after signing.
- * @param accountId - Classic Stellar account public key (G...)
- * @returns Unsigned transaction (envelope) as base64 XDR
+ * Build an unsigned changeTrust transaction for the given account (G...).
+ * Returns envelope XDR (base64) and network info for client-side signing.
  */
-export async function buildUsdcChangeTrustTx(
-  accountId: string
-): Promise<string> {
+export async function buildTrustlineTransaction(
+  accountPublicKey: string
+): Promise<BuildTrustlineTxResult> {
   const horizon = getHorizon();
   const networkPassphrase = getNetworkPassphrase();
-  const issuer = getUsdcIssuer();
-  const usdcAsset = new Asset("USDC", issuer);
+  const network =
+    process.env.STELLAR_NETWORK === "public" ? "public" : "testnet";
 
-  const account = await horizon.loadAccount(accountId);
+  const sourceAccount = await horizon.loadAccount(accountPublicKey);
+  const usdcAsset = new Asset("USDC", getUsdcIssuer());
 
-  const tx = new TransactionBuilder(account, {
+  const transaction = new TransactionBuilder(sourceAccount, {
     fee: "100",
     networkPassphrase,
   })
     .addOperation(
       Operation.changeTrust({
         asset: usdcAsset,
-        limit: "922337203685.4775807", // max
+        limit: "1000000000", // 1B USDC limit
       })
     )
     .setTimeout(30)
     .build();
 
-  return tx.toEnvelope().toXDR("base64");
-}
-
-/**
- * Check if a classic account (G) has a USDC trustline (Circle issuer for current network).
- */
-export async function hasUsdcTrustline(accountId: string): Promise<boolean> {
-  const horizon = getHorizon();
-  const issuer = getUsdcIssuer();
-  try {
-    const account = await horizon.accounts().accountId(accountId).call();
-    const hasTrustline = account.balances.some(
-      (b) =>
-        b.asset_type !== "native" &&
-        "asset_issuer" in b &&
-        b.asset_issuer === issuer &&
-        "asset_code" in b &&
-        b.asset_code === "USDC"
-    );
-    return hasTrustline;
-  } catch {
-    return false;
-  }
+  const envelopeXdr = transaction.toEnvelope().toXDR("base64");
+  return { envelopeXdr, network, networkPassphrase };
 }

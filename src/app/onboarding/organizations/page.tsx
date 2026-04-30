@@ -16,15 +16,22 @@ export default function OrganizationsPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("/api/profile/organizations", { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : { organizations: [], canCreate: false }))
+    fetch("/api/profile/organizations", {
+      credentials: "include",
+      cache: "no-store",
+    })
+      .then((r) =>
+        r.ok
+          ? r.json()
+          : { organizations: [], canCreate: true }
+      )
       .then((d) => {
         setOrganizations(d.organizations ?? []);
-        setCanCreate(d.canCreate ?? false);
+        setCanCreate(d.canCreate ?? true);
       })
       .catch(() => {
         setOrganizations([]);
-        setCanCreate(false);
+        setCanCreate(true);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -99,21 +106,19 @@ export default function OrganizationsPage() {
             </ul>
           )}
 
-          {canCreate && (
-            <div className="mt-6 flex flex-col gap-3">
-              <Link
-                href="/onboarding/create-organization"
-                className="w-full text-center rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium hover:opacity-90 transition-opacity"
-              >
-                Create new organization
-              </Link>
-            </div>
-          )}
+          <div className="mt-6 flex flex-col gap-3">
+            <Link
+              href="/onboarding/create-organization"
+              className="w-full text-center rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium hover:opacity-90 transition-opacity"
+            >
+              Create new organization
+            </Link>
+          </div>
 
-          {!hasOrgs && !canCreate && (
-            <div className="mt-6 space-y-3">
-              <p className="text-sm text-gray-300">
-                You don’t have access to any organization yet. Contact your administrator to be added, or log out.
+          {!hasOrgs && (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-gray-400">
+                No organization linked yet. You can create one above, or ask an admin to invite you to an existing team.
               </p>
               <form action="/api/auth/logout" method="POST" className="w-full">
                 <button

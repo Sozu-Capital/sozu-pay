@@ -24,7 +24,7 @@ export async function POST() {
     );
   }
 
-  const updated = await setActivationRequested(session.id, session.orgId ?? undefined);
+  const updated = await setActivationRequested(session.id);
   if (!updated) {
     return NextResponse.json(
       { error: "Failed to submit activation request." },

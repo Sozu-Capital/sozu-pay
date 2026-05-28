@@ -15,7 +15,7 @@ export async function getWalletPublicKey(): Promise<string | null> {
   const user = await getUserByPrivyId(session.id);
   if (!user) return null;
 
-  return user.stellar_smart_account_address ?? user.stellar_public_key ?? null;
+  return user.stellar_public_key ?? null;
 }
 
 /**

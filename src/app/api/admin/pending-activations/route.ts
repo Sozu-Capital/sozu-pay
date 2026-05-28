@@ -22,7 +22,7 @@ export async function GET() {
   const pending = await getPendingActivationUsers();
   const withOrgNames = await Promise.all(
     pending.map(async (u: User) => {
-      const requestedOrgId = u.activation_requested_org_id ?? null;
+      const requestedOrgId = u.org_id ?? null;
       let requested_org_name: string | null = null;
       if (requestedOrgId) {
         const org = await getOrganizationById(requestedOrgId);

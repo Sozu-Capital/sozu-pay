@@ -24,11 +24,6 @@ interface SdpWallet {
   homepage: string;
 }
 
-interface SdpAsset {
-  id: string;
-  code: string;
-  issuer: string;
-}
 
 interface SdpPayment {
   id: string;
@@ -70,7 +65,6 @@ export default function DisbursementsPage() {
   // List view
   const [disbursements, setDisbursements] = useState<SdpDisbursement[]>([]);
   const [wallets, setWallets] = useState<SdpWallet[]>([]);
-  const [assets, setAssets] = useState<SdpAsset[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
 
@@ -112,7 +106,6 @@ export default function DisbursementsPage() {
       const data = await res.json();
       setDisbursements(data.disbursements ?? []);
       setWallets(data.wallets ?? []);
-      setAssets(data.assets ?? []);
       if ((data.wallets ?? []).length > 0 && !selectedWalletId) {
         setSelectedWalletId(data.wallets[0].id);
       }
@@ -125,7 +118,7 @@ export default function DisbursementsPage() {
 
   useEffect(() => {
     fetchList();
-  }, []);
+  }, [fetchList]);
 
   // ── Fetch detail ──────────────────────────────────────────────────────────
 

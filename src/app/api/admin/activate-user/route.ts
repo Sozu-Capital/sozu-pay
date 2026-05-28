@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId, setUserAllowed, updateUserOrgIdAndAdmin } from "@/lib/db/users";
+import { getUserByPrivyId, setUserAllowed, updateUserOrgId } from "@/lib/db/users";
 import { getOrganizationById } from "@/lib/db/organizations";
 import { fundClassicAccount, fundSmartAccount, isClassicAccount, isSmartAccount } from "@/lib/stellar/fund";
 
@@ -39,27 +39,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // If they requested activation in org context and have no org yet, assign them as org admin
-  const requestedOrgId = updated.activation_requested_org_id ?? null;
-  if (requestedOrgId && !updated.org_id) {
-    const org = await getOrganizationById(requestedOrgId);
+  // If user has no org yet and is being activated, assign them as org admin via their org_id field
+  if (!updated.org_id) {
+    const org = await getOrganizationById(updated.org_id ?? "");
     if (org) {
-      const withOrg = await updateUserOrgIdAndAdmin(privyUserId, org.id, "admin");
+      const withOrg = await updateUserOrgId(privyUserId, org.id);
       if (withOrg) updated = withOrg;
     }
   }
 
   let fundTxHash: string | null = null;
-  const toFund =
-    updated.stellar_smart_account_address && isSmartAccount(updated.stellar_smart_account_address)
-      ? updated.stellar_smart_account_address
-      : updated.stellar_public_key;
+  const toFund = updated.stellar_public_key;
 
   if (toFund) {
     try {
       if (isSmartAccount(toFund)) {
         fundTxHash = await fundSmartAccount(toFund);
-        // Optional: invoke contract-specific USDC setup here if SMART_ACCOUNT_USDC_SETUP_CONTRACT_ID is set (see docs/smart-accounts.md).
       } else if (isClassicAccount(toFund)) {
         fundTxHash = await fundClassicAccount(toFund);
       }

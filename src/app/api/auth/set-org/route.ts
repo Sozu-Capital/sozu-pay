@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, setSession } from "@/lib/auth/session";
 import { getUserByPrivyId } from "@/lib/db/users";
-import { getOrganizationById, getDefaultOrganization } from "@/lib/db/organizations";
+import { getOrganizationById } from "@/lib/db/organizations";
 
 /**
  * POST /api/auth/set-org – set the current organization for this session.
@@ -29,8 +29,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Organization not found" }, { status: 404 });
   }
 
-  const defaultOrg = await getDefaultOrganization();
-  const canSelect = user.org_id === orgId || (defaultOrg?.id === orgId);
+  const canSelect = user.org_id === orgId || user.admin_level === "super_admin";
   if (!canSelect) {
     return NextResponse.json({ error: "You do not have access to this organization" }, { status: 403 });
   }

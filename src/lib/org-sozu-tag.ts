@@ -81,7 +81,16 @@ async function upsertStellarWallet(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const userCol = stellarWalletUserColumn();
   const pkCol = stellarWalletPublicKeyColumn();
-  const row: Record<string, string> = { [userCol]: authUserId, [pkCol]: publicKey };
+
+  // Build row; include turnkey_wallet_id as a fallback value when the column
+  // is NOT NULL but Turnkey is not in use. Use authUserId as a stable unique
+  // placeholder. Ideal fix: run ALTER TABLE stellar_wallets ALTER COLUMN
+  // turnkey_wallet_id DROP NOT NULL; in Supabase.
+  const row: Record<string, string> = {
+    [userCol]: authUserId,
+    [pkCol]: publicKey,
+    turnkey_wallet_id: authUserId,
+  };
 
   const { error } = await sb.from("stellar_wallets").upsert(row, { onConflict: userCol });
   if (!error) return { ok: true };

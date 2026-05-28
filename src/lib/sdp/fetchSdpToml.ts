@@ -15,11 +15,15 @@ export async function fetchSdpTomlEndpoints(
     return { error: "Empty SDP host" };
   }
 
-  const isLocal =
+  // Local/dev SDP often serves HTTP only (e.g. Docker on :8000). Try HTTP first for
+  // loopback and common dev hostnames (*.stellar.local per SDP docs); production hosts
+  // still try HTTPS first when not matched here.
+  const tryHttpFirst =
     host.startsWith("localhost") ||
     host.startsWith("127.") ||
-    host === "[::1]";
-  const tryUrls = isLocal
+    host === "[::1]" ||
+    host.includes("stellar.local");
+  const tryUrls = tryHttpFirst
     ? [
         `http://${host}/.well-known/stellar.toml`,
         `https://${host}/.well-known/stellar.toml`,

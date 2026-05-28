@@ -27,6 +27,52 @@ Tracked in detail in **[ngo-disbursement-wallet-dev-plan.md](ngo-disbursement-wa
 
 **Insta Awards 30-day sprint:** See **[30day-sprint-plan.md](30day-sprint-plan.md)** for scope: (1) Conversion landing page, (2) Sozu Wallet as SDP provider, (3) NGO Dashboard MVP — persistence + single on-chain payout (Phases A+B).
 
+### SDP wallet registration (deliverable: registration path + operator docs)
+
+See [sdp-readiness.md](../04-integrations/sdp-readiness.md) for the full snapshot and production checklist.
+
+**SDP routes are implemented in SozuCredit (`credit.sozu.capital`) — the recipient wallet. The following items are required to go live.**
+
+> Architecture: SozuPay_dashboard = NGO operator (send side). SozuCredit = recipient wallet (receive side). All SDP env vars and deep links point to SozuCredit.
+
+#### Internal / ops (in SozuCredit repo)
+
+- [x] SDP lib files (`lib/sdp/`) migrated to SozuCredit with Supabase session adapter
+- [x] `/.well-known/stellar.toml` route added to SozuCredit
+- [x] `/sdp/invite` entry route added to SozuCredit
+- [x] SEP-10 challenge + token API routes added to SozuCredit
+- [x] SEP-24 deposit, transactions, info routes added to SozuCredit
+- [x] `SdpRegisterFlow` (passkey signing — no secret key paste) + `/sdp/register` page added to SozuCredit
+- [x] Middleware updated in SozuCredit to protect `/sdp/register`
+- [ ] Production env set in SozuCredit: `SDP_ALLOWED_DOMAINS`, `WALLET_CLIENT_DOMAIN=credit.sozu.capital`, `SEP10_CLIENT_SIGNING_SECRET`, `AUTH_SECRET`
+- [ ] `stellar.toml` reachable at `https://credit.sozu.capital/.well-known/stellar.toml`
+- [ ] `STELLAR_NETWORK` set correctly for target environment (testnet vs public)
+- [ ] Recipients have a Stellar wallet in `stellar_wallets` with USDC trustline
+
+#### Partner / operator
+
+- [ ] Operator values prepared and shared with first partner: name `SozuCredit`, homepage `https://credit.sozu.capital`, SEP-10 client domain `credit.sozu.capital`, deep link `https://credit.sozu.capital/sdp/invite` (see [sdp-wallet-operator-checklist.md](../04-integrations/sdp-wallet-operator-checklist.md))
+- [ ] Partner SDP admin has seeded SozuCredit as a wallet in their SDP instance
+
+#### Verification and evidence
+
+- [ ] Local or sandbox E2E completed per [sdp-local-e2e.md](../04-integrations/sdp-local-e2e.md): invite → login → SEP-10 → SEP-24 verified
+- [ ] Evidence captured: screen recording + SDP version + client domain + deep link used
+- [ ] Repeated on mainnet/public network when testnet pass is confirmed
+
+#### External dependencies (issuer / anchor ACL — not in our hands)
+
+- [ ] Asset issuer or anchor ACL decision tracked with partner (e.g. Circle USDC allowlist for regulated distribution)
+- [ ] Any issuer-required compliance review or registration submitted to partner
+
+#### Next increment (not blocking production path)
+
+- [x] Passkey-gated signing in `/sdp/register` — done in SozuCredit (no secret key paste)
+- [ ] Optional: Playwright smoke tests with mocked SEP-10/SEP-24 for CI regression coverage
+- [ ] E2E test with real Docker SDP instance (see [sdp-local-e2e.md](../04-integrations/sdp-local-e2e.md)): run against SozuCredit on localhost + ngrok tunnel
+
+---
+
 ### Core infrastructure (Months 0–3)
 
 - [ ] Sozu Wallet: non-custodial, USDC on Stellar, ARS default display, passkey/MPC

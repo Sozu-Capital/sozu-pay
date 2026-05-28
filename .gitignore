@@ -19,6 +19,9 @@ out/
 build
 dist
 
+# local SDP backend clone (use submodule or external path; do not commit)
+stellar-disbursement-platform-backend/
+
 # misc
 .DS_Store
 *.pem

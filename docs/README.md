@@ -34,7 +34,7 @@ For architecture, contracts, or integrations, use the folders below.
 | **01-architecture** | System design: microcredit disbursement E2E, self-custodial auth, org wallet, smart accounts (G vs C), login flow. |
 | **02-contracts** | Soroban: disbursement wallet contract, yield router spec, testnet contract addresses (USDC, Blend, factory). |
 | **03-planning** | Execution: 30-day sprint plan, NGO disbursement dev plan (MUJERES 2000), production-disbursements tasks, todo. |
-| **04-integrations** | E-commerce widget/API, E2E payout test (recipients persistence, multi-recipient, Classic vs Soroban). |
+| **04-integrations** | SDP wallet registration (readiness, operator checklist, local E2E, **testnet + prod domain E2E**, passkey spec); e-commerce widget/API; E2E payout test (recipients persistence, multi-recipient, Classic vs Soroban). |
 | **05-requirements** | Non-functional requirements (performance, availability, compliance), partner PDF (MUJERES 2000 functional requirements). |
 | **06-operations** | Runbooks: local dev, env vars, out-of-scope plug-in points. |
 | **07-reference** | Schema (Supabase users, organizations, recipients), phase spec (Privy + wallet + KYC), codebase cleanup notes, performance analysis. |
@@ -47,3 +47,7 @@ For architecture, contracts, or integrations, use the folders below.
 - **NGO dev plan and milestones:** [03-planning/ngo-disbursement-wallet-dev-plan.md](03-planning/ngo-disbursement-wallet-dev-plan.md)
 - **Batch disbursement and persistence:** [03-planning/production-disbursements-tasks.md](03-planning/production-disbursements-tasks.md)
 - **E2E architecture:** [01-architecture/architecture-microcredit-disbursement.md](01-architecture/architecture-microcredit-disbursement.md)
+- **SDP readiness (snapshot + checklist):** [04-integrations/sdp-readiness.md](04-integrations/sdp-readiness.md)
+- **SDP operator allowlist values:** [04-integrations/sdp-wallet-operator-checklist.md](04-integrations/sdp-wallet-operator-checklist.md)
+- **SDP local E2E runbook:** [04-integrations/sdp-local-e2e.md](04-integrations/sdp-local-e2e.md)
+- **SDP testnet E2E (local SDP + credit.sozu.capital):** [04-integrations/sdp-testnet-production-e2e.md](04-integrations/sdp-testnet-production-e2e.md)

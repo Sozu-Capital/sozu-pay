@@ -1,4 +1,6 @@
-# SDP operator checklist — allowlisting SozuPay (web wallet)
+# SDP operator checklist — allowlisting SozuCredit (recipient wallet)
+
+> **Status and scope:** See [sdp-readiness.md](sdp-readiness.md) for a full snapshot of what is implemented, what is missing, and the production readiness checklist.
 
 Use this when an SDP administrator seeds your wallet or when you submit details to Stellar / a disbursement partner.
 
@@ -6,10 +8,10 @@ Use this when an SDP administrator seeds your wallet or when you submit details 
 
 | Field | Example | Notes |
 |--------|---------|--------|
-| **Name** | SozuPay | Display name in SDP UI. |
-| **Homepage** | `https://your-product-domain` | Marketing or product URL. |
-| **SEP-10 client domain** | `app.yourdomain.com` | Hostname only, no `https://`. Must match the `Host` header when SDP fetches `https://<client_domain>/.well-known/stellar.toml`. In development with a tunnel, use the tunnel hostname. |
-| **Deep link schema** | `https://app.yourdomain.com/sdp/invite` | Full HTTPS URL prefix for registration links. SDP appends query parameters (`asset`, `domain`, `name`, `signature`, optional `token`). The path must match production (default in app: `/sdp/invite`, overridable via `SDP_INVITE_PATHNAME`). |
+| **Name** | SozuCredit | Display name in SDP UI. |
+| **Homepage** | `https://credit.sozu.capital` | Marketing or product URL. |
+| **SEP-10 client domain** | `credit.sozu.capital` | Hostname only, no `https://`. SDP fetches `https://credit.sozu.capital/.well-known/stellar.toml`. |
+| **Deep link schema** | `https://credit.sozu.capital/sdp/invite` | Full HTTPS URL prefix for registration links. SDP appends query parameters (`asset`, `domain`, `name`, `signature`, optional `token`). |
 
 ## Server environment (your deployment)
 

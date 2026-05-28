@@ -67,8 +67,10 @@ export interface SdpMessage {
 export interface CreateDisbursementParams {
   name: string;
   walletId: string;
-  assetCode: string;
-  assetIssuer: string;
+  /** UUID returned by GET /assets — required by SDP v6. */
+  assetId: string;
+  /** Defaults to EMAIL (invite by email). */
+  registrationContactType?: "EMAIL" | "PHONE_NUMBER" | "EMAIL_AND_WALLET_ADDRESS" | "PHONE_NUMBER_AND_WALLET_ADDRESS";
   countryCode?: string;
   verificationField?: string;
 }
@@ -164,10 +166,8 @@ export async function createDisbursement(
     body: JSON.stringify({
       name: params.name,
       wallet_id: params.walletId,
-      asset: {
-        code: params.assetCode,
-        issuer: params.assetIssuer,
-      },
+      asset_id: params.assetId,
+      registration_contact_type: params.registrationContactType ?? "EMAIL",
       country_code: params.countryCode ?? "US",
       verification_field: params.verificationField ?? "DATE_OF_BIRTH",
     }),

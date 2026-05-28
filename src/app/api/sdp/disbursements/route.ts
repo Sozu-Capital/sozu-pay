@@ -45,8 +45,7 @@ export async function GET() {
  * Accepts multipart/form-data:
  *   name        (string, required)
  *   walletId    (string, required) — SDP wallet UUID
- *   assetCode   (string, default "USDC")
- *   assetIssuer (string, required for non-testnet USDC)
+ *   assetCode   (string, default "USDC") — used to look up the SDP asset UUID
  *   file        (CSV, required)
  */
 export async function POST(request: Request) {
@@ -70,16 +69,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "CSV file is required" }, { status: 400 });
     }
 
+    // Resolve the SDP asset UUID — SDP v6 requires asset_id, not code+issuer.
     const assetCode = (form.get("assetCode") as string | null) ?? "USDC";
-    const assetIssuer =
-      (form.get("assetIssuer") as string | null) ??
-      "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"; // testnet USDC
+    const assets = await listAssets();
+    const asset =
+      assets.find((a) => a.code === assetCode) ?? assets[0];
+
+    if (!asset) {
+      return NextResponse.json(
+        { error: `No asset with code "${assetCode}" found in SDP. Register it in the SDP admin UI first.` },
+        { status: 400 }
+      );
+    }
 
     const disbursement = await createDisbursement({
       name,
       walletId,
-      assetCode,
-      assetIssuer,
+      assetId: asset.id,
+      registrationContactType: "EMAIL",
     });
 
     const csvBuffer = Buffer.from(await file.arrayBuffer());

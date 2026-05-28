@@ -36,7 +36,7 @@ For architecture, contracts, or integrations, use the folders below.
 | **03-planning** | Execution: 30-day sprint plan, NGO disbursement dev plan (MUJERES 2000), production-disbursements tasks, todo. |
 | **04-integrations** | SDP wallet registration (readiness, operator checklist, local E2E, **testnet + prod domain E2E**, passkey spec); e-commerce widget/API; E2E payout test (recipients persistence, multi-recipient, Classic vs Soroban). |
 | **05-requirements** | Non-functional requirements (performance, availability, compliance), partner PDF (MUJERES 2000 functional requirements). |
-| **06-operations** | Runbooks: local dev, env vars, out-of-scope plug-in points. |
+| **06-operations** | Runbooks: local dev, env vars, out-of-scope plug-in points; **repository naming**; SDP NGO deploy overview linked from integrations. |
 | **07-reference** | Schema (Supabase users, organizations, recipients), phase spec (Privy + wallet + KYC), codebase cleanup notes, performance analysis. |
 
 ---
@@ -50,4 +50,7 @@ For architecture, contracts, or integrations, use the folders below.
 - **SDP readiness (snapshot + checklist):** [04-integrations/sdp-readiness.md](04-integrations/sdp-readiness.md)
 - **SDP operator allowlist values:** [04-integrations/sdp-wallet-operator-checklist.md](04-integrations/sdp-wallet-operator-checklist.md)
 - **SDP local E2E runbook:** [04-integrations/sdp-local-e2e.md](04-integrations/sdp-local-e2e.md)
+- **SDP NGO platform deployment (Vercel + hosted SDP):** [04-integrations/sdp-ngo-platform-deployment.md](04-integrations/sdp-ngo-platform-deployment.md)
+- **SDP Railway deploy runbook (step-by-step):** [04-integrations/sdp-railway-deploy.md](04-integrations/sdp-railway-deploy.md)
 - **SDP testnet E2E (local SDP + credit.sozu.capital):** [04-integrations/sdp-testnet-production-e2e.md](04-integrations/sdp-testnet-production-e2e.md)
+- **Repository naming (sozupay_mvp vs local folder):** [06-operations/repository-and-naming.md](06-operations/repository-and-naming.md)

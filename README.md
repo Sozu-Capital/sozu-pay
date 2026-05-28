@@ -1,6 +1,10 @@
 # SozuPay Dashboard
 
+**Canonical GitHub repo:** [blessedux/sozupay_mvp](https://github.com/blessedux/sozupay_mvp) (`origin`). Local folder may be named `SozuPay_dashboard`; see [docs/06-operations/repository-and-naming.md](docs/06-operations/repository-and-naming.md).
+
 Dashboard for the **EMPRENDE microcredit program** with our first NGO partner **MUJERES 2000**. Used by **Equipo interno** (staff) to manage beneficiaries, disbursements, repayments, and reporting. Roadmap and feature scope are driven by [MUJERES 2000 requirements](docs/05-requirements/Requerimientos_funcionales_MUJERES_2000.pdf) and documented in [docs/03-planning/ngo-disbursement-wallet-dev-plan.md](docs/03-planning/ngo-disbursement-wallet-dev-plan.md) and [docs/03-planning/todo.md](docs/03-planning/todo.md).
+
+**SDP integration:** This app is the **NGO operator UI** (deploy on Vercel). The **Stellar Disbursement Platform server** runs separately (containers + Postgres). Recipients use **[SozuCredit](https://github.com/blessedux/SozuCredit)**. Architecture and deploy steps: [docs/04-integrations/sdp-ngo-platform-deployment.md](docs/04-integrations/sdp-ngo-platform-deployment.md).
 
 ---
 
@@ -17,17 +21,29 @@ Dashboard for the **EMPRENDE microcredit program** with our first NGO partner **
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  SozuPay Dashboard (this repo)                               │
-│  Next.js · API routes · Stellar Horizon (USDC)               │
+│  SozuPay Dashboard (this repo · Vercel)                      │
+│  Next.js · Privy · NGO UI · (future) SDP API client          │
 ├─────────────────────────────────────────────────────────────┤
-│  /login → /dashboard                                        │
-│  Dashboard: Overview, Transactions, Vault, Payment walls,   │
-│  Payouts, Recipients, Keys, Audit, Settings                 │
+│  /login → /dashboard → disbursements, recipients, reports   │
+└───────────────────────────┬─────────────────────────────────┘
+                            │ HTTPS (server-side)
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Stellar Disbursement Platform (hosted · NOT on Vercel)      │
+│  Go API · PostgreSQL · TSS · batch payouts · invites         │
+└───────────────────────────┬─────────────────────────────────┘
+                            │ invite + USDC
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  SozuCredit (Vercel · credit.sozu.capital)                   │
+│  Recipient wallet · /sdp/invite · SEP-10 · SEP-24            │
 └─────────────────────────────────────────────────────────────┘
-         │
-         ▼
-  Stellar (testnet/mainnet) · USDC · Horizon API
+                            │
+                            ▼
+              Stellar testnet / mainnet · USDC · Horizon
 ```
+
+Full deployment guide: [docs/04-integrations/sdp-ngo-platform-deployment.md](docs/04-integrations/sdp-ngo-platform-deployment.md).
 
 - **Frontend:** Next.js (React), TypeScript, Tailwind.
 - **Backend:** Next.js API routes; Stellar Horizon for balance and transactions (keys and signing on server).

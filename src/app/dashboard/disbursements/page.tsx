@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useTranslations } from "next-intl";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -24,7 +25,6 @@ interface SdpWallet {
   homepage: string;
 }
 
-
 interface SdpPayment {
   id: string;
   amount: string;
@@ -32,6 +32,11 @@ interface SdpPayment {
   stellar_transaction_id: string | null;
   receiver: { id: string; email?: string; phone_number?: string };
   created_at: string;
+}
+
+interface TagEntry {
+  tag: string;
+  amount: string;
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -59,9 +64,23 @@ const PAYMENT_STATUS_COLORS: Record<string, string> = {
   FAILED: "text-red-600",
 };
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function tagsToCSV(tags: TagEntry[], defaultAmount: string): string {
+  const rows = tags.map((t) => {
+    const id = t.tag.replace(/^@/, "").trim();
+    const email = `${id}@sozu.capital`;
+    const amount = (t.amount || defaultAmount || "0").trim();
+    return `${email},${id},${amount},2000-01-01`;
+  });
+  return "email,id,amount,verification\n" + rows.join("\n");
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function DisbursementsPage() {
+  const t = useTranslations("disbursementsPage");
+
   // List view
   const [disbursements, setDisbursements] = useState<SdpDisbursement[]>([]);
   const [wallets, setWallets] = useState<SdpWallet[]>([]);
@@ -72,10 +91,22 @@ export default function DisbursementsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [batchName, setBatchName] = useState("");
   const [selectedWalletId, setSelectedWalletId] = useState("");
+
+  // Input mode: tags or csv
+  const [inputMode, setInputMode] = useState<"tags" | "csv">("tags");
+
+  // SozuTag mode
+  const [tags, setTags] = useState<TagEntry[]>([]);
+  const [tagInput, setTagInput] = useState("");
+  const [defaultAmount, setDefaultAmount] = useState("");
+  const tagInputRef = useRef<HTMLInputElement>(null);
+
+  // CSV mode
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Detail view
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -140,26 +171,69 @@ export default function DisbursementsPage() {
       .finally(() => setDetailLoading(false));
   }, [selectedId]);
 
+  // ── Tag input ─────────────────────────────────────────────────────────────
+
+  function handleTagKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const raw = tagInput.trim();
+    if (!raw) return;
+    const normalised = raw.startsWith("@") ? raw : `@${raw}`;
+    if (tags.some((t) => t.tag.toLowerCase() === normalised.toLowerCase())) {
+      setTagInput("");
+      return;
+    }
+    setTags((prev) => [...prev, { tag: normalised, amount: "" }]);
+    setTagInput("");
+  }
+
+  function updateTagAmount(index: number, amount: string) {
+    setTags((prev) => prev.map((t, i) => (i === index ? { ...t, amount } : t)));
+  }
+
+  function removeTag(index: number) {
+    setTags((prev) => prev.filter((_, i) => i !== index));
+  }
+
   // ── Create disbursement ───────────────────────────────────────────────────
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!csvFile) {
-      setCreateError("Please select a CSV file.");
-      return;
-    }
+    setCreateError(null);
+
     if (!selectedWalletId) {
-      setCreateError("Please select a wallet.");
+      setCreateError(t("errorNoWallet"));
       return;
     }
 
+    let fileToUpload: File;
+
+    if (inputMode === "tags") {
+      if (tags.length === 0) {
+        setCreateError(t("errorNoRecipientsOrFile"));
+        return;
+      }
+      const missingAmount = tags.some((tag) => !tag.amount && !defaultAmount);
+      if (missingAmount) {
+        setCreateError(t("errorNoAmount"));
+        return;
+      }
+      const csvString = tagsToCSV(tags, defaultAmount);
+      fileToUpload = new File([csvString], "disbursement.csv", { type: "text/csv" });
+    } else {
+      if (!csvFile) {
+        setCreateError(t("errorNoRecipientsOrFile"));
+        return;
+      }
+      fileToUpload = csvFile;
+    }
+
     setCreating(true);
-    setCreateError(null);
 
     const form = new FormData();
     form.append("name", batchName);
     form.append("walletId", selectedWalletId);
-    form.append("file", csvFile);
+    form.append("file", fileToUpload);
 
     try {
       const res = await fetch("/api/sdp/disbursements", { method: "POST", body: form });
@@ -171,6 +245,9 @@ export default function DisbursementsPage() {
       setShowCreate(false);
       setBatchName("");
       setCsvFile(null);
+      setTags([]);
+      setTagInput("");
+      setDefaultAmount("");
       if (fileInputRef.current) fileInputRef.current.value = "";
       await fetchList();
       setSelectedId(data.disbursement.id);
@@ -193,7 +270,7 @@ export default function DisbursementsPage() {
         setActionMsg(`Error: ${data.error ?? res.status}`);
         return;
       }
-      setActionMsg("Disbursement started. Payments are being processed.");
+      setActionMsg(t("disbursementStarted"));
       await fetchList();
       if (selectedId === id) setSelectedId(null);
       setTimeout(() => setSelectedId(id), 100);
@@ -221,7 +298,7 @@ export default function DisbursementsPage() {
         return;
       }
       setActionMsg(
-        `Invites sent: ${data.sent} sent, ${data.skipped} skipped (already registered), ${data.failed} failed.`
+        t("invitesSent", { sent: data.sent, skipped: data.skipped, failed: data.failed })
       );
     } catch (e) {
       setActionMsg(e instanceof Error ? e.message : "Network error");
@@ -238,11 +315,10 @@ export default function DisbursementsPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-            Batch disbursements
+            {t("title")}
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Create CSV-based payment batches via the Stellar Disbursement Platform.
-            Recipients receive an invite email and register on SozuCredit.
+            {t("subtitle")}
           </p>
         </div>
         <button
@@ -252,7 +328,7 @@ export default function DisbursementsPage() {
           }}
           className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
         >
-          {showCreate ? "Cancel" : "New batch"}
+          {showCreate ? t("cancel") : t("newBatch")}
         </button>
       </div>
 
@@ -264,43 +340,44 @@ export default function DisbursementsPage() {
             onClick={() => setActionMsg(null)}
             className="ml-3 text-blue-500 hover:text-blue-700 font-medium"
           >
-            Dismiss
+            {t("dismiss")}
           </button>
         </div>
       )}
 
       {/* Create form */}
       {showCreate && (
-        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-6 space-y-4">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-6 space-y-5">
           <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-            Create new disbursement batch
+            {t("createTitle")}
           </h2>
 
           {listError && (
             <p className="text-sm text-amber-700 dark:text-amber-400">
-              Warning: could not load wallets/assets from SDP ({listError}). Check{" "}
-              <code className="text-xs">SDP_API_URL</code> in your env.
+              {t("sdpWarning", { error: listError })}
             </p>
           )}
 
-          <form onSubmit={handleCreate} className="space-y-4">
+          <form onSubmit={handleCreate} className="space-y-5">
+            {/* Batch name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Batch name
+                {t("batchNameLabel")}
               </label>
               <input
                 required
                 type="text"
                 value={batchName}
                 onChange={(e) => setBatchName(e.target.value)}
-                placeholder="e.g. Mujeres 2000 — May 2026"
+                placeholder={t("batchNamePlaceholder")}
                 className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
+            {/* Wallet */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Recipient wallet
+                {t("walletLabel")}
               </label>
               {wallets.length > 0 ? (
                 <select
@@ -321,44 +398,144 @@ export default function DisbursementsPage() {
                   type="text"
                   value={selectedWalletId}
                   onChange={(e) => setSelectedWalletId(e.target.value)}
-                  placeholder="Wallet UUID from SDP admin"
+                  placeholder={t("walletPlaceholder")}
                   className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               )}
             </div>
 
+            {/* Input mode toggle */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Payment instructions (CSV)
-              </label>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                Required columns:{" "}
-                <code className="bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
-                  email,id,amount,verification
-                </code>
-                {" "}—{" "}
-                <a
-                  href="/sdp-disbursement-template.csv"
-                  download
-                  className="text-blue-600 hover:underline"
-                >
-                  download template
-                </a>
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                {t("inputModeLabel")}
               </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,text/csv"
-                required
-                onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
-                className="block w-full text-sm text-gray-700 dark:text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-gray-100 dark:file:bg-gray-700 file:text-sm file:font-medium"
-              />
-              {csvFile && (
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {csvFile.name} ({Math.round(csvFile.size / 1024)} KB)
-                </p>
-              )}
+              <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden w-fit">
+                {(["tags", "csv"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setInputMode(mode)}
+                    className={`px-4 py-1.5 text-sm font-medium transition-colors ${
+                      inputMode === mode
+                        ? "bg-blue-600 text-white"
+                        : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    }`}
+                  >
+                    {mode === "tags" ? t("modeTags") : t("modeCsv")}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* SozuTag mode */}
+            {inputMode === "tags" && (
+              <div className="space-y-3">
+                {/* Default amount */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {t("defaultAmountLabel")}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={defaultAmount}
+                    onChange={(e) => setDefaultAmount(e.target.value)}
+                    placeholder={t("defaultAmountPlaceholder")}
+                    className="w-48 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Tag input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {t("tagInputLabel")}
+                  </label>
+                  <input
+                    ref={tagInputRef}
+                    type="text"
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={handleTagKeyDown}
+                    placeholder={t("tagInputPlaceholder")}
+                    className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {t("tagInputHint")}
+                  </p>
+                </div>
+
+                {/* Tag chips */}
+                {tags.length === 0 ? (
+                  <p className="text-xs text-gray-400 dark:text-gray-500 italic">
+                    {t("noTagsYet")}
+                  </p>
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {tags.map((entry, i) => (
+                      <li
+                        key={entry.tag}
+                        className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 px-3 py-2"
+                      >
+                        <span className="flex-1 text-sm font-medium text-gray-800 dark:text-gray-200 font-mono">
+                          {entry.tag}
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={entry.amount}
+                          onChange={(e) => updateTagAmount(i, e.target.value)}
+                          placeholder={defaultAmount || t("tagAmountPlaceholder")}
+                          className="w-28 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-1 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeTag(i)}
+                          className="text-gray-400 hover:text-red-500 transition-colors"
+                          aria-label="Remove"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {/* CSV mode */}
+            {inputMode === "csv" && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t("csvLabel")}
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  {t("csvHint")}{" "}
+                  <a
+                    href="/sdp-disbursement-template.csv"
+                    download
+                    className="text-blue-600 hover:underline"
+                  >
+                    {t("csvDownload")}
+                  </a>
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
+                  className="block w-full text-sm text-gray-700 dark:text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-gray-100 dark:file:bg-gray-700 file:text-sm file:font-medium"
+                />
+                {csvFile && (
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {csvFile.name} ({Math.round(csvFile.size / 1024)} KB)
+                  </p>
+                )}
+              </div>
+            )}
 
             {createError && (
               <p className="text-sm text-red-600 dark:text-red-400">{createError}</p>
@@ -370,14 +547,14 @@ export default function DisbursementsPage() {
                 disabled={creating}
                 className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-60"
               >
-                {creating ? "Creating…" : "Create batch"}
+                {creating ? t("creating") : t("createBatch")}
               </button>
               <button
                 type="button"
                 onClick={() => setShowCreate(false)}
                 className="px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
               >
-                Cancel
+                {t("cancel")}
               </button>
             </div>
           </form>
@@ -387,24 +564,21 @@ export default function DisbursementsPage() {
       {/* Disbursements list */}
       <div className="space-y-3">
         {listLoading && (
-          <p className="text-sm text-gray-500 dark:text-gray-400">Loading disbursements…</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t("loading")}</p>
         )}
         {!listLoading && listError && (
           <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4">
             <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
-              Could not connect to SDP
+              {t("sdpError")}
             </p>
             <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">{listError}</p>
             <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
-              Set <code>SDP_API_URL</code>, <code>SDP_ADMIN_EMAIL</code>, and{" "}
-              <code>SDP_ADMIN_PASSWORD</code> in your environment variables.
+              {t("sdpEnvHint")}
             </p>
           </div>
         )}
         {!listLoading && !listError && disbursements.length === 0 && (
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            No disbursements yet. Click &quot;New batch&quot; to create the first one.
-          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t("empty")}</p>
         )}
         {disbursements.map((d) => (
           <div
@@ -420,7 +594,7 @@ export default function DisbursementsPage() {
               <div className="space-y-0.5 min-w-0">
                 <p className="font-medium text-gray-900 dark:text-white truncate">{d.name}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {d.total_payments} payments · {d.asset.code} · {d.wallet.name}
+                  {d.total_payments} {t("payments")} · {d.asset.code} · {d.wallet.name}
                 </p>
               </div>
               <div className="flex items-center gap-3 shrink-0 ml-4">
@@ -461,7 +635,7 @@ export default function DisbursementsPage() {
                       disabled={startingId === d.id}
                       className="px-3 py-1.5 rounded bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-60"
                     >
-                      {startingId === d.id ? "Starting…" : "Start payments"}
+                      {startingId === d.id ? t("starting") : t("startPayments")}
                     </button>
                   )}
                   <button
@@ -469,7 +643,7 @@ export default function DisbursementsPage() {
                     disabled={sendingId === d.id}
                     className="px-3 py-1.5 rounded bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-60"
                   >
-                    {sendingId === d.id ? "Sending…" : "Send invite emails"}
+                    {sendingId === d.id ? t("sending") : t("sendInvites")}
                   </button>
                   <button
                     onClick={() => {
@@ -478,17 +652,17 @@ export default function DisbursementsPage() {
                     }}
                     className="px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                   >
-                    Refresh
+                    {t("refresh")}
                   </button>
                 </div>
 
                 {/* Stats */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[
-                    { label: "Total", value: d.total_payments },
-                    { label: "Successful", value: d.successful_payments },
-                    { label: "Failed", value: d.failed_payments },
-                    { label: "Disbursed", value: `${d.disbursed_amount} ${d.asset.code}` },
+                    { label: t("statTotal"), value: d.total_payments },
+                    { label: t("statSuccessful"), value: d.successful_payments },
+                    { label: t("statFailed"), value: d.failed_payments },
+                    { label: t("statDisbursed"), value: `${d.disbursed_amount} ${d.asset.code}` },
                   ].map((s) => (
                     <div
                       key={s.label}
@@ -504,7 +678,7 @@ export default function DisbursementsPage() {
 
                 {/* Payments table */}
                 {detailLoading && (
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Loading payments…</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{t("loading")}</p>
                 )}
                 {detailError && (
                   <p className="text-sm text-red-600 dark:text-red-400">{detailError}</p>
@@ -515,16 +689,16 @@ export default function DisbursementsPage() {
                       <thead>
                         <tr className="border-b border-gray-200 dark:border-gray-700">
                           <th className="text-left py-2 pr-4 font-medium text-gray-500 dark:text-gray-400">
-                            Recipient
+                            {t("colRecipient")}
                           </th>
                           <th className="text-right py-2 pr-4 font-medium text-gray-500 dark:text-gray-400">
-                            Amount
+                            {t("colAmount")}
                           </th>
                           <th className="text-left py-2 pr-4 font-medium text-gray-500 dark:text-gray-400">
-                            Status
+                            {t("colStatus")}
                           </th>
                           <th className="text-left py-2 font-medium text-gray-500 dark:text-gray-400">
-                            Tx hash
+                            {t("colTxHash")}
                           </th>
                         </tr>
                       </thead>
@@ -561,7 +735,7 @@ export default function DisbursementsPage() {
                                   {p.stellar_transaction_id.slice(0, 12)}…
                                 </a>
                               ) : (
-                                <span className="text-xs text-gray-400">pending</span>
+                                <span className="text-xs text-gray-400">{t("pending")}</span>
                               )}
                             </td>
                           </tr>
@@ -572,7 +746,7 @@ export default function DisbursementsPage() {
                               colSpan={4}
                               className="py-4 text-center text-sm text-gray-400"
                             >
-                              No payments yet. Upload a CSV to populate recipients.
+                              {t("noPayments")}
                             </td>
                           </tr>
                         )}

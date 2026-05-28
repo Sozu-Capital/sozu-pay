@@ -34,9 +34,12 @@ interface SdpPayment {
   created_at: string;
 }
 
-interface TagEntry {
-  tag: string;
+interface DraftRecipient {
+  name: string;
+  email: string;
+  phone: string;
   amount: string;
+  verification: string;
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -64,14 +67,23 @@ const PAYMENT_STATUS_COLORS: Record<string, string> = {
   FAILED: "text-red-600",
 };
 
+const EMPTY_FORM: DraftRecipient = {
+  name: "",
+  email: "",
+  phone: "",
+  amount: "",
+  verification: "",
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function tagsToCSV(tags: TagEntry[], defaultAmount: string): string {
-  const rows = tags.map((t) => {
-    const id = t.tag.replace(/^@/, "").trim();
-    const email = `${id}@sozu.capital`;
-    const amount = (t.amount || defaultAmount || "0").trim();
-    return `${email},${id},${amount},2000-01-01`;
+function recipientsToCSV(recipients: DraftRecipient[], defaultAmount: string): string {
+  const rows = recipients.map((r) => {
+    const id = r.name.trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+    const email = r.email.trim();
+    const amount = (r.amount || defaultAmount || "0").trim();
+    const verification = r.verification.trim() || "2000-01-01";
+    return `${email},${id},${amount},${verification}`;
   });
   return "email,id,amount,verification\n" + rows.join("\n");
 }
@@ -87,26 +99,23 @@ export default function DisbursementsPage() {
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
 
-  // Create form
+  // Create form — shared
   const [showCreate, setShowCreate] = useState(false);
   const [batchName, setBatchName] = useState("");
   const [selectedWalletId, setSelectedWalletId] = useState("");
-
-  // Input mode: tags or csv
-  const [inputMode, setInputMode] = useState<"tags" | "csv">("tags");
-
-  // SozuTag mode
-  const [tags, setTags] = useState<TagEntry[]>([]);
-  const [tagInput, setTagInput] = useState("");
+  const [inputMode, setInputMode] = useState<"manual" | "csv">("manual");
   const [defaultAmount, setDefaultAmount] = useState("");
-  const tagInputRef = useRef<HTMLInputElement>(null);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  // Manual mode — draft recipient list + add form
+  const [draftRecipients, setDraftRecipients] = useState<DraftRecipient[]>([]);
+  const [recipientForm, setRecipientForm] = useState<DraftRecipient>(EMPTY_FORM);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   // CSV mode
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
 
   // Detail view
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -171,31 +180,41 @@ export default function DisbursementsPage() {
       .finally(() => setDetailLoading(false));
   }, [selectedId]);
 
-  // ── Tag input ─────────────────────────────────────────────────────────────
+  // ── Add recipient to draft ────────────────────────────────────────────────
 
-  function handleTagKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key !== "Enter") return;
-    e.preventDefault();
-    const raw = tagInput.trim();
-    if (!raw) return;
-    const normalised = raw.startsWith("@") ? raw : `@${raw}`;
-    if (tags.some((t) => t.tag.toLowerCase() === normalised.toLowerCase())) {
-      setTagInput("");
-      return;
+  function handleAddRecipient() {
+    const { name, email } = recipientForm;
+    if (!name.trim() || !email.trim()) return;
+    setDraftRecipients((prev) => [...prev, { ...recipientForm }]);
+    setRecipientForm(EMPTY_FORM);
+    nameInputRef.current?.focus();
+  }
+
+  function handleRecipientKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddRecipient();
     }
-    setTags((prev) => [...prev, { tag: normalised, amount: "" }]);
-    setTagInput("");
   }
 
-  function updateTagAmount(index: number, amount: string) {
-    setTags((prev) => prev.map((t, i) => (i === index ? { ...t, amount } : t)));
+  function removeRecipient(index: number) {
+    setDraftRecipients((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function removeTag(index: number) {
-    setTags((prev) => prev.filter((_, i) => i !== index));
+  function setField(field: keyof DraftRecipient, value: string) {
+    setRecipientForm((prev) => ({ ...prev, [field]: value }));
   }
 
   // ── Create disbursement ───────────────────────────────────────────────────
+
+  function resetCreateForm() {
+    setBatchName("");
+    setDraftRecipients([]);
+    setRecipientForm(EMPTY_FORM);
+    setDefaultAmount("");
+    setCsvFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -208,21 +227,26 @@ export default function DisbursementsPage() {
 
     let fileToUpload: File;
 
-    if (inputMode === "tags") {
-      if (tags.length === 0) {
-        setCreateError(t("errorNoRecipientsOrFile"));
+    if (inputMode === "manual") {
+      if (draftRecipients.length === 0) {
+        setCreateError(t("errorNoRecipients"));
         return;
       }
-      const missingAmount = tags.some((tag) => !tag.amount && !defaultAmount);
+      const missingEmail = draftRecipients.some((r) => !r.email.trim());
+      if (missingEmail) {
+        setCreateError(t("errorMissingEmail"));
+        return;
+      }
+      const missingAmount = draftRecipients.some((r) => !r.amount.trim() && !defaultAmount.trim());
       if (missingAmount) {
-        setCreateError(t("errorNoAmount"));
+        setCreateError(t("errorMissingAmount"));
         return;
       }
-      const csvString = tagsToCSV(tags, defaultAmount);
+      const csvString = recipientsToCSV(draftRecipients, defaultAmount);
       fileToUpload = new File([csvString], "disbursement.csv", { type: "text/csv" });
     } else {
       if (!csvFile) {
-        setCreateError(t("errorNoRecipientsOrFile"));
+        setCreateError(t("errorNoFile"));
         return;
       }
       fileToUpload = csvFile;
@@ -243,12 +267,7 @@ export default function DisbursementsPage() {
         return;
       }
       setShowCreate(false);
-      setBatchName("");
-      setCsvFile(null);
-      setTags([]);
-      setTagInput("");
-      setDefaultAmount("");
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      resetCreateForm();
       await fetchList();
       setSelectedId(data.disbursement.id);
     } catch (e) {
@@ -317,9 +336,7 @@ export default function DisbursementsPage() {
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
             {t("title")}
           </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {t("subtitle")}
-          </p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("subtitle")}</p>
         </div>
         <button
           onClick={() => {
@@ -334,20 +351,20 @@ export default function DisbursementsPage() {
 
       {/* Action message banner */}
       {actionMsg && (
-        <div className="rounded-md bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 px-4 py-3 text-sm text-blue-800 dark:text-blue-300">
-          {actionMsg}
+        <div className="rounded-md bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 px-4 py-3 text-sm text-blue-800 dark:text-blue-300 flex items-start justify-between gap-3">
+          <span>{actionMsg}</span>
           <button
             onClick={() => setActionMsg(null)}
-            className="ml-3 text-blue-500 hover:text-blue-700 font-medium"
+            className="shrink-0 text-blue-500 hover:text-blue-700 font-medium"
           >
             {t("dismiss")}
           </button>
         </div>
       )}
 
-      {/* Create form */}
+      {/* ── Create form ───────────────────────────────────────────────────── */}
       {showCreate && (
-        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-6 space-y-5">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-6 space-y-6">
           <h2 className="text-base font-semibold text-gray-900 dark:text-white">
             {t("createTitle")}
           </h2>
@@ -358,7 +375,7 @@ export default function DisbursementsPage() {
             </p>
           )}
 
-          <form onSubmit={handleCreate} className="space-y-5">
+          <form onSubmit={handleCreate} className="space-y-6">
             {/* Batch name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -410,7 +427,7 @@ export default function DisbursementsPage() {
                 {t("inputModeLabel")}
               </p>
               <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden w-fit">
-                {(["tags", "csv"] as const).map((mode) => (
+                {(["manual", "csv"] as const).map((mode) => (
                   <button
                     key={mode}
                     type="button"
@@ -421,15 +438,15 @@ export default function DisbursementsPage() {
                         : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                     }`}
                   >
-                    {mode === "tags" ? t("modeTags") : t("modeCsv")}
+                    {mode === "manual" ? t("modeManual") : t("modeCsv")}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* SozuTag mode */}
-            {inputMode === "tags" && (
-              <div className="space-y-3">
+            {/* ── Manual mode ──────────────────────────────────────────────── */}
+            {inputMode === "manual" && (
+              <div className="space-y-4">
                 {/* Default amount */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -446,91 +463,227 @@ export default function DisbursementsPage() {
                   />
                 </div>
 
-                {/* Tag input */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t("tagInputLabel")}
-                  </label>
-                  <input
-                    ref={tagInputRef}
-                    type="text"
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={handleTagKeyDown}
-                    placeholder={t("tagInputPlaceholder")}
-                    className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {t("tagInputHint")}
+                {/* Recipient add form */}
+                <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-4 space-y-3">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t("recipientSectionTitle")}
                   </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Name */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                        {t("nameLabel")}
+                      </label>
+                      <input
+                        ref={nameInputRef}
+                        type="text"
+                        value={recipientForm.name}
+                        onChange={(e) => setField("name", e.target.value)}
+                        onKeyDown={handleRecipientKeyDown}
+                        placeholder={t("namePlaceholder")}
+                        className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    {/* Email */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                        {t("emailLabel")}
+                      </label>
+                      <input
+                        type="email"
+                        value={recipientForm.email}
+                        onChange={(e) => setField("email", e.target.value)}
+                        onKeyDown={handleRecipientKeyDown}
+                        placeholder={t("emailPlaceholder")}
+                        className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    {/* Phone */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                        {t("phoneLabel")}
+                      </label>
+                      <input
+                        type="tel"
+                        value={recipientForm.phone}
+                        onChange={(e) => setField("phone", e.target.value)}
+                        onKeyDown={handleRecipientKeyDown}
+                        placeholder={t("phonePlaceholder")}
+                        className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    {/* Amount */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                        {t("amountLabel")}
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={recipientForm.amount}
+                        onChange={(e) => setField("amount", e.target.value)}
+                        onKeyDown={handleRecipientKeyDown}
+                        placeholder={defaultAmount || t("amountPlaceholder")}
+                        className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    {/* Verification (date of birth) */}
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                        {t("verificationLabel")}
+                      </label>
+                      <input
+                        type="date"
+                        value={recipientForm.verification}
+                        onChange={(e) => setField("verification", e.target.value)}
+                        onKeyDown={handleRecipientKeyDown}
+                        className="w-48 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                        {t("verificationHint")}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAddRecipient}
+                    disabled={!recipientForm.name.trim() || !recipientForm.email.trim()}
+                    className="mt-1 px-4 py-2 rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-sm font-medium hover:bg-gray-700 dark:hover:bg-gray-300 disabled:opacity-40 transition-colors"
+                  >
+                    {t("addRecipient")}
+                  </button>
                 </div>
 
-                {/* Tag chips */}
-                {tags.length === 0 ? (
-                  <p className="text-xs text-gray-400 dark:text-gray-500 italic">
-                    {t("noTagsYet")}
+                {/* Draft list */}
+                <div>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {t("draftTitle", { count: draftRecipients.length })}
                   </p>
-                ) : (
-                  <ul className="flex flex-col gap-2">
-                    {tags.map((entry, i) => (
-                      <li
-                        key={entry.tag}
-                        className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 px-3 py-2"
-                      >
-                        <span className="flex-1 text-sm font-medium text-gray-800 dark:text-gray-200 font-mono">
-                          {entry.tag}
-                        </span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={entry.amount}
-                          onChange={(e) => updateTagAmount(i, e.target.value)}
-                          placeholder={defaultAmount || t("tagAmountPlaceholder")}
-                          className="w-28 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-1 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeTag(i)}
-                          className="text-gray-400 hover:text-red-500 transition-colors"
-                          aria-label="Remove"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+
+                  {draftRecipients.length === 0 ? (
+                    <p className="text-xs text-gray-400 dark:text-gray-500 italic">
+                      {t("noDraftYet")}
+                    </p>
+                  ) : (
+                    <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 dark:bg-gray-800">
+                          <tr>
+                            <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                              {t("colName")}
+                            </th>
+                            <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                              {t("colEmail")}
+                            </th>
+                            <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 hidden sm:table-cell">
+                              {t("colPhone")}
+                            </th>
+                            <th className="text-right px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                              {t("colAmountDraft")}
+                            </th>
+                            <th className="px-3 py-2" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {draftRecipients.map((r, i) => (
+                            <tr
+                              key={i}
+                              className="border-t border-gray-100 dark:border-gray-800"
+                            >
+                              <td className="px-3 py-2 text-gray-800 dark:text-gray-200 font-medium truncate max-w-[140px]">
+                                {r.name}
+                              </td>
+                              <td className="px-3 py-2 text-gray-600 dark:text-gray-400 truncate max-w-[160px]">
+                                {r.email}
+                              </td>
+                              <td className="px-3 py-2 text-gray-500 dark:text-gray-500 hidden sm:table-cell">
+                                {r.phone || "—"}
+                              </td>
+                              <td className="px-3 py-2 text-right font-medium text-gray-900 dark:text-white">
+                                {r.amount || defaultAmount || "—"}
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => removeRecipient(i)}
+                                  className="text-gray-400 hover:text-red-500 transition-colors"
+                                  aria-label={t("removeRecipient")}
+                                >
+                                  <svg
+                                    className="w-4 h-4"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M6 18L18 6M6 6l12 12"
+                                    />
+                                  </svg>
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
-            {/* CSV mode */}
+            {/* ── CSV mode ─────────────────────────────────────────────────── */}
             {inputMode === "csv" && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t("csvLabel")}
                 </label>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                  {t("csvHint")}{" "}
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {t("csvColumns")}
+                </p>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <label className="cursor-pointer px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                    {csvFile ? csvFile.name : t("csvUploadLabel")}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".csv,text/csv"
+                      onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
+                      className="sr-only"
+                    />
+                  </label>
                   <a
                     href="/sdp-disbursement-template.csv"
                     download
-                    className="text-blue-600 hover:underline"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-blue-300 dark:border-blue-700 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
                   >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                      />
+                    </svg>
                     {t("csvDownload")}
                   </a>
-                </p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv,text/csv"
-                  onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
-                  className="block w-full text-sm text-gray-700 dark:text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-gray-100 dark:file:bg-gray-700 file:text-sm file:font-medium"
-                />
+                </div>
                 {csvFile && (
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     {csvFile.name} ({Math.round(csvFile.size / 1024)} KB)
                   </p>
                 )}
@@ -541,7 +694,7 @@ export default function DisbursementsPage() {
               <p className="text-sm text-red-600 dark:text-red-400">{createError}</p>
             )}
 
-            <div className="flex gap-3">
+            <div className="flex gap-3 pt-1">
               <button
                 type="submit"
                 disabled={creating}
@@ -551,7 +704,10 @@ export default function DisbursementsPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setShowCreate(false)}
+                onClick={() => {
+                  setShowCreate(false);
+                  resetCreateForm();
+                }}
                 className="px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
               >
                 {t("cancel")}
@@ -561,7 +717,7 @@ export default function DisbursementsPage() {
         </div>
       )}
 
-      {/* Disbursements list */}
+      {/* ── Disbursements list ──────────────────────────────────────────────── */}
       <div className="space-y-3">
         {listLoading && (
           <p className="text-sm text-gray-500 dark:text-gray-400">{t("loading")}</p>
@@ -572,14 +728,13 @@ export default function DisbursementsPage() {
               {t("sdpError")}
             </p>
             <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">{listError}</p>
-            <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
-              {t("sdpEnvHint")}
-            </p>
+            <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">{t("sdpEnvHint")}</p>
           </div>
         )}
         {!listLoading && !listError && disbursements.length === 0 && (
           <p className="text-sm text-gray-500 dark:text-gray-400">{t("empty")}</p>
         )}
+
         {disbursements.map((d) => (
           <div
             key={d.id}
@@ -616,7 +771,12 @@ export default function DisbursementsPage() {
                   viewBox="0 0 24 24"
                   stroke="currentColor"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
                 </svg>
               </div>
             </div>
@@ -662,7 +822,10 @@ export default function DisbursementsPage() {
                     { label: t("statTotal"), value: d.total_payments },
                     { label: t("statSuccessful"), value: d.successful_payments },
                     { label: t("statFailed"), value: d.failed_payments },
-                    { label: t("statDisbursed"), value: `${d.disbursed_amount} ${d.asset.code}` },
+                    {
+                      label: t("statDisbursed"),
+                      value: `${d.disbursed_amount} ${d.asset.code}`,
+                    },
                   ].map((s) => (
                     <div
                       key={s.label}
@@ -709,7 +872,9 @@ export default function DisbursementsPage() {
                             className="border-b border-gray-100 dark:border-gray-800 last:border-0"
                           >
                             <td className="py-2 pr-4 text-gray-700 dark:text-gray-300 truncate max-w-[200px]">
-                              {p.receiver.email ?? p.receiver.phone_number ?? p.receiver.id.slice(0, 8)}
+                              {p.receiver.email ??
+                                p.receiver.phone_number ??
+                                p.receiver.id.slice(0, 8)}
                             </td>
                             <td className="py-2 pr-4 text-right text-gray-900 dark:text-white font-medium">
                               {p.amount} {d.asset.code}

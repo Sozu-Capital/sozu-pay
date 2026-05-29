@@ -113,7 +113,7 @@ export async function POST(
 
         if (sep10SigningKey) {
           try {
-            registrationUrl = signSdpInviteUrl(
+            const signedUrl = signSdpInviteUrl(
               walletInviteUrl,
               assetCode,
               assetIssuer,
@@ -121,6 +121,12 @@ export async function POST(
               organizationName,
               sep10SigningKey
             );
+            // Append tenant as unsigned param AFTER the signature so existing
+            // verifiers can ignore it while new SozuCredit versions read it.
+            const tenantName = process.env.SDP_TENANT_NAME?.trim();
+            registrationUrl = tenantName
+              ? `${signedUrl}&tenant=${encodeURIComponent(tenantName)}`
+              : signedUrl;
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             console.warn("[send-invites] URL signing failed, falling back to plain invite URL:", msg);

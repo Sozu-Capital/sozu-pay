@@ -41,3 +41,6 @@ yarn-error.log*
 next-env.d.ts
 .vercel
 .env*.local
+
+# accidental npx cache dirs from hostname-based cwd
+sdp-v2-production*/

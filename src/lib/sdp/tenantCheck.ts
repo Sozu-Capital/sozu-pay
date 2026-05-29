@@ -73,9 +73,9 @@ export async function preflightWalletRegistrationUrl(
 
     if (error.includes("Failed to load tenant")) {
       return (
-        "SDP tenant database is not fully provisioned. On Railway, run tenant migrations: " +
-        "`./stellar-disbursement-platform db migrate up --tenant-id <tenant-uuid>` " +
-        "(see docs/04-integrations/sdp-railway-deploy.md Step 7)."
+        "SDP could not resolve the tenant from the wallet-registration JWT home_domain. " +
+        "On Railway with a flat hostname (no tenant subdomain), set SINGLE_TENANT_MODE=true on sdp-api " +
+        "or set the tenant base_url to https://<tenant-name>.your-domain (see sdp-railway-deploy.md)."
       );
     }
 

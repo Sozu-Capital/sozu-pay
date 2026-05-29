@@ -28,7 +28,7 @@ export async function GET() {
     tenantRecognized: probe.ok,
     detail: probe.detail,
     walletRegistrationHint: probe.ok
-      ? "If recipients see 'Failed to load tenant by name', run Step 7 tenant migrations on Railway."
+      ? "If recipients see 'Failed to load tenant by name' on a flat Railway URL, set SINGLE_TENANT_MODE=true on sdp-api."
       : "Set SDP_TENANT_NAME to your Railway tenant name (login probe returned tenant not found).",
   });
 }

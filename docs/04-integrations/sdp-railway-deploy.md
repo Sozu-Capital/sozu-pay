@@ -73,7 +73,7 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 # Multi-tenant
 ADMIN_ACCOUNT=SDP-admin
 ADMIN_API_KEY=<generate-a-strong-random-key>
-SINGLE_TENANT_MODE=false
+SINGLE_TENANT_MODE=true
 INSTANCE_NAME=SozuPay SDP testnet
 
 # SEP-10 signing
@@ -289,7 +289,8 @@ Redeploy SozuCredit, then re-run the preflight script.
 | `502` on disbursement create | SDP API unreachable | Verify `SDP_API_URL` has no trailing `/`; check Railway service is deployed |
 | Payments stuck in `PENDING` | TSS not running or not funded | Check sdp-tss service logs; fund distribution wallet on Friendbot |
 | SozuCredit 503 on TOML | `SEP10_CLIENT_SIGNING_SECRET` not set | Verify Vercel env on SozuCredit project; redeploy |
-| Recipient wallet registration 500: `Failed to load tenant by name` | Tenant row exists but **tenant DB migrations** were not run (Step 7) | `railway run --service sdp-api -- ./stellar-disbursement-platform db migrate up --tenant-id <uuid>` — get UUID from SDP admin or `GET /api/sdp/tenant-check` |
+| Recipient wallet registration 500: `Failed to load tenant by name` | JWT `home_domain` is a flat Railway URL; SDP parses the first subdomain as tenant name (`sdp-v2-production-f6c7`, not `mujeres-admin`) | Set `SINGLE_TENANT_MODE=true` when you have one tenant on a flat hostname, **or** set tenant `base_url` to `https://<tenant-name>.your-domain` with matching DNS |
+| Tenant schema missing (rare after create) | Step 7 tenant migrations not run | `railway run --service sdp-api -- ./stellar-disbursement-platform db migrate up --tenant-id <uuid>` |
 | `Tenant not found in context` on dashboard SDP calls | Wrong `SDP_TENANT_NAME` | Must match tenant `name` from Railway setup (probe: `POST /login` with header should return "Incorrect email or password", not "Tenant not found") |
 
 ---

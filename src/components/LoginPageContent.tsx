@@ -15,9 +15,11 @@ type LoginPageContentProps = {
    * When false (e.g. /), keep existing sessions so the home route is not a forced logout.
    */
   clearSessionOnMount?: boolean;
+  /** After successful login, redirect here instead of default onboarding. */
+  returnTo?: string;
 };
 
-export function LoginPageContent({ clearSessionOnMount = true }: LoginPageContentProps) {
+export function LoginPageContent({ clearSessionOnMount = true, returnTo }: LoginPageContentProps) {
   const router = useRouter();
   const { ready, authenticated, user, getAccessToken, logout: privyLogout } = usePrivy();
   const { login: openLoginModal } = useLogin();
@@ -97,9 +99,11 @@ export function LoginPageContent({ clearSessionOnMount = true }: LoginPageConten
           return;
         }
         const next =
-          typeof data.redirect === "string" && data.redirect.startsWith("/")
-            ? data.redirect
-            : "/onboarding/organizations";
+          returnTo && returnTo.startsWith("/")
+            ? returnTo
+            : typeof data.redirect === "string" && data.redirect.startsWith("/")
+              ? data.redirect
+              : "/onboarding/organizations";
         router.replace(next);
       } catch (e) {
         if (cancelled) return;
@@ -120,7 +124,7 @@ export function LoginPageContent({ clearSessionOnMount = true }: LoginPageConten
     return () => {
       cancelled = true;
     };
-  }, [ready, authenticated, user, getAccessToken, router, t]);
+  }, [ready, authenticated, user, getAccessToken, router, t, returnTo]);
 
   const usePrivyAuth = !!process.env.NEXT_PUBLIC_PRIVY_APP_ID;
   const isClearingSession = clearing && authenticated;

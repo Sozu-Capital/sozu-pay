@@ -76,7 +76,7 @@ export function DashboardNav() {
             )}
             <NavLink href="/dashboard/walls" label={t("paymentWalls")} />
             <NavLink href="/dashboard/payouts" label={t("payouts")} />
-            <NavLink href="/dashboard/disbursements" label={t("disbursements")} />
+            {isAdmin && <NavLink href="/dashboard/disbursements" label={t("disbursements")} />}
             <NavLink href="/dashboard/payments" label={t("paymentsPoc")} />
             <NavLink href="/dashboard/recipients" label={t("recipients")} />
             <NavLink href="/dashboard/profile" label={t("profile")} />

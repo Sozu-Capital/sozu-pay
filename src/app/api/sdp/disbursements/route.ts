@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
+import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
 import {
   createDisbursement,
   listDisbursements,
@@ -24,6 +25,10 @@ function isSdpConfigured() {
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const auth = await requireDisbursementAdmin(session.id);
+  if (!auth.ok) return auth.response;
+
   if (!isSdpConfigured()) return notConfigured();
 
   try {
@@ -59,6 +64,10 @@ export async function GET() {
 export async function POST(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const auth = await requireDisbursementAdmin(session.id);
+  if (!auth.ok) return auth.response;
+
   if (!isSdpConfigured()) return notConfigured();
 
   try {

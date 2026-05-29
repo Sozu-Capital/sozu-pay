@@ -218,3 +218,45 @@ export async function updateOrganizationSozuTagAuthUserId(
   }
   return data as Organization;
 }
+
+export async function updateOrganizationSorobanContract(
+  orgId: string,
+  sorobanContractId: string
+): Promise<Organization | null> {
+  const { data, error } = await getSupabase()
+    .from("organizations")
+    .update({
+      soroban_contract_id: sorobanContractId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", orgId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[organizations] updateOrganizationSorobanContract:", error.message);
+    return null;
+  }
+  return data as Organization;
+}
+
+export async function updateOrganizationTreasuryContract(
+  orgId: string,
+  treasuryContractId: string
+): Promise<Organization | null> {
+  const { data, error } = await getSupabase()
+    .from("organizations")
+    .update({
+      treasury_contract_id: treasuryContractId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", orgId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[organizations] updateOrganizationTreasuryContract:", error.message);
+    return null;
+  }
+  return data as Organization;
+}

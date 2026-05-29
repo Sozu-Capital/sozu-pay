@@ -9,40 +9,10 @@ import {
   Contract,
   Keypair,
   TransactionBuilder,
-  Networks,
   rpc,
   xdr,
 } from "@stellar/stellar-sdk";
-
-const USDC_EXP = 7; // 7 decimals
-
-function getNetworkPassphrase(): string {
-  return process.env.STELLAR_NETWORK === "public"
-    ? Networks.PUBLIC
-    : Networks.TESTNET;
-}
-
-function getSorobanRpcUrl(): string {
-  const url = process.env.SOROBAN_RPC_URL?.trim();
-  if (!url) {
-    throw new Error(
-      "SOROBAN_RPC_URL is required for Soroban payouts. Set it in env (e.g. https://soroban-testnet.stellar.org)."
-    );
-  }
-  return url;
-}
-
-/**
- * Convert a human amount string (e.g. "10.5" USDC) to i128 (BigInt) with 7 decimals.
- */
-function amountToI128(amount: string): bigint {
-  const num = parseFloat(amount);
-  if (!Number.isFinite(num) || num < 0) {
-    throw new Error(`Invalid payout amount: ${amount}`);
-  }
-  const scaled = Math.round(num * 10 ** USDC_EXP);
-  return BigInt(scaled);
-}
+import { amountToI128, getNetworkPassphrase, getSorobanRpcUrl } from "@/lib/stellar/soroban-common";
 
 export type SorobanPayoutOptions = {
   /** Contract ID (C address) of the disbursement wallet. */

@@ -35,6 +35,25 @@ export async function addWebauthnCredential(params: {
   return data as WebauthnCredentialRow;
 }
 
+export async function getWebauthnCredentialForUser(params: {
+  userId: number;
+  credentialId: string;
+  orgId?: string | null;
+}): Promise<WebauthnCredentialRow | null> {
+  let q = getSupabase()
+    .from("webauthn_credentials")
+    .select("*")
+    .eq("user_id", params.userId)
+    .eq("credential_id", params.credentialId)
+    .limit(1);
+  if (params.orgId) {
+    q = q.eq("org_id", params.orgId);
+  }
+  const { data, error } = await q.maybeSingle();
+  if (error) return null;
+  return (data as WebauthnCredentialRow) ?? null;
+}
+
 export async function listWebauthnCredentialsForUser(params: {
   userId: number;
   orgId?: string | null;

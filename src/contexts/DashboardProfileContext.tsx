@@ -16,6 +16,8 @@ export type DashboardProfile = {
   needsOrganization?: boolean;
   admin_level?: string | null;
   can_manage_disbursements?: boolean;
+  member_smart_account_id?: string | null;
+  smart_wallet_ready?: boolean;
   org_id?: string | null;
   org_type?: "store" | "ngo" | null;
 };

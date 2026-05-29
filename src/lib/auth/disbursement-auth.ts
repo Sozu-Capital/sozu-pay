@@ -50,10 +50,13 @@ export async function repairOrgCreatorAccess(user: User): Promise<User> {
   const isTreasuryManager = org.treasury_manager_user_id === user.id;
   const isOrgAdmin = user.admin_level === "admin" || user.admin_level === "super_admin";
 
-  if (org.treasury_manager_user_id == null && isOrgAdmin) {
-    await updateOrganizationTreasuryManager(org.id, user.id);
-    const promoted = await promoteOrgCreator(user.privy_user_id, org.id);
-    return promoted ?? ensureDisbursementManagerActivated(user);
+  if (org.treasury_manager_user_id == null) {
+    const memberSa = await getMemberSmartAccount(org.id, user.id);
+    if (memberSa || isOrgAdmin) {
+      await updateOrganizationTreasuryManager(org.id, user.id);
+      const promoted = await promoteOrgCreator(user.privy_user_id, org.id);
+      return promoted ?? ensureDisbursementManagerActivated(user);
+    }
   }
 
   if (isTreasuryManager && !isOrgAdmin) {
@@ -75,19 +78,6 @@ export async function requireDisbursementAdmin(
 
   user = await repairOrgCreatorAccess(user);
 
-  if (!user.allowed) {
-    logDenied("user not allowlisted", { privyUserId, userId: user.id });
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error: "Your profile is not activated. Contact your organization admin.",
-          code: "NOT_ALLOWLISTED",
-        },
-        { status: 403 }
-      ),
-    };
-  }
   if (!(await userCanManageDisbursements(user))) {
     logDenied("insufficient role for disbursements", {
       privyUserId,

@@ -98,12 +98,28 @@ export function LoginPageContent({ clearSessionOnMount = true, returnTo }: Login
           setError(data.error ?? t("failedToSignIn"));
           return;
         }
-        const next =
+
+        let next =
           returnTo && returnTo.startsWith("/")
             ? returnTo
             : typeof data.redirect === "string" && data.redirect.startsWith("/")
               ? data.redirect
-              : "/onboarding/organizations";
+              : null;
+
+        if (!next) {
+          const profileRes = await fetch("/api/profile", { credentials: "include" });
+          const profile = await profileRes.json().catch(() => ({}));
+          if (profile.needsOrgCreation) {
+            next = "/onboarding/create-organization";
+          } else if (profile.needsOrganization) {
+            next = "/onboarding/organizations";
+          } else if (profile.needsSmartWalletSetup) {
+            next = "/onboarding/setup-smart-wallet";
+          } else {
+            next = "/dashboard";
+          }
+        }
+
         router.replace(next);
       } catch (e) {
         if (cancelled) return;

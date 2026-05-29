@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, setSession } from "@/lib/auth/session";
-import { getUserByPrivyId, getOrCreateUserByPrivy } from "@/lib/db/users";
+import { getUserByPrivyId, getOrCreateUserByPrivy, setUserAllowed } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
@@ -53,10 +53,13 @@ export async function GET() {
   const needsOrganization = !user.org_id;
 
   const memberSa =
-    user.org_id && user.allowed
-      ? await getMemberSmartAccount(user.org_id, user.id)
-      : null;
-  const needsSmartWalletSetup = !!user.org_id && !!user.allowed && memberSa == null;
+    user.org_id ? await getMemberSmartAccount(user.org_id, user.id) : null;
+  const needsSmartWalletSetup = !!user.org_id && memberSa == null;
+
+  if (!user.allowed && (can_manage_disbursements || memberSa)) {
+    const activated = await setUserAllowed(session.id, true);
+    if (activated) user = activated;
+  }
 
   const org_stellar_disbursement_public_key = org?.stellar_disbursement_public_key ?? null;
   const org_soroban_contract_id = orgDisbursementContractId;
@@ -92,6 +95,8 @@ export async function GET() {
     allowed: user.allowed,
     admin_level: user.admin_level,
     can_manage_disbursements,
+    member_smart_account_id: memberSa?.contract_id ?? null,
+    smart_wallet_ready: !!memberSa,
     activation_requested_at: user.activation_requested_at,
     needsPayoutWalletSetup,
     needsOrgCreation,

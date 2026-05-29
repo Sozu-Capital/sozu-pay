@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId } from "@/lib/db/users";
+import { getUserByPrivyId, promoteOrgCreator, setUserAllowed } from "@/lib/db/users";
+import { getOrganizationById, updateOrganizationTreasuryManager } from "@/lib/db/organizations";
 import { addWebauthnCredential } from "@/lib/db/webauthn-credentials";
 import { upsertSmartAccount, type SmartAccountType } from "@/lib/db/smart-accounts";
 import { updateOrganizationTreasuryContract } from "@/lib/db/organizations";
@@ -59,6 +60,16 @@ export async function POST(request: NextRequest) {
   });
   if (!smart) {
     return NextResponse.json({ error: "Failed to store smart account." }, { status: 500 });
+  }
+
+  await setUserAllowed(user.privy_user_id, true);
+
+  if (type === "member") {
+    const org = await getOrganizationById(user.org_id);
+    if (org && org.treasury_manager_user_id == null) {
+      await updateOrganizationTreasuryManager(org.id, user.id);
+      await promoteOrgCreator(user.privy_user_id, org.id);
+    }
   }
 
   if (type === "org_treasury") {

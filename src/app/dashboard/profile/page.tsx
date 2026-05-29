@@ -18,6 +18,9 @@ type ProfileData = {
   org_has_recovery?: boolean;
   allowed: boolean;
   admin_level: string;
+  member_smart_account_id?: string | null;
+  smart_wallet_ready?: boolean;
+  org_soroban_contract_id?: string | null;
   activation_requested_at: string | null;
   needsPayoutWalletSetup?: boolean;
 };
@@ -808,154 +811,55 @@ export default function ProfilePage() {
         </section>
       )}
 
-      {/* Smart wallet: one card with wallet UI + small activation button when not allowed */}
+      {/* Passkey smart wallet (Soroban C address) */}
       <section className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6">
         <h2 className="text-lg font-semibold">{t("smartWalletTitle")}</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          {t("smartWalletBody")}
+          {t("smartWalletPasskeyBody")}
         </p>
 
-        {profile.stellar_public_key ? (
+        {profile.member_smart_account_id ? (
           <div className="mt-4 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <code className="flex-1 min-w-0 font-mono text-sm text-gray-700 dark:text-gray-300 break-all bg-gray-100 dark:bg-gray-700/50 px-2 py-1.5 rounded">
-                {profile.stellar_public_key}
-              </code>
-              <button
-                type="button"
-                onClick={() => handleCopy(profile.stellar_public_key!, "address")}
-                className="rounded-md border border-gray-300 dark:border-gray-600 px-2 py-1.5 text-xs font-medium shrink-0"
-              >
-                {copied === "address" ? tc("copied") : tc("copy")}
-              </button>
-            </div>
-            {stellarExplorerUrl && (
-              <a
-                href={stellarExplorerUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                {t("viewOnStellarExpert")}
-              </a>
-            )}
-            {/* Sign transaction with wallet auth (no external wallet): add USDC trustline */}
-            {trustlineStatus?.has_trustline ? (
-              <p className="text-sm text-green-600 dark:text-green-400">{t("usdcTrustlineAdded")}</p>
-            ) : trustlineStatus?.needs_trustline ? (
+            <div>
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                {t("passkeySmartAccountLabel")}
+              </p>
               <div className="flex flex-wrap items-center gap-2">
+                <code className="flex-1 min-w-0 font-mono text-sm text-gray-700 dark:text-gray-300 break-all bg-gray-100 dark:bg-gray-700/50 px-2 py-1.5 rounded">
+                  {profile.member_smart_account_id}
+                </code>
                 <button
                   type="button"
-                  onClick={handleOpenTrustlineSign}
-                  className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-2 text-sm font-medium hover:opacity-90"
+                  onClick={() => handleCopy(profile.member_smart_account_id!, "smart-account")}
+                  className="rounded-md border border-gray-300 dark:border-gray-600 px-2 py-1.5 text-xs font-medium shrink-0"
                 >
-                  {t("addUsdcTrustline")}
+                  {copied === "smart-account" ? tc("copied") : tc("copy")}
                 </button>
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  {t("trustlineSignHint")}
-                </span>
               </div>
-            ) : null}
+            </div>
+            <a
+              href={`${STELLAR_EXPERT_BASE}/contract/${profile.member_smart_account_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              {t("viewOnStellarExpert")}
+            </a>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              {t("settingsRecoveryWallet")}
+              {t("passkeySignHint")}
             </p>
-          </div>
-        ) : (createStep === "backup" || createStep === "registering") && newKeypair ? (
-          <div className="mt-4 space-y-4">
-            <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
-              {t("saveSecretWarning")}
-            </p>
-            <div>
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t("publicAddressLabel")}</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <code className="flex-1 min-w-0 font-mono text-sm break-all bg-gray-100 dark:bg-gray-700/50 px-2 py-1.5 rounded">
-                  {newKeypair.publicKey}
-                </code>
-                <button type="button" onClick={() => handleCopy(newKeypair.publicKey, "pub")} className="rounded-md border px-2 py-1.5 text-xs shrink-0">
-                  {copied === "pub" ? tc("copied") : tc("copy")}
-                </button>
-              </div>
-            </div>
-            <div>
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t("secretKeyLabel")}</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <code className="flex-1 min-w-0 font-mono text-sm break-all bg-red-50 dark:bg-red-900/20 px-2 py-1.5 rounded">
-                  {newKeypair.secretKey}
-                </code>
-                <button type="button" onClick={() => handleCopy(newKeypair.secretKey, "secret")} className="rounded-md border border-red-300 dark:border-red-700 px-2 py-1.5 text-xs shrink-0 text-red-700 dark:text-red-400">
-                  {copied === "secret" ? tc("copied") : tc("copy")}
-                </button>
-              </div>
-            </div>
-            <label className="flex items-center gap-2 mt-2">
-              <input
-                type="checkbox"
-                checked={backupConfirmed}
-                onChange={(e) => setBackupConfirmed(e.target.checked)}
-                className="rounded border-gray-300 dark:border-gray-600"
-              />
-              <span className="text-sm">{t("backupConfirmCheckbox")}</span>
-            </label>
-            {createError && <p className="text-sm text-red-600 dark:text-red-400">{createError}</p>}
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={!backupConfirmed || createStep === "registering"}
-                onClick={handleConfirmBackupAndRegister}
-                className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-2 text-sm font-medium disabled:opacity-50"
-              >
-                {createStep === "registering" ? t("registering") : t("registerWallet")}
-              </button>
-              <button
-                type="button"
-                onClick={handleCancelCreate}
-                disabled={createStep === "registering"}
-                className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm font-medium"
-              >
-                {tc("cancel")}
-              </button>
-            </div>
           </div>
         ) : (
           <div className="mt-4 space-y-3">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {t("noWalletLinked")}
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              {t("passkeyWalletMissing")}
             </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={handleCreateWallet}
-                className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-2 text-sm font-medium hover:opacity-90"
-              >
-                {t("createNewWallet")}
-              </button>
-              <button
-                type="button"
-                className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
-              >
-                {t("connectExistingWallet")}
-              </button>
-              {!profile.allowed && (
-                <>
-                  <span className="text-gray-400 dark:text-gray-500">·</span>
-                  {activationRequested ? (
-                    <span className="text-sm text-amber-600 dark:text-amber-400">{t("activationRequested")}</span>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={requestingActivation}
-                      onClick={handleRequestActivation}
-                      className="rounded-md border border-amber-500 dark:border-amber-600 text-amber-700 dark:text-amber-400 px-2 py-1.5 text-xs font-medium hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50"
-                    >
-                      {requestingActivation ? t("requestActivationLoading") : t("requestActivation")}
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {t("createVsConnectNote")}
-            </p>
+            <Link
+              href="/onboarding/setup-smart-wallet"
+              className="inline-flex rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-2 text-sm font-medium hover:opacity-90"
+            >
+              {t("setupPasskeyWallet")}
+            </Link>
           </div>
         )}
       </section>
@@ -997,9 +901,9 @@ export default function ProfilePage() {
         </Link>
       </section>
 
-      {profile.allowed && (
+      {profile.smart_wallet_ready && (
         <p className="mt-6 text-sm text-gray-500 dark:text-gray-400">
-          {t("profileActivated")}
+          {t("passkeyWalletReady")}
         </p>
       )}
 

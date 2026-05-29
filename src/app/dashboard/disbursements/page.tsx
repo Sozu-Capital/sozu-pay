@@ -391,12 +391,30 @@ export default function DisbursementsPage() {
               />
             </div>
 
-            {/* Wallet */}
+            {/* Wallet — hidden from NGO user when only one option exists */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 {t("walletLabel")}
               </label>
-              {wallets.length > 0 ? (
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                {t("walletHint")}
+              </p>
+
+              {wallets.length === 1 ? (
+                /* Single wallet — auto-selected, shown as a friendly read-only pill */
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 px-3 py-1 text-sm font-medium text-green-800 dark:text-green-300">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    {wallets[0].name}
+                  </span>
+                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                    {t("walletAutoSelected")} · {wallets[0].homepage}
+                  </span>
+                </div>
+              ) : wallets.length > 1 ? (
+                /* Multiple wallets — show name only, no UUID */
                 <select
                   required
                   value={selectedWalletId}
@@ -405,11 +423,12 @@ export default function DisbursementsPage() {
                 >
                   {wallets.map((w) => (
                     <option key={w.id} value={w.id}>
-                      {w.name} — {w.homepage}
+                      {w.name} ({w.homepage})
                     </option>
                   ))}
                 </select>
               ) : (
+                /* Wallets not loaded yet (SDP unreachable) — show UUID fallback */
                 <input
                   required
                   type="text"

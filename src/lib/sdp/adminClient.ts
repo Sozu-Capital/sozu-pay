@@ -244,7 +244,7 @@ export async function listDisbursements(): Promise<SdpDisbursement[]> {
  */
 export async function listPayments(disbursementId: string): Promise<SdpPayment[]> {
   const data = await sdpFetch<{ data: SdpPayment[] }>(
-    `/disbursements/${disbursementId}/payments?page=1&page_limit=200`
+    `/disbursements/${disbursementId}/payments?page=1&page_limit=100`
   );
   return data.data ?? [];
 }
@@ -255,7 +255,7 @@ export async function listPayments(disbursementId: string): Promise<SdpPayment[]
  */
 export async function listReceivers(disbursementId: string): Promise<SdpReceiver[]> {
   const data = await sdpFetch<{ data: SdpReceiver[] }>(
-    `/disbursements/${disbursementId}/receivers?page=1&page_limit=200`
+    `/disbursements/${disbursementId}/receivers?page=1&page_limit=100`
   );
   return data.data ?? [];
 }

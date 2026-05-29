@@ -3,7 +3,9 @@ import { getSession } from "@/lib/auth/session";
 import {
   getDisbursement,
   listReceivers,
+  listAssets,
   retryReceiverWalletInvitation,
+  ensureSozuCreditWallet,
 } from "@/lib/sdp/adminClient";
 import { sendSdpInviteEmail } from "@/lib/email/sdp-invite";
 import { signSdpInviteUrl } from "@/lib/sdp/signInviteUrl";
@@ -68,10 +70,15 @@ export async function POST(
   const walletInviteUrl = `${WALLET_BASE_URL}${WALLET_INVITE_PATH}`;
 
   try {
-    const [disbursement, receivers] = await Promise.all([
+    const [disbursement, receivers, assets] = await Promise.all([
       getDisbursement(id),
       listReceivers(id),
+      listAssets(),
     ]);
+
+    // Ensure credit.sozu.capital is registered in SDP before sending invites —
+    // recipients need it for SEP-10 client_domain validation to succeed.
+    await ensureSozuCreditWallet(assets.map((a) => ({ code: a.code, issuer: a.issuer })));
 
     const assetCode = disbursement.asset?.code ?? "USDC";
     const assetIssuer = disbursement.asset?.issuer ?? "";

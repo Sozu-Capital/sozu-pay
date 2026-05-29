@@ -194,6 +194,27 @@ export async function updateOrganizationRecoverySecret(
   return null;
 }
 
+export async function updateOrganizationTreasuryManager(
+  orgId: string,
+  userId: number
+): Promise<Organization | null> {
+  const { data, error } = await getSupabase()
+    .from("organizations")
+    .update({
+      treasury_manager_user_id: userId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", orgId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[organizations] updateOrganizationTreasuryManager:", error.message);
+    return null;
+  }
+  return data as Organization;
+}
+
 export async function updateOrganizationSozuTagAuthUserId(
   orgId: string,
   authUserId: string | null

@@ -6,6 +6,7 @@ import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
 import { resolveOrgDisbursementContractId } from "@/lib/stellar/org-treasury";
 import { isUserDerivedEncrypted } from "@/lib/org-wallet-encryption";
+import { canManageDisbursements, repairOrgCreatorAccess } from "@/lib/auth/disbursement-auth";
 
 /**
  * GET /api/profile – current user's profile from DB (for Profile page).
@@ -27,7 +28,15 @@ export async function GET() {
 
   const org_payout_wallet_public_key = getOrgDisbursementPublicKey();
 
-  const org = user.org_id ? await getOrganizationForUser(user.org_id) : null;
+  let org = user.org_id ? await getOrganizationForUser(user.org_id) : null;
+
+  user = await repairOrgCreatorAccess(user);
+  if (user.org_id) {
+    org = await getOrganizationForUser(user.org_id);
+  }
+
+  const can_manage_disbursements = canManageDisbursements(user, org);
+
   const orgDisbursementContractId = org ? resolveOrgDisbursementContractId(org) : null;
   const orgHasTreasury =
     !!orgDisbursementContractId || !!(org?.stellar_disbursement_secret_encrypted);
@@ -48,11 +57,6 @@ export async function GET() {
       ? await getMemberSmartAccount(user.org_id, user.id)
       : null;
   const needsSmartWalletSetup = !!user.org_id && !!user.allowed && memberSa == null;
-
-  const can_manage_disbursements =
-    user.admin_level === "admin" ||
-    user.admin_level === "super_admin" ||
-    (!!org && org.treasury_manager_user_id === user.id);
 
   const org_stellar_disbursement_public_key = org?.stellar_disbursement_public_key ?? null;
   const org_soroban_contract_id = orgDisbursementContractId;

@@ -39,9 +39,8 @@ export function DashboardNav() {
   const { profile } = useDashboardProfile() ?? { profile: null };
   const isAdmin =
     profile?.admin_level === "admin" || profile?.admin_level === "super_admin";
-  const canManageDisbursements =
-    profile?.can_manage_disbursements === true || isAdmin;
   const isStore = profile?.org_type === "store";
+  const showDisbursementsNav = !isStore && !!profile?.org_id;
   const t = useTranslations("nav");
 
   return (
@@ -66,7 +65,7 @@ export function DashboardNav() {
           </>
         ) : (
           <>
-            {canManageDisbursements && (
+            {showDisbursementsNav && (
               <NavLink href="/dashboard/disbursements" label={t("disbursements")} />
             )}
             <NavLink href="/dashboard/audit" label={t("auditLog")} indent />

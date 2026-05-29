@@ -95,6 +95,10 @@ function recipientsToCSV(recipients: DraftRecipient[], defaultAmount: string): s
   return "email,id,amount,verification\n" + rows.join("\n");
 }
 
+function isSdpConfigError(message: string): boolean {
+  return /SDP_API_URL|SDP_ADMIN_EMAIL|SDP_ADMIN_PASSWORD|not configured/i.test(message);
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function DisbursementsPage() {
@@ -110,6 +114,7 @@ export default function DisbursementsPage() {
   const [wallets, setWallets] = useState<SdpWallet[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
+  const [listErrorCode, setListErrorCode] = useState<string | null>(null);
 
   // Create form — shared
   const [showCreate, setShowCreate] = useState(false);
@@ -150,11 +155,13 @@ export default function DisbursementsPage() {
   const fetchList = useCallback(async () => {
     setListLoading(true);
     setListError(null);
+    setListErrorCode(null);
     try {
       const res = await fetch("/api/sdp/disbursements");
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        setListError(j.error ?? `Error ${res.status}`);
+        setListError(typeof j.error === "string" ? j.error : `Error ${res.status}`);
+        setListErrorCode(typeof j.code === "string" ? j.code : null);
         return;
       }
       const data = await res.json();
@@ -807,10 +814,22 @@ export default function DisbursementsPage() {
         {!listLoading && listError && (
           <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4">
             <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
-              {t("sdpError")}
+              {listErrorCode === "NOT_ALLOWLISTED"
+                ? t("profileNotActivatedTitle")
+                : listErrorCode === "INSUFFICIENT_ROLE"
+                  ? t("roleRequiredTitle")
+                  : isSdpConfigError(listError)
+                    ? t("sdpConfigTitle")
+                    : t("sdpError")}
             </p>
             <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">{listError}</p>
-            <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">{t("sdpEnvHint")}</p>
+            <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+              {listErrorCode === "NOT_ALLOWLISTED"
+                ? t("profileNotActivatedHint")
+                : listErrorCode === "INSUFFICIENT_ROLE"
+                  ? t("roleRequiredHint")
+                  : t("sdpEnvHint")}
+            </p>
           </div>
         )}
         {!listLoading && !listError && disbursements.length === 0 && (

@@ -7,7 +7,6 @@ import {
   Contract,
   Keypair,
   TransactionBuilder,
-  Networks,
   rpc,
   xdr,
   Operation,
@@ -32,11 +31,15 @@ function getUsdcIssuer(): string {
   return isPublicNetwork() ? USDC_ISSUER_PUBLIC : USDC_ISSUER_TESTNET;
 }
 
+/** Circle USDC SAC on Stellar testnet (issuer GBBD47…). */
+const USDC_SAC_TESTNET = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA";
+
 export function getSorobanUsdcTokenId(): string {
   const fromEnv = process.env.SOROBAN_USDC_TOKEN_ID?.trim();
   if (fromEnv) return fromEnv;
+  if (!isPublicNetwork()) return USDC_SAC_TESTNET;
   throw new Error(
-    "SOROBAN_USDC_TOKEN_ID is required for Soroban treasury operations. Set it in env (USDC SAC contract ID on testnet/mainnet)."
+    "SOROBAN_USDC_TOKEN_ID is required for Soroban treasury operations on mainnet."
   );
 }
 

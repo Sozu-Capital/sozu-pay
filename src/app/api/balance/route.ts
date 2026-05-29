@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
 import { getDashboardBalancePublicKey } from "@/lib/wallet-resolve";
 import { getUsdcBalance } from "@/lib/stellar/balance";
+import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
 import { getUsdToLocalRate, convertUsdToLocal } from "@/lib/fx";
 
 /**
- * USDC balance for the dashboard. Uses org disbursement wallet when user has an org with one; else user wallet.
- * When authenticated but no wallet yet (e.g. before org setup), returns zeros so the dashboard still loads.
- *
- * Response shape includes both legacy USD fields and new localFiat* fields for the store balance screen.
+ * USDC balance for the dashboard. Uses org Soroban disbursement contract when set.
  */
 export async function GET() {
   const publicKey = await getDashboardBalancePublicKey();
@@ -29,8 +27,11 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [usdcBalance, inVault, fx] = await Promise.all([
-    getUsdcBalance(publicKey),
+  const usdcBalance = publicKey.startsWith("C")
+    ? await getSorobanUsdcBalance(publicKey)
+    : await getUsdcBalance(publicKey);
+
+  const [inVault, fx] = await Promise.all([
     Promise.resolve("0"),
     getUsdToLocalRate(),
   ]);

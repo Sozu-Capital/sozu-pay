@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 
 /**
- * If the user has not set their payout wallet passphrase, redirect to onboarding.
- * Used in dashboard layout so existing users without stellar_payout_public_key are prompted.
+ * Redirect users through org onboarding when profile flags require it.
  */
 export function OnboardingRedirect() {
   const router = useRouter();
@@ -24,12 +23,14 @@ export function OnboardingRedirect() {
     }
     if (profile.needsSmartWalletSetup) {
       router.replace("/onboarding/setup-smart-wallet");
-      return;
     }
-    if (profile.needsPayoutWalletSetup) {
-      router.replace("/onboarding/set-payout-wallet");
-    }
-  }, [profile?.needsOrgCreation, profile?.needsOrganization, profile?.needsSmartWalletSetup, profile?.needsPayoutWalletSetup, profile, router]);
+  }, [
+    profile?.needsOrgCreation,
+    profile?.needsOrganization,
+    profile?.needsSmartWalletSetup,
+    profile,
+    router,
+  ]);
 
   return null;
 }

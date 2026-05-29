@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePrivy } from "@privy-io/react-auth";
 import { useTranslations } from "next-intl";
+import { OrgTreasurySetup } from "@/components/OrgTreasurySetup";
 
 type ProfileData = {
   email: string;
@@ -771,6 +772,10 @@ export default function ProfilePage() {
             </div>
           )}
         </section>
+      )}
+
+      {profile.admin_level === "super_admin" && profile.org_id && (
+        <OrgTreasurySetup isSuperAdmin />
       )}
 
       {/* Org payout wallet from env (optional; when set, Classic payouts can use this shared org key) */}

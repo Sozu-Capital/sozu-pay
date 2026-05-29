@@ -157,6 +157,30 @@ export async function updateUserOrgId(
   return data as User;
 }
 
+/** Org creator becomes super-admin with dashboard access (no manual activation). */
+export async function promoteOrgCreator(
+  privyUserId: string,
+  orgId: string
+): Promise<User | null> {
+  const { data, error } = await getSupabase()
+    .from("users")
+    .update({
+      org_id: orgId,
+      admin_level: "super_admin",
+      allowed: true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("privy_user_id", privyUserId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[users] promoteOrgCreator:", error.message);
+    return null;
+  }
+  return data as User;
+}
+
 /** Clears org_id (e.g. org row deleted or broken FK). */
 export async function clearUserOrgId(privyUserId: string): Promise<User | null> {
   const { data, error } = await getSupabase()

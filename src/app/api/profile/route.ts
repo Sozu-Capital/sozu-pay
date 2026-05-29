@@ -4,11 +4,11 @@ import { getUserByPrivyId, getOrCreateUserByPrivy } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
+import { resolveOrgDisbursementContractId } from "@/lib/stellar/org-treasury";
 import { isUserDerivedEncrypted } from "@/lib/org-wallet-encryption";
 
 /**
  * GET /api/profile – current user's profile from DB (for Profile page).
- * Creates the user if they have a session but no row yet (e.g. first visit after login).
  */
 export async function GET() {
   const session = await getSession();
@@ -25,27 +25,32 @@ export async function GET() {
     }
   }
 
-  /** Org disbursement wallet from env (optional). When set, Classic payouts can use it; else super_admin signs with their own key. */
   const org_payout_wallet_public_key = getOrgDisbursementPublicKey();
 
-  /** Super-admin needs a way to sign payouts: either org disbursement wallet (stored) or their own admin key. */
-  const hasPayoutKey = !!(user.stellar_payout_public_key || user.stellar_public_key);
   const org = user.org_id ? await getOrganizationForUser(user.org_id) : null;
-  const orgHasDisbursementWallet = !!(org?.stellar_disbursement_secret_encrypted);
+  const orgDisbursementContractId = org ? resolveOrgDisbursementContractId(org) : null;
+  const orgHasTreasury =
+    !!orgDisbursementContractId || !!(org?.stellar_disbursement_secret_encrypted);
+
+  /** Legacy: classic G payout key setup (deprecated for new orgs). */
+  const hasPayoutKey = !!(user.stellar_payout_public_key || user.stellar_public_key);
   const needsPayoutWalletSetup =
-    user.admin_level === "super_admin" && !hasPayoutKey && !orgHasDisbursementWallet;
+    user.admin_level === "super_admin" &&
+    !hasPayoutKey &&
+    !orgHasTreasury &&
+    !orgDisbursementContractId;
 
-  /** Super-admin with no org must create one first (Store or NGO). */
-  const needsOrgCreation =
-    user.admin_level === "super_admin" && !user.org_id;
-
-  /** Any user without an org must go through organization step (create or get added). */
+  const needsOrgCreation = user.admin_level === "super_admin" && !user.org_id;
   const needsOrganization = !user.org_id;
 
-  const needsSmartWalletSetup =
-    !!user.org_id && !!user.allowed && (await getMemberSmartAccount(user.org_id, user.id)) == null;
+  const memberSa =
+    user.org_id && user.allowed
+      ? await getMemberSmartAccount(user.org_id, user.id)
+      : null;
+  const needsSmartWalletSetup = !!user.org_id && !!user.allowed && memberSa == null;
 
   const org_stellar_disbursement_public_key = org?.stellar_disbursement_public_key ?? null;
+  const org_soroban_contract_id = orgDisbursementContractId;
   const org_has_stored_secret = !!(org?.stellar_disbursement_secret_encrypted);
   const org_encryption_type =
     org?.stellar_disbursement_secret_encrypted && isUserDerivedEncrypted(org.stellar_disbursement_secret_encrypted)
@@ -55,12 +60,11 @@ export async function GET() {
         : null;
   const org_has_recovery = !!(org?.recovery_encrypted_secret);
 
-  // If user has an org but session has no orgId (e.g. old session), set it so dashboard works
   if (user.org_id && session.orgId !== user.org_id) {
     try {
       await setSession({ ...session, orgId: user.org_id });
     } catch {
-      // non-fatal: continue and return profile
+      // non-fatal
     }
   }
 
@@ -72,6 +76,7 @@ export async function GET() {
     org_id: user.org_id ?? null,
     org_type: org?.type ?? null,
     org_stellar_disbursement_public_key,
+    org_soroban_contract_id,
     org_has_stored_secret,
     org_encryption_type,
     org_has_recovery,
@@ -82,5 +87,6 @@ export async function GET() {
     needsOrgCreation,
     needsOrganization,
     needsSmartWalletSetup,
+    treasury_ready: !!orgDisbursementContractId,
   });
 }

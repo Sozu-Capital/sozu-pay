@@ -1,43 +1,89 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
+import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
 
 type OrgType = "store" | "ngo";
 type InviteRole = "member" | "admin" | "guardian" | "treasury_manager";
-
 type InviteRow = { email: string; role: InviteRole };
+
+type SetupStep =
+  | "idle"
+  | "passkey"
+  | "org"
+  | "register"
+  | "treasury"
+  | "done"
+  | "error";
+
+const STEP_LABELS: Record<Exclude<SetupStep, "idle" | "error" | "done">, string> = {
+  passkey: "Creating passkey smart wallet…",
+  org: "Creating organization…",
+  register: "Linking passkey to your org…",
+  treasury: "Deploying disbursement treasury…",
+};
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function b64url(u8: Uint8Array): string {
+  const bin = String.fromCharCode(...u8);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
 export default function CreateOrganizationPage() {
+  const router = useRouter();
+  const { ready, kit, createWallet, error: kitError } = useSmartAccountKitContext();
+
   const [type, setType] = useState<OrgType>("ngo");
   const [orgName, setOrgName] = useState("My organization");
   const [sozuTag, setSozuTag] = useState("");
   const [guardianThreshold, setGuardianThreshold] = useState(2);
   const [invitesText, setInvitesText] = useState("");
-  const [creating, setCreating] = useState(false);
+  const [profileEmail, setProfileEmail] = useState("user");
+
+  const [step, setStep] = useState<SetupStep>("idle");
   const [error, setError] = useState("");
-  const [done, setDone] = useState(false);
+  const [treasuryContractId, setTreasuryContractId] = useState<string | null>(null);
+  const [memberContractId, setMemberContractId] = useState<string | null>(null);
 
   const invites: InviteRow[] = useMemo(() => {
     const emails = invitesText
       .split(/[\n,;]+/)
       .map(normalizeEmail)
       .filter((e) => e.includes("@"));
-    // default all to member; creator will assign roles later (guardian/treasury_manager) in a dedicated screen
     const uniq = Array.from(new Set(emails));
     return uniq.map((email) => ({ email, role: "member" as const }));
   }, [invitesText]);
 
+  useEffect(() => {
+    fetch("/api/profile", { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (typeof d.email === "string" && d.email) setProfileEmail(d.email);
+      })
+      .catch(() => {});
+  }, []);
+
+  const isBusy = step !== "idle" && step !== "done" && step !== "error";
+  const canStart = ready && !!kit && !isBusy && orgName.trim().length > 0;
+
   async function handleCreate() {
+    if (!kit) return;
     setError("");
-    setCreating(true);
+    setStep("passkey");
+
     try {
-      const res = await fetch("/api/profile/org", {
+      const wallet = await createWallet("SozuPay", profileEmail);
+      const memberC = wallet.contractId;
+      const credId = wallet.credentialId;
+      setMemberContractId(memberC);
+
+      setStep("org");
+      const orgRes = await fetch("/api/profile/org", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -49,44 +95,110 @@ export default function CreateOrganizationPage() {
           invites,
         }),
       });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(d.error ?? "Failed to create organization");
-        return;
+      const orgData = await orgRes.json().catch(() => ({}));
+      if (!orgRes.ok) {
+        throw new Error(orgData.error ?? "Failed to create organization");
       }
-      setDone(true);
-    } catch {
-      setError("Something went wrong.");
-    } finally {
-      setCreating(false);
+
+      setStep("register");
+      const all = await kit.credentials.getAll();
+      const match = all.find((c) => c.credentialId === credId);
+      if (!match) throw new Error("Passkey credential not found locally");
+
+      const registerRes = await fetch("/api/smart-accounts/register", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "member",
+          contractId: memberC,
+          credentialId: credId,
+          publicKey65b: b64url(match.publicKey),
+          label: "Primary passkey",
+        }),
+      });
+      const registerData = await registerRes.json().catch(() => ({}));
+      if (!registerRes.ok) {
+        throw new Error(registerData.error ?? "Failed to register smart wallet");
+      }
+
+      setStep("treasury");
+      const treasuryRes = await fetch("/api/profile/org/provision-treasury", {
+        method: "POST",
+        credentials: "include",
+      });
+      const treasuryData = await treasuryRes.json().catch(() => ({}));
+      if (!treasuryRes.ok) {
+        throw new Error(treasuryData.error ?? "Failed to provision org treasury");
+      }
+
+      setTreasuryContractId(treasuryData.soroban_contract_id ?? null);
+      setStep("done");
+    } catch (e) {
+      setStep("error");
+      setError(e instanceof Error ? e.message : "Something went wrong.");
     }
   }
 
-  if (done) {
+  if (step === "done") {
     return (
       <DarkGradientBg>
         <main className="min-h-screen flex flex-col items-center justify-center p-4 dark text-white">
           <div className="w-full max-w-md rounded-xl border border-white/10 bg-black/40 backdrop-blur-sm p-6 shadow-xl">
-            <h1 className="text-xl font-semibold text-white">
-              Organization created
-            </h1>
+            <h1 className="text-xl font-semibold text-white">Your NGO treasury is ready</h1>
             <p className="mt-2 text-sm text-gray-300">
-              Next, pick the organization and continue. You’ll set up treasury passkeys and guardian recovery on the next steps.
+              Passkey wallet and disbursement contract are live on testnet. Send USDC to your
+              treasury address to fund batch disbursements.
             </p>
+            {memberContractId && (
+              <div className="mt-4 rounded-md border border-white/10 bg-black/30 p-3">
+                <p className="text-xs text-gray-400">Your passkey smart account</p>
+                <p className="mt-1 font-mono text-xs break-all text-white">{memberContractId}</p>
+              </div>
+            )}
+            {treasuryContractId && (
+              <div className="mt-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3">
+                <p className="text-xs text-emerald-200">Fund this address with testnet USDC</p>
+                <p className="mt-1 font-mono text-xs break-all text-white">{treasuryContractId}</p>
+              </div>
+            )}
             <div className="mt-6 flex flex-col gap-2">
-              <Link
-                href="/onboarding/organizations"
-                className="w-full text-center rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium hover:opacity-90 transition-opacity"
+              <button
+                type="button"
+                onClick={() => router.replace("/dashboard/disbursements")}
+                className="w-full rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium hover:opacity-90 transition-opacity"
               >
-                Choose organization & continue
-              </Link>
-              <Link
-                href="/dashboard/profile"
-                className="w-full text-center rounded-md border border-white/20 bg-white/5 py-2.5 px-4 text-sm font-medium text-white hover:bg-white/10"
+                Go to disbursements
+              </button>
+              <button
+                type="button"
+                onClick={() => router.replace("/dashboard/profile")}
+                className="w-full rounded-md border border-white/20 bg-white/5 py-2.5 px-4 text-sm font-medium text-white hover:bg-white/10"
               >
-                Profile
-              </Link>
+                Profile & treasury
+              </button>
             </div>
+          </div>
+        </main>
+      </DarkGradientBg>
+    );
+  }
+
+  if (isBusy) {
+    const label = step in STEP_LABELS ? STEP_LABELS[step as keyof typeof STEP_LABELS] : "Setting up…";
+    return (
+      <DarkGradientBg>
+        <main className="min-h-screen flex flex-col items-center justify-center p-4 dark text-white">
+          <div className="w-full max-w-md rounded-xl border border-white/10 bg-black/40 backdrop-blur-sm p-8 shadow-xl text-center">
+            <div
+              className="mx-auto h-10 w-10 rounded-full border-2 border-white/20 border-t-white animate-spin"
+              aria-hidden
+            />
+            <h1 className="mt-6 text-lg font-semibold">Setting up your NGO treasury</h1>
+            <p className="mt-2 text-sm text-gray-300">{label}</p>
+            <p className="mt-4 text-xs text-gray-500">
+              Keep this tab open — passkey and contract deployment may take a minute.
+            </p>
           </div>
         </main>
       </DarkGradientBg>
@@ -97,50 +209,46 @@ export default function CreateOrganizationPage() {
     <DarkGradientBg>
       <main className="min-h-screen flex flex-col items-center justify-center p-4 dark text-white">
         <div className="w-full max-w-md rounded-xl border border-white/10 bg-black/40 backdrop-blur-sm p-6 shadow-xl">
-          <h1 className="text-xl font-semibold text-white">
-            Create your organization
-          </h1>
+          <h1 className="text-xl font-semibold text-white">Create your organization</h1>
           <p className="mt-2 text-sm text-gray-300">
-            You’ll create a passkey-based smart treasury wallet (no secret keys). Add teammates now (optional); you can edit roles later.
+            We&apos;ll create your passkey smart wallet and deploy your org treasury on testnet.
+            You only need to add USDC afterward.
           </p>
 
-          {error && (
-            <p className="mt-3 text-sm text-red-400">{error}</p>
+          {(error || kitError) && (
+            <p className="mt-3 text-sm text-red-400">{error || kitError}</p>
+          )}
+
+          {!ready && (
+            <p className="mt-3 text-sm text-gray-400">Loading smart account kit…</p>
           )}
 
           <div className="mt-5 space-y-3">
             <div>
-              <label className="text-xs font-medium text-gray-300">
-                Organization name
-              </label>
+              <label className="text-xs font-medium text-gray-300">Organization name</label>
               <input
                 value={orgName}
                 onChange={(e) => setOrgName(e.target.value)}
                 placeholder="e.g. My NGO"
+                disabled={false}
                 className="mt-1 w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20"
               />
             </div>
 
             <div>
-              <label className="text-xs font-medium text-gray-300">
-                Sozu tag (optional)
-              </label>
+              <label className="text-xs font-medium text-gray-300">Sozu tag (optional)</label>
               <input
                 value={sozuTag}
                 onChange={(e) => setSozuTag(e.target.value)}
                 placeholder="$myorg"
                 className="mt-1 w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20"
               />
-              <p className="mt-1 text-xs text-gray-400">
-                This will create your org receive tag (e.g. <span className="font-mono">$mujeres2000</span>).
-              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setType("store")}
-                disabled={creating}
                 className={`w-full rounded-md border py-3 px-3 text-left font-medium transition-colors ${
                   type === "store"
                     ? "border-white/30 bg-white/10 text-white"
@@ -152,7 +260,6 @@ export default function CreateOrganizationPage() {
               <button
                 type="button"
                 onClick={() => setType("ngo")}
-                disabled={creating}
                 className={`w-full rounded-md border py-3 px-3 text-left font-medium transition-colors ${
                   type === "ngo"
                     ? "border-white/30 bg-white/10 text-white"
@@ -164,9 +271,7 @@ export default function CreateOrganizationPage() {
             </div>
 
             <div>
-              <label className="text-xs font-medium text-gray-300">
-                Guardian threshold (recovery)
-              </label>
+              <label className="text-xs font-medium text-gray-300">Guardian threshold (recovery)</label>
               <input
                 type="number"
                 min={1}
@@ -176,15 +281,10 @@ export default function CreateOrganizationPage() {
                 title="Guardian threshold"
                 className="mt-1 w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/20"
               />
-              <p className="mt-1 text-xs text-gray-400">
-                Used only for recovery/role changes. Normal payouts are single-signer.
-              </p>
             </div>
 
             <div>
-              <label className="text-xs font-medium text-gray-300">
-                Invite team members (emails)
-              </label>
+              <label className="text-xs font-medium text-gray-300">Invite team members (emails)</label>
               <textarea
                 value={invitesText}
                 onChange={(e) => setInvitesText(e.target.value)}
@@ -192,9 +292,7 @@ export default function CreateOrganizationPage() {
                 placeholder={"name@org.com\nother@org.com"}
                 className="mt-1 w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20"
               />
-              <p className="mt-1 text-xs text-gray-400">
-                {invites.length} invite(s) parsed.
-              </p>
+              <p className="mt-1 text-xs text-gray-400">{invites.length} invite(s) parsed.</p>
             </div>
           </div>
 
@@ -202,10 +300,10 @@ export default function CreateOrganizationPage() {
             <button
               type="button"
               onClick={() => void handleCreate()}
-              disabled={creating || !orgName.trim()}
+              disabled={!canStart}
               className="w-full rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {creating ? "Creating…" : "Create organization"}
+              {step === "error" ? "Retry setup" : "Create organization & treasury"}
             </button>
           </div>
         </div>

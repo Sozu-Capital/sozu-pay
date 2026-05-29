@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth/session";
 import { getUserByPrivyId } from "@/lib/db/users";
 import { addWebauthnCredential } from "@/lib/db/webauthn-credentials";
 import { upsertSmartAccount, type SmartAccountType } from "@/lib/db/smart-accounts";
+import { updateOrganizationTreasuryContract } from "@/lib/db/organizations";
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -19,6 +20,13 @@ export async function POST(request: NextRequest) {
   const typeRaw = typeof body.type === "string" ? body.type : "";
   const type: SmartAccountType =
     typeRaw === "org_treasury" || typeRaw === "member" ? typeRaw : "member";
+
+  if (type === "org_treasury" && user.admin_level !== "super_admin") {
+    return NextResponse.json(
+      { error: "Only super admins can register the org treasury smart account." },
+      { status: 403 }
+    );
+  }
 
   const contractId = typeof body.contractId === "string" ? body.contractId.trim() : "";
   const credentialId = typeof body.credentialId === "string" ? body.credentialId.trim() : "";
@@ -51,6 +59,10 @@ export async function POST(request: NextRequest) {
   });
   if (!smart) {
     return NextResponse.json({ error: "Failed to store smart account." }, { status: 500 });
+  }
+
+  if (type === "org_treasury") {
+    await updateOrganizationTreasuryContract(user.org_id, contractId);
   }
 
   return NextResponse.json({ ok: true, smartAccount: smart });

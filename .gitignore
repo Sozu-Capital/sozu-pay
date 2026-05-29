@@ -44,3 +44,6 @@ next-env.d.ts
 
 # accidental npx cache dirs from hostname-based cwd
 sdp-v2-production*/
+
+# Rust / Soroban contract build artifacts
+contracts/**/target/

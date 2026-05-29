@@ -76,8 +76,9 @@ export async function POST(request: Request) {
       assets.find((a) => a.code === assetCode) ?? assets[0];
 
     if (!asset) {
+      const available = assets.map((a) => a.code).join(", ") || "none";
       return NextResponse.json(
-        { error: `No asset with code "${assetCode}" found in SDP. Register it in the SDP admin UI first.` },
+        { error: `No asset with code "${assetCode}" found in SDP (available: ${available}). Register it in the SDP admin UI first.` },
         { status: 400 }
       );
     }

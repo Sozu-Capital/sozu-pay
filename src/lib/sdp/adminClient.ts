@@ -144,16 +144,18 @@ export async function sdpHealth(): Promise<unknown> {
   return sdpFetch<unknown>("/health");
 }
 
-/** List all available wallets registered in SDP (to pick walletId). */
+/** List all available wallets registered in SDP (to pick walletId).
+ *  SDP v6 GET /wallets returns a raw JSON array, not a wrapped object. */
 export async function listWallets(): Promise<Array<{ id: string; name: string; homepage: string }>> {
-  const data = await sdpFetch<{ wallets: Array<{ id: string; name: string; homepage: string }> }>("/wallets");
-  return data.wallets ?? [];
+  const data = await sdpFetch<Array<{ id: string; name: string; homepage: string }>>("/wallets");
+  return Array.isArray(data) ? data : [];
 }
 
-/** List all available assets registered in SDP. */
+/** List all available assets registered in SDP.
+ *  SDP v6 GET /assets returns a raw JSON array, not a wrapped object. */
 export async function listAssets(): Promise<Array<{ id: string; code: string; issuer: string }>> {
-  const data = await sdpFetch<{ assets: Array<{ id: string; code: string; issuer: string }> }>("/assets");
-  return data.assets ?? [];
+  const data = await sdpFetch<Array<{ id: string; code: string; issuer: string }>>("/assets");
+  return Array.isArray(data) ? data : [];
 }
 
 /** Create a new disbursement batch. Returns the created disbursement. */

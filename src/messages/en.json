@@ -23,7 +23,6 @@
     "paymentWalls": "Payment walls",
     "payouts": "Payouts",
     "disbursements": "Disbursements",
-    "paymentsPoc": "Payments (POC)",
     "recipients": "Recipients",
     "profile": "Profile",
     "admin": "Admin",
@@ -217,7 +216,7 @@
     "initBody": "Run the SQL in docs/supabase-shadow-ledger.sql to enable shadow payment rail balances.",
     "title": "Internal ledger (shadow rail POC)",
     "footnote": "Off-chain ledger after ops confirms fiat. This is not your on-chain Stellar USDC balance.",
-    "link": "Payments & withdrawals"
+    "link": "Manage batch campaigns"
   },
   "auditPage": {
     "title": "Audit log",
@@ -266,38 +265,6 @@
     "stores": "Stores",
     "storesBody": "Connect Shopify, WooCommerce, or custom stores. Same wallet and transaction list.",
     "storesDocs": "See docs/ecommerce-integration.md for widget and API."
-  },
-  "paymentsPocPage": {
-    "title": "Payments (POC)",
-    "subtitle": "Shadow payment rail: create CLP orders, track internal ledger USDC (credited when ops confirms fiat). On-chain wallet balance is separate—see Overview.",
-    "invalidClp": "Enter a valid CLP amount.",
-    "createFailed": "Create failed",
-    "orderCreated": "Created order {ref}. Quoted ~{usdc} USDC. {instructions}",
-    "withdrawFailed": "Withdraw request failed",
-    "withdrawQueued": "Withdrawal queued.",
-    "ledgerBalance": "Ledger balance",
-    "ledgerOnly": "Internal ledger only (not Stellar chain).",
-    "newOrder": "New payment order",
-    "amountClp": "Amount (CLP, whole pesos)",
-    "payerRef": "Payer reference (optional memo)",
-    "createOrder": "Create order",
-    "withdrawSection": "Request CLP withdrawal",
-    "withdrawHelp": "Queues a request for operations. After CLP is sent manually, ops marks fulfilled and ledger USDC is debited.",
-    "withdrawAmount": "USDC (ledger) amount",
-    "note": "Note",
-    "notePlaceholder": "Bank account / instructions",
-    "queueWithdrawal": "Queue withdrawal",
-    "orders": "Orders",
-    "colRef": "Reference",
-    "colClp": "CLP",
-    "colUsdc": "USDC (quoted)",
-    "colStatus": "Status",
-    "colCreated": "Created",
-    "noOrders": "No orders yet.",
-    "withdrawalRequests": "Withdrawal requests",
-    "none": "None.",
-    "ledgerTx": "Ledger transactions",
-    "noLedgerTx": "No ledger movements yet."
   },
   "wallsPage": {
     "title": "Payment walls",
@@ -661,8 +628,8 @@
     "treasuryMigrateFailed": "Migration failed."
   },
   "disbursementsPage": {
-    "title": "Batch disbursements",
-    "subtitle": "Create payment batches via the Stellar Disbursement Platform. Recipients receive an invite email and register on SozuCredit.",
+    "title": "Disbursements",
+    "subtitle": "Create and manage SDP batch campaigns: add recipients, send wallet invites, authorize payouts with your passkey, and track payment status.",
     "newBatch": "New batch",
     "cancel": "Cancel",
     "dismiss": "Dismiss",

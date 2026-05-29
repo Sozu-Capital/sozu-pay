@@ -52,7 +52,7 @@ export default function LedgerShadowBalance() {
         {t("footnote")}
       </p>
       <Link
-        href="/dashboard/payments"
+        href="/dashboard/disbursements"
         className="mt-3 inline-block text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
       >
         {t("link")}

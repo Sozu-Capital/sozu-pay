@@ -22,8 +22,7 @@
     "creditApplications": "Solicitudes de crédito",
     "paymentWalls": "Muros de pago",
     "payouts": "Retiros",
-    "disbursements": "Desembolsos",
-    "paymentsPoc": "Pagos (POC)",
+    "disbursements": "Distribuciones",
     "recipients": "Destinatarios",
     "profile": "Perfil",
     "admin": "Admin",
@@ -217,7 +216,7 @@
     "initBody": "Ejecuta el SQL en docs/supabase-shadow-ledger.sql para habilitar balances del riel de pagos sombra.",
     "title": "Libro mayor interno (riel sombra POC)",
     "footnote": "Libro fuera de cadena tras confirmación fiat por operaciones. No es tu balance USDC Stellar on-chain.",
-    "link": "Pagos y retiros"
+    "link": "Gestionar campañas en lote"
   },
   "auditPage": {
     "title": "Registro de auditoría",
@@ -266,38 +265,6 @@
     "stores": "Tiendas",
     "storesBody": "Conecta Shopify, WooCommerce o tiendas personalizadas. Misma billetera y lista de transacciones.",
     "storesDocs": "Ver docs/ecommerce-integration.md para widget y API."
-  },
-  "paymentsPocPage": {
-    "title": "Pagos (POC)",
-    "subtitle": "Riel de pagos sombra: crea órdenes en CLP, sigue el USDC interno en el libro (acreditado cuando operaciones confirma fiat). El balance on-chain es aparte — ver Resumen.",
-    "invalidClp": "Introduce un monto CLP válido.",
-    "createFailed": "Error al crear",
-    "orderCreated": "Orden creada {ref}. Cotizado ~{usdc} USDC. {instructions}",
-    "withdrawFailed": "Error al solicitar retiro",
-    "withdrawQueued": "Retiro en cola.",
-    "ledgerBalance": "Balance en libro mayor",
-    "ledgerOnly": "Solo libro interno (no cadena Stellar).",
-    "newOrder": "Nueva orden de pago",
-    "amountClp": "Monto (CLP, pesos enteros)",
-    "payerRef": "Referencia del pagador (memo opcional)",
-    "createOrder": "Crear orden",
-    "withdrawSection": "Solicitar retiro CLP",
-    "withdrawHelp": "Encola una solicitud para operaciones. Tras enviar CLP manualmente, operaciones marca cumplido y se debita el USDC del libro.",
-    "withdrawAmount": "Monto USDC (libro)",
-    "note": "Nota",
-    "notePlaceholder": "Cuenta bancaria / instrucciones",
-    "queueWithdrawal": "Encolar retiro",
-    "orders": "Órdenes",
-    "colRef": "Referencia",
-    "colClp": "CLP",
-    "colUsdc": "USDC (cotizado)",
-    "colStatus": "Estado",
-    "colCreated": "Creado",
-    "noOrders": "Aún no hay órdenes.",
-    "withdrawalRequests": "Solicitudes de retiro",
-    "none": "Ninguna.",
-    "ledgerTx": "Movimientos del libro mayor",
-    "noLedgerTx": "Aún no hay movimientos en el libro."
   },
   "wallsPage": {
     "title": "Muros de pago",
@@ -737,8 +704,8 @@
     "tutorialMyLoansCta": "Entendido"
   },
   "disbursementsPage": {
-    "title": "Desembolsos en lote",
-    "subtitle": "Creá lotes de pagos a través de la Plataforma de Desembolsos Stellar. Los destinatarios reciben un correo de invitación y se registran en SozuCredit.",
+    "title": "Distribuciones",
+    "subtitle": "Creá y gestioná campañas SDP en lote: agregá destinatarios, enviá invitaciones a la billetera, autorizá pagos con passkey y seguí el estado de cada pago.",
     "newBatch": "Nuevo lote",
     "cancel": "Cancelar",
     "dismiss": "Cerrar",

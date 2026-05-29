@@ -49,6 +49,11 @@ export async function GET() {
       : null;
   const needsSmartWalletSetup = !!user.org_id && !!user.allowed && memberSa == null;
 
+  const can_manage_disbursements =
+    user.admin_level === "admin" ||
+    user.admin_level === "super_admin" ||
+    (!!org && org.treasury_manager_user_id === user.id);
+
   const org_stellar_disbursement_public_key = org?.stellar_disbursement_public_key ?? null;
   const org_soroban_contract_id = orgDisbursementContractId;
   const org_has_stored_secret = !!(org?.stellar_disbursement_secret_encrypted);
@@ -82,6 +87,7 @@ export async function GET() {
     org_has_recovery,
     allowed: user.allowed,
     admin_level: user.admin_level,
+    can_manage_disbursements,
     activation_requested_at: user.activation_requested_at,
     needsPayoutWalletSetup,
     needsOrgCreation,

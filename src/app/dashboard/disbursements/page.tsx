@@ -101,7 +101,9 @@ export default function DisbursementsPage() {
   const t = useTranslations("disbursementsPage");
   const { profile } = useDashboardProfile() ?? { profile: null };
   const isDisbursementAdmin =
-    profile?.admin_level === "admin" || profile?.admin_level === "super_admin";
+    profile?.can_manage_disbursements === true ||
+    profile?.admin_level === "admin" ||
+    profile?.admin_level === "super_admin";
 
   // List view
   const [disbursements, setDisbursements] = useState<SdpDisbursement[]>([]);
@@ -397,15 +399,17 @@ export default function DisbursementsPage() {
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("subtitle")}</p>
         </div>
-        <button
-          onClick={() => {
-            setShowCreate((v) => !v);
-            setCreateError(null);
-          }}
-          className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
-        >
-          {showCreate ? t("cancel") : t("newBatch")}
-        </button>
+        {isDisbursementAdmin && (
+          <button
+            onClick={() => {
+              setShowCreate((v) => !v);
+              setCreateError(null);
+            }}
+            className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+          >
+            {showCreate ? t("cancel") : t("newBatch")}
+          </button>
+        )}
       </div>
 
       {/* Action message banner */}

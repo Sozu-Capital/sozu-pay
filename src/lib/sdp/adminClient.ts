@@ -48,20 +48,42 @@ export interface SdpPayment {
   updated_at: string;
 }
 
+/**
+ * ReceiverWallet as returned inside GET /disbursements/{id}/receivers.
+ * SDP v6 embeds the wallet AND payment directly on each receiver row.
+ */
+export interface SdpReceiverWallet {
+  id: string;
+  status: string;
+  stellar_address?: string;
+  invited_at?: string | null;
+  last_message_sent_at?: string | null;
+  invitation_sent_at?: string | null;
+}
+
+/**
+ * Payment embedded in each DisbursementReceiver row.
+ * SDP v6 has no /disbursements/{id}/payments route; payments are accessed
+ * via GET /disbursements/{id}/receivers → [].payment.
+ */
+export interface SdpEmbeddedPayment {
+  id: string;
+  amount: string;
+  status: string;
+  stellar_transaction_id?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface SdpReceiver {
   id: string;
   email?: string;
   phone_number?: string;
   external_id?: string;
-  wallets: Array<{ stellar_address?: string; status: string }>;
-}
-
-export interface SdpMessage {
-  receiver_id: string;
-  wallet_id: string;
-  asset_id: string;
-  receiver_wallet_registration_message_at: string | null;
-  registration_link?: string;
+  /** Embedded payment for this disbursement (present on disbursement-scoped receiver lists). */
+  payment?: SdpEmbeddedPayment | null;
+  /** Wallet registration state for this receiver. */
+  receiver_wallet?: SdpReceiverWallet | null;
 }
 
 export interface CreateDisbursementParams {
@@ -239,23 +261,33 @@ export async function listDisbursements(): Promise<SdpDisbursement[]> {
 }
 
 /**
- * List payments for a disbursement.
- * Includes `stellar_transaction_id` once the TSS has submitted them.
- */
-export async function listPayments(disbursementId: string): Promise<SdpPayment[]> {
-  const data = await sdpFetch<{ data: SdpPayment[] }>(
-    `/disbursements/${disbursementId}/payments?page=1&page_limit=100`
-  );
-  return data.data ?? [];
-}
-
-/**
  * List receivers for a disbursement.
- * Includes registration_link / wallet status so the dashboard can build invite emails.
+ * SDP v6 GET /disbursements/{id}/receivers returns paginated receivers,
+ * each with an embedded `payment` and `receiver_wallet` object.
+ * This is the ONLY way to get per-payment detail for a disbursement —
+ * there is no /disbursements/{id}/payments sub-route in SDP v6.
  */
 export async function listReceivers(disbursementId: string): Promise<SdpReceiver[]> {
   const data = await sdpFetch<{ data: SdpReceiver[] }>(
     `/disbursements/${disbursementId}/receivers?page=1&page_limit=100`
   );
   return data.data ?? [];
+}
+
+/**
+ * Trigger SDP to (re)send a signed wallet-registration invite to a receiver.
+ * SDP v6 route: PATCH /receivers/{receiver_id}/wallets/{receiver_wallet_id}
+ *
+ * SDP generates a cryptographically-signed deep link and delivers it
+ * via its configured message channel (email / SMS). This is the only
+ * supported way to get a signed registration URL to a recipient — the
+ * dashboard cannot sign URLs itself.
+ */
+export async function retryReceiverWalletInvitation(
+  receiverId: string,
+  receiverWalletId: string
+): Promise<void> {
+  await sdpFetch<void>(`/receivers/${receiverId}/wallets/${receiverWalletId}`, {
+    method: "PATCH",
+  });
 }

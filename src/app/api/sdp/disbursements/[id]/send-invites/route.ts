@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { getDisbursement, listReceivers } from "@/lib/sdp/adminClient";
+import {
+  getDisbursement,
+  listReceivers,
+  retryReceiverWalletInvitation,
+} from "@/lib/sdp/adminClient";
 import { sendSdpInviteEmail } from "@/lib/email/sdp-invite";
 
 const WALLET_BASE_URL =
@@ -9,9 +13,16 @@ const WALLET_BASE_URL =
 /**
  * POST /api/sdp/disbursements/[id]/send-invites
  *
- * Reads receivers from SDP, builds registration URLs, and sends invite emails
- * via Resend for each receiver that has an email address and has not yet
- * registered (wallet status != REGISTERED).
+ * Two-step invite per unregistered receiver:
+ *
+ * 1. PATCH /receivers/{id}/wallets/{wallet_id} → triggers SDP to generate
+ *    a cryptographically-signed deep link and deliver it via its own
+ *    message channel (email/SMS configured in SDP settings on Railway).
+ *    This is the only supported way to produce a valid signed invite URL.
+ *
+ * 2. Resend email (if RESEND_API_KEY is set) → supplemental notification
+ *    that tells the recipient a payment is waiting and to check their
+ *    inbox for the registration link from SDP.
  *
  * Body (optional JSON): { organizationName?: string }
  */
@@ -40,44 +51,69 @@ export async function POST(
 
     const results: Array<{
       email: string;
-      sent: boolean;
+      sdpTriggered: boolean;
+      notificationSent: boolean;
       skipped: boolean;
       error?: string;
     }> = [];
 
     for (const receiver of receivers) {
-      const email = receiver.email;
+      const email = receiver.email ?? receiver.phone_number;
       if (!email) continue;
 
+      const wallet = receiver.receiver_wallet;
+      const walletId = wallet?.id;
+
       // Skip receivers who already have a registered wallet.
-      const alreadyRegistered = receiver.wallets?.some(
-        (w) => w.status === "REGISTERED"
-      );
-      if (alreadyRegistered) {
-        results.push({ email, sent: false, skipped: true });
+      if (wallet?.status === "REGISTERED") {
+        results.push({ email, sdpTriggered: false, notificationSent: false, skipped: true });
         continue;
       }
 
-      // Build a registration URL pointing at the SozuCredit wallet.
-      // The SDP invite flow uses /sdp/invite on the wallet domain.
-      const registrationUrl = buildRegistrationUrl(
-        disbursement.id,
-        receiver.id
-      );
+      let sdpTriggered = false;
+      let sdpError: string | undefined;
 
-      const result = await sendSdpInviteEmail({
-        toEmail: email,
-        organizationName,
-        registrationUrl,
-        disbursementName: disbursement.name,
+      // Step 1 — ask SDP to (re)send its own signed registration link.
+      if (walletId) {
+        try {
+          await retryReceiverWalletInvitation(receiver.id, walletId);
+          sdpTriggered = true;
+        } catch (e) {
+          sdpError = e instanceof Error ? e.message : String(e);
+          console.warn(
+            `[send-invites] SDP RetryInvitation failed for receiver ${receiver.id}:`,
+            sdpError
+          );
+        }
+      }
+
+      // Step 2 — supplemental Resend notification (if receiver has email).
+      let notificationSent = false;
+      if (receiver.email) {
+        const notifResult = await sendSdpInviteEmail({
+          toEmail: receiver.email,
+          organizationName,
+          // Point to the wallet homepage; recipient's real invite arrives from SDP.
+          registrationUrl: WALLET_BASE_URL,
+          disbursementName: disbursement.name,
+        });
+        notificationSent = notifResult.sent;
+      }
+
+      results.push({
+        email,
+        sdpTriggered,
+        notificationSent,
+        skipped: false,
+        error: sdpError,
       });
-
-      results.push({ email, ...result });
     }
 
-    const sentCount = results.filter((r) => r.sent).length;
+    const sentCount = results.filter((r) => r.sdpTriggered || r.notificationSent).length;
     const skippedCount = results.filter((r) => r.skipped).length;
-    const failedCount = results.filter((r) => !r.sent && !r.skipped).length;
+    const failedCount = results.filter(
+      (r) => !r.skipped && !r.sdpTriggered && !r.notificationSent
+    ).length;
 
     return NextResponse.json({
       ok: true,
@@ -91,12 +127,4 @@ export async function POST(
     console.error("[api/sdp/disbursements/[id]/send-invites]", msg);
     return NextResponse.json({ error: msg }, { status: 502 });
   }
-}
-
-function buildRegistrationUrl(disbursementId: string, receiverId: string): string {
-  const base = WALLET_BASE_URL.replace(/\/$/, "");
-  const url = new URL(`${base}/sdp/invite`);
-  url.searchParams.set("disbursement_id", disbursementId);
-  url.searchParams.set("receiver_id", receiverId);
-  return url.toString();
 }

@@ -7,6 +7,7 @@ export interface DbRecipient {
   bank_account_id: string;
   stellar_address: string | null;
   phone: string | null;
+  date_of_birth: string | null;
   created_at: string;
 }
 
@@ -17,6 +18,7 @@ export interface Recipient {
   bankAccountId: string;
   stellarAddress?: string;
   phone?: string;
+  dateOfBirth?: string;
   createdAt: string;
 }
 
@@ -27,7 +29,8 @@ function toRecipient(row: DbRecipient): Recipient {
     name: row.name,
     bankAccountId: row.bank_account_id ?? "",
     stellarAddress: row.stellar_address ?? undefined,
-    phone: (row as { phone?: string | null }).phone ?? undefined,
+    phone: row.phone ?? undefined,
+    dateOfBirth: row.date_of_birth ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -37,15 +40,17 @@ export async function createRecipientDb(
   name: string,
   bankAccountId: string,
   stellarAddress?: string,
-  phone?: string
+  phone?: string,
+  dateOfBirth?: string
 ): Promise<Recipient> {
   const payload: Record<string, unknown> = {
     owner_id: ownerId,
     name,
     bank_account_id: bankAccountId ?? "",
     stellar_address: stellarAddress ?? null,
+    phone: phone?.trim() || null,
+    date_of_birth: dateOfBirth?.trim() || null,
   };
-  if (phone !== undefined) (payload as Record<string, unknown>).phone = phone.trim() || null;
   const { data, error } = await getSupabase()
     .from("recipients")
     .insert(payload)
@@ -86,7 +91,7 @@ export async function listRecipientsDb(ownerId: string): Promise<Recipient[]> {
 export async function updateRecipientDb(
   id: string,
   ownerId: string,
-  updates: Partial<Pick<Recipient, "name" | "bankAccountId" | "stellarAddress" | "phone">>
+  updates: Partial<Pick<Recipient, "name" | "bankAccountId" | "stellarAddress" | "phone" | "dateOfBirth">>
 ): Promise<Recipient | null> {
   const payload: Record<string, unknown> = {};
   if (updates.name !== undefined) payload.name = updates.name;
@@ -95,6 +100,8 @@ export async function updateRecipientDb(
   if (updates.stellarAddress !== undefined)
     payload.stellar_address = updates.stellarAddress;
   if (updates.phone !== undefined) payload.phone = updates.phone?.trim() || null;
+  if (updates.dateOfBirth !== undefined)
+    payload.date_of_birth = updates.dateOfBirth?.trim() || null;
 
   if (Object.keys(payload).length === 0) {
     return getRecipientDb(id, ownerId);

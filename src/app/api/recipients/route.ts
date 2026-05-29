@@ -18,22 +18,34 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const name = typeof body.name === "string" ? body.name.trim() : "Recipient";
+  const name = typeof body.name === "string" ? body.name.trim() : "";
   const bankAccountId = typeof body.bankAccountId === "string" ? body.bankAccountId.trim() : "";
   const stellarAddress = typeof body.stellarAddress === "string" ? body.stellarAddress.trim() : undefined;
   const phone = typeof body.phone === "string" ? body.phone.trim() : undefined;
+  const dateOfBirth = typeof body.dateOfBirth === "string" ? body.dateOfBirth.trim() : undefined;
 
   if (!name) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
   }
 
-  if (!bankAccountId && !stellarAddress) {
+  if (!dateOfBirth) {
+    return NextResponse.json({ error: "Date of birth is required" }, { status: 400 });
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
     return NextResponse.json(
-      { error: "Provide either bankAccountId or stellarAddress (or add a bank account in Settings)" },
+      { error: "Date of birth must be YYYY-MM-DD" },
       { status: 400 }
     );
   }
 
-  const recipient = await createRecipient(session.id, name, bankAccountId, stellarAddress, phone);
+  const recipient = await createRecipient(
+    session.id,
+    name,
+    bankAccountId,
+    stellarAddress,
+    phone,
+    dateOfBirth
+  );
   return NextResponse.json({ recipient });
 }

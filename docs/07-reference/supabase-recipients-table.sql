@@ -7,15 +7,14 @@ CREATE TABLE IF NOT EXISTS recipients (
   name TEXT NOT NULL,
   bank_account_id TEXT NOT NULL DEFAULT '',
   stellar_address TEXT,
+  phone TEXT,
+  date_of_birth DATE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- List recipients by owner (dashboard)
 CREATE INDEX IF NOT EXISTS idx_recipients_owner_id ON recipients(owner_id);
 
--- Optional: prevent duplicate name+owner if you want uniqueness
--- CREATE UNIQUE INDEX idx_recipients_owner_name ON recipients(owner_id, name);
-
--- Optional: phone and email for recipient details
+-- Migration for existing tables:
 -- ALTER TABLE recipients ADD COLUMN IF NOT EXISTS phone TEXT;
--- ALTER TABLE recipients ADD COLUMN IF NOT EXISTS email TEXT;
+-- ALTER TABLE recipients ADD COLUMN IF NOT EXISTS date_of_birth DATE;

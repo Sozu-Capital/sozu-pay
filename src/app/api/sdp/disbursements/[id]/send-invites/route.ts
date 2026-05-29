@@ -16,6 +16,33 @@ const WALLET_BASE_URL =
 
 const WALLET_INVITE_PATH = process.env.SDP_INVITE_PATHNAME ?? "/sdp/invite";
 
+function appendUnsignedInviteParams(
+  url: string,
+  params: Record<string, string | undefined>
+): string {
+  const u = new URL(url);
+  for (const [key, value] of Object.entries(params)) {
+    if (value?.trim()) u.searchParams.set(key, value.trim());
+  }
+  return u.toString();
+}
+
+/** Slug from batch CSV `id` column → display name for identity matching. */
+function externalIdToDisplayName(externalId: string): string {
+  return externalId
+    .trim()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function receiverVerificationDob(receiver: {
+  payment?: { verification_field_value?: string; verification?: string } | null;
+}): string {
+  const p = receiver.payment;
+  if (!p) return "";
+  return (p.verification_field_value ?? p.verification ?? "").trim();
+}
+
 /**
  * Derives the SDP tenant hostname from the SDP_API_URL env var.
  * e.g. "https://sdp-v2-production-f6c7.up.railway.app" → "sdp-v2-production-f6c7.up.railway.app"
@@ -128,9 +155,12 @@ export async function POST(
             // Append tenant as unsigned param AFTER the signature so existing
             // verifiers can ignore it while new SozuCredit versions read it.
             const tenantName = process.env.SDP_TENANT_NAME?.trim();
-            registrationUrl = tenantName
-              ? `${signedUrl}&tenant=${encodeURIComponent(tenantName)}`
-              : signedUrl;
+            registrationUrl = appendUnsignedInviteParams(signedUrl, {
+              tenant: tenantName,
+              be: receiver.email,
+              bn: externalIdToDisplayName(receiver.external_id ?? ""),
+              bd: receiverVerificationDob(receiver),
+            });
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             console.warn("[send-invites] URL signing failed, falling back to plain invite URL:", msg);

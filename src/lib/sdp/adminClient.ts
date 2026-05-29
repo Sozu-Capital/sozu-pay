@@ -73,6 +73,9 @@ export interface SdpEmbeddedPayment {
   stellar_transaction_id?: string | null;
   created_at?: string;
   updated_at?: string;
+  /** DOB or other verification value from batch CSV */
+  verification_field_value?: string;
+  verification?: string;
 }
 
 export interface SdpReceiver {

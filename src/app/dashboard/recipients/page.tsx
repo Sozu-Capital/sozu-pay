@@ -16,26 +16,20 @@ interface Recipient {
   bankAccountId: string;
   stellarAddress?: string;
   phone?: string;
+  dateOfBirth?: string;
   createdAt?: string;
 }
 
-interface BankAccount {
-  id: string;
-  label: string;
-  last4: string;
-}
 
 export default function RecipientsPage() {
   const t = useTranslations("recipientsPage");
   const tc = useTranslations("common");
   const tp = useTranslations("payoutsPage");
   const [recipients, setRecipients] = useState<Recipient[]>([]);
-  const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
-  const [bankAccountId, setBankAccountId] = useState("");
-  const [stellarAddress, setStellarAddress] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [showPayMultiple, setShowPayMultiple] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [amountPerRecipient, setAmountPerRecipient] = useState<Record<string, string>>({});
@@ -88,13 +82,10 @@ export default function RecipientsPage() {
 
   function load() {
     setLoading(true);
-    Promise.all([
-      fetch("/api/recipients").then((r) => (r.ok ? r.json() : { recipients: [] })),
-      fetch("/api/bank-accounts").then((r) => (r.ok ? r.json() : { accounts: [] })),
-    ])
-      .then(([r, a]) => {
+    fetch("/api/recipients")
+      .then((r) => (r.ok ? r.json() : { recipients: [] }))
+      .then((r) => {
         setRecipients(r.recipients ?? []);
-        setAccounts(a.accounts ?? []);
       })
       .finally(() => setLoading(false));
   }
@@ -115,14 +106,12 @@ export default function RecipientsPage() {
 
   function handleAdd(e: React.FormEvent) {
     e.preventDefault();
-    const bank = bankAccountId || (accounts[0]?.id ?? "");
-    const stellar = stellarAddress.trim() || undefined;
     if (!name.trim()) {
       alert(t("nameRequired"));
       return;
     }
-    if (!bank && !stellar) {
-      alert(t("bankOrStellarRequired"));
+    if (!dateOfBirth.trim()) {
+      alert(t("dobRequired"));
       return;
     }
     fetch("/api/recipients", {
@@ -130,8 +119,7 @@ export default function RecipientsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: name.trim(),
-        bankAccountId: bank || undefined,
-        stellarAddress: stellar,
+        dateOfBirth: dateOfBirth.trim(),
         phone: phone.trim() || undefined,
       }),
     })
@@ -143,8 +131,7 @@ export default function RecipientsPage() {
         }
         setShowAdd(false);
         setName("");
-        setBankAccountId("");
-        setStellarAddress("");
+        setDateOfBirth("");
         setPhone("");
         load();
       })
@@ -524,41 +511,24 @@ export default function RecipientsPage() {
       ) : (
         <form onSubmit={handleAdd} className="mt-6 max-w-md space-y-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <div>
-            <label className="block text-sm font-medium">{t("nameLabel")}</label>
+            <label className="block text-sm font-medium">{t("fullNameLabel")}</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={t("namePlaceholder")}
+              placeholder={t("fullNamePlaceholder")}
               className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
             />
           </div>
           <div>
-            <label htmlFor="recipient-bank-account" className="block text-sm font-medium">{t("bankOptional")}</label>
-            <select
-              id="recipient-bank-account"
-              value={bankAccountId}
-              onChange={(e) => setBankAccountId(e.target.value)}
-              className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
-            >
-              <option value="">{t("bankStellarOnly")}</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.label} (…{a.last4})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium">{t("stellarLabel")}</label>
+            <label htmlFor="recipient-dob" className="block text-sm font-medium">{t("dobLabel")}</label>
             <input
-              value={stellarAddress}
-              onChange={(e) => setStellarAddress(e.target.value)}
-              placeholder={t("stellarPlaceholder")}
-              className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 font-mono text-sm"
+              id="recipient-dob"
+              type="date"
+              value={dateOfBirth}
+              onChange={(e) => setDateOfBirth(e.target.value)}
+              className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
             />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {t("bankOrStellarHint")}
-            </p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("dobHint")}</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t("phoneLabel")}</label>
@@ -728,6 +698,12 @@ export default function RecipientsPage() {
                           <div className="flex items-center gap-1.5">
                             <span className="font-medium text-gray-500 dark:text-gray-500 shrink-0">{t("phone")}</span>
                             <span>{r.phone}</span>
+                          </div>
+                        )}
+                        {(r.dateOfBirth ?? "").trim() && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-medium text-gray-500 dark:text-gray-500 shrink-0">{t("dob")}</span>
+                            <span>{r.dateOfBirth}</span>
                           </div>
                         )}
                         <div className="flex items-center gap-1.5">

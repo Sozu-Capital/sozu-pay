@@ -97,6 +97,14 @@ export interface CreateDisbursementParams {
   verificationField?: string;
 }
 
+export interface RegisterWalletParams {
+  name: string;
+  homepage: string;
+  sep10ClientDomain: string;
+  deepLinkSchema: string;
+  assets: Array<{ code: string; issuer: string }>;
+}
+
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
 function sdpUrl(path: string): string {
@@ -168,9 +176,63 @@ export async function sdpHealth(): Promise<unknown> {
 
 /** List all available wallets registered in SDP (to pick walletId).
  *  SDP v6 GET /wallets returns a raw JSON array, not a wrapped object. */
-export async function listWallets(): Promise<Array<{ id: string; name: string; homepage: string }>> {
-  const data = await sdpFetch<Array<{ id: string; name: string; homepage: string }>>("/wallets");
+export async function listWallets(): Promise<Array<{ id: string; name: string; homepage: string; sep_10_client_domain?: string }>> {
+  const data = await sdpFetch<Array<{ id: string; name: string; homepage: string; sep_10_client_domain?: string }>>("/wallets");
   return Array.isArray(data) ? data : [];
+}
+
+/** Register a new wallet in SDP (tenant admin or super-admin required). */
+export async function registerWallet(
+  params: RegisterWalletParams
+): Promise<{ id: string; name: string; homepage: string }> {
+  return sdpFetch<{ id: string; name: string; homepage: string }>("/wallets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: params.name,
+      homepage: params.homepage,
+      sep_10_client_domain: params.sep10ClientDomain,
+      deep_link_schema: params.deepLinkSchema,
+      assets: params.assets,
+    }),
+  });
+}
+
+/**
+ * Ensures the SozuCredit wallet is registered in SDP.
+ * Returns the wallet ID (existing or newly created).
+ * Reads SOZUCREDIT_URL from the environment; falls back gracefully if already present.
+ */
+export async function ensureSozuCreditWallet(
+  assets: Array<{ code: string; issuer: string }>
+): Promise<string | null> {
+  const walletUrl = (process.env.SOZUCREDIT_URL ?? "").replace(/\/$/, "");
+  if (!walletUrl) return null;
+
+  const clientDomain = walletUrl.replace(/^https?:\/\//i, "").split("/")[0];
+  const deepLinkSchema = `${walletUrl}/sdp/invite`;
+
+  try {
+    const wallets = await listWallets();
+    const existing = wallets.find(
+      (w) =>
+        w.sep_10_client_domain === clientDomain ||
+        w.homepage?.replace(/\/$/, "") === walletUrl
+    );
+    if (existing) return existing.id;
+
+    const created = await registerWallet({
+      name: "SozuCredit",
+      homepage: walletUrl,
+      sep10ClientDomain: clientDomain,
+      deepLinkSchema,
+      assets,
+    });
+    return created.id;
+  } catch (e) {
+    console.warn("[ensureSozuCreditWallet] Could not register wallet:", e instanceof Error ? e.message : e);
+    return null;
+  }
 }
 
 /** List all available assets registered in SDP.

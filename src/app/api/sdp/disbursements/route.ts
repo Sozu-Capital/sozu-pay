@@ -6,6 +6,7 @@ import {
   uploadInstructions,
   listWallets,
   listAssets,
+  ensureSozuCreditWallet,
 } from "@/lib/sdp/adminClient";
 
 function notConfigured() {
@@ -26,11 +27,18 @@ export async function GET() {
   if (!isSdpConfigured()) return notConfigured();
 
   try {
-    const [disbursements, wallets, assets] = await Promise.all([
+    const [disbursements, assets] = await Promise.all([
       listDisbursements(),
-      listWallets(),
       listAssets(),
     ]);
+
+    // Ensure SozuCredit is registered as a wallet in SDP (idempotent).
+    // This is required for SEP-10 client_domain validation to succeed.
+    await ensureSozuCreditWallet(
+      assets.map((a) => ({ code: a.code, issuer: a.issuer }))
+    );
+
+    const wallets = await listWallets();
     return NextResponse.json({ disbursements, wallets, assets });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

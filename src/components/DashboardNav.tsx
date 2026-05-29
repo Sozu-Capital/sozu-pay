@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 import { useTranslations } from "next-intl";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { useSignOut } from "@/lib/auth/useSignOut";
 
 function NavLink({
   href,
@@ -42,6 +43,7 @@ export function DashboardNav() {
   const isStore = profile?.org_type === "store";
   const showDisbursementsNav = !isStore && !!profile?.org_id;
   const t = useTranslations("nav");
+  const { signOut, signingOut } = useSignOut();
 
   return (
     <nav className="mt-6 flex flex-col flex-1 min-h-0">
@@ -96,18 +98,18 @@ export function DashboardNav() {
       </div>
       <div className="mt-auto pt-4 border-t border-white/10">
         <LanguageSwitcher className="mb-3" />
-        <form action="/api/auth/logout" method="POST" className="block">
-          <button
-            type="submit"
-            className="w-full flex items-center justify-end gap-2 px-3 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
-            aria-label={t("logOut")}
-          >
-            <span className="sr-only">{t("logOut")}</span>
-            <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-          </button>
-        </form>
+        <button
+          type="button"
+          onClick={() => signOut()}
+          disabled={signingOut}
+          className="w-full flex items-center justify-end gap-2 px-3 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white disabled:opacity-50"
+          aria-label={t("logOut")}
+        >
+          <span className="sr-only">{t("logOut")}</span>
+          <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </button>
       </div>
     </nav>
   );

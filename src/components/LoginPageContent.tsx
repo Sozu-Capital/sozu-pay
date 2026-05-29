@@ -54,6 +54,8 @@ export function LoginPageContent({ clearSessionOnMount = true, returnTo }: Login
   }, [ready, privyLogout, clearSessionOnMount]);
 
   useEffect(() => {
+    // Do not re-sync Privy while we are clearing session (logout → /login race).
+    if (clearSessionOnMount && clearing) return;
     if (!ready || !authenticated || !user) return;
 
     const ABORT_MS = 20_000;
@@ -140,7 +142,7 @@ export function LoginPageContent({ clearSessionOnMount = true, returnTo }: Login
     return () => {
       cancelled = true;
     };
-  }, [ready, authenticated, user, getAccessToken, router, t, returnTo]);
+  }, [ready, authenticated, user, getAccessToken, router, t, returnTo, clearSessionOnMount, clearing]);
 
   const usePrivyAuth = !!process.env.NEXT_PUBLIC_PRIVY_APP_ID;
   const isClearingSession = clearing && authenticated;

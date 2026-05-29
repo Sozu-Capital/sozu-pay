@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import BankAccountsSection from "@/components/BankAccountsSection";
-import { usePrivy } from "@privy-io/react-auth";
 import { useTranslations } from "next-intl";
+import { useSignOut } from "@/lib/auth/useSignOut";
 
 export default function SettingsPage() {
   const t = useTranslations("settingsPage");
@@ -13,14 +13,12 @@ export default function SettingsPage() {
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [totpCode, setTotpCode] = useState("");
   const [showTotpSetup, setShowTotpSetup] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
   const [orgTag, setOrgTag] = useState<string | null>(null);
   const [orgTagInput, setOrgTagInput] = useState("");
   const [orgTagBusy, setOrgTagBusy] = useState(false);
   const [orgTagError, setOrgTagError] = useState<string | null>(null);
   const [orgTagSaved, setOrgTagSaved] = useState(false);
-  const privy = usePrivy();
-  const usePrivyAuth = typeof window !== "undefined" && !!process.env.NEXT_PUBLIC_PRIVY_APP_ID;
+  const { signOut, signingOut } = useSignOut();
 
   useEffect(() => {
     fetch("/api/auth/session")
@@ -226,34 +224,14 @@ export default function SettingsPage() {
       </section>
 
       <div className="mt-8">
-        {usePrivyAuth ? (
-          <button
-            type="button"
-            disabled={signingOut}
-            onClick={async () => {
-              setSigningOut(true);
-              try {
-                if (privy.logout) await privy.logout();
-              } finally {
-                const res = await fetch("/api/auth/logout", { method: "POST", redirect: "manual" });
-                const url = res.headers.get("Location");
-                window.location.href = url || "/";
-              }
-            }}
-            className="rounded-md border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 px-3 py-1.5 text-sm disabled:opacity-50"
-          >
-            {signingOut ? tc("signingOut") : tc("signOut")}
-          </button>
-        ) : (
-          <form action="/api/auth/logout" method="POST">
-            <button
-              type="submit"
-              className="rounded-md border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 px-3 py-1.5 text-sm"
-            >
-              {tc("signOut")}
-            </button>
-          </form>
-        )}
+        <button
+          type="button"
+          disabled={signingOut}
+          onClick={() => signOut()}
+          className="rounded-md border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 px-3 py-1.5 text-sm disabled:opacity-50"
+        >
+          {signingOut ? tc("signingOut") : tc("signOut")}
+        </button>
       </div>
     </div>
   );

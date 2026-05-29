@@ -3,6 +3,7 @@ import { getSdpApiContext } from "@/lib/sdp/sdpApiContext";
 import { getSdpSep10JwtCookie } from "@/lib/sdp/jwtCookie";
 import { parseSdpAssetParam } from "@/lib/sdp/assetParam";
 import { postSep24DepositInteractive, augmentSdpInteractiveUrl } from "@/lib/sdp/sep24Server";
+import { preflightWalletRegistrationUrl } from "@/lib/sdp/tenantCheck";
 
 export async function POST() {
   const ctx = await getSdpApiContext();
@@ -40,8 +41,22 @@ export async function POST() {
     return NextResponse.json({ error: res.error }, { status: 502 });
   }
 
+  const url = augmentSdpInteractiveUrl(res.url, { tenantName, lang: "es" });
+  const preflightError = await preflightWalletRegistrationUrl(url, tenantName);
+  if (preflightError) {
+    return NextResponse.json(
+      {
+        error: preflightError,
+        code: preflightError.includes("tenant migrations")
+          ? "SDP_TENANT_NOT_PROVISIONED"
+          : "SDP_WALLET_REGISTRATION_FAILED",
+      },
+      { status: 503 }
+    );
+  }
+
   return NextResponse.json({
-    url: augmentSdpInteractiveUrl(res.url, { tenantName, lang: "es" }),
+    url,
     id: res.id ?? null,
   });
 }

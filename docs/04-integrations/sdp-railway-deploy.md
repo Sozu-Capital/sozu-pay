@@ -258,6 +258,7 @@ Add these to your Vercel project environment variables:
 
 ```bash
 SDP_API_URL=https://<sdp-api-railway-url>
+SDP_TENANT_NAME=mujeres-admin
 SDP_ADMIN_EMAIL=<owner-email>
 SDP_ADMIN_PASSWORD=<owner-password>
 SOZUCREDIT_URL=https://credit.sozu.capital
@@ -288,6 +289,8 @@ Redeploy SozuCredit, then re-run the preflight script.
 | `502` on disbursement create | SDP API unreachable | Verify `SDP_API_URL` has no trailing `/`; check Railway service is deployed |
 | Payments stuck in `PENDING` | TSS not running or not funded | Check sdp-tss service logs; fund distribution wallet on Friendbot |
 | SozuCredit 503 on TOML | `SEP10_CLIENT_SIGNING_SECRET` not set | Verify Vercel env on SozuCredit project; redeploy |
+| Recipient wallet registration 500: `Failed to load tenant by name` | Tenant row exists but **tenant DB migrations** were not run (Step 7) | `railway run --service sdp-api -- ./stellar-disbursement-platform db migrate up --tenant-id <uuid>` — get UUID from SDP admin or `GET /api/sdp/tenant-check` |
+| `Tenant not found in context` on dashboard SDP calls | Wrong `SDP_TENANT_NAME` | Must match tenant `name` from Railway setup (probe: `POST /login` with header should return "Incorrect email or password", not "Tenant not found") |
 
 ---
 

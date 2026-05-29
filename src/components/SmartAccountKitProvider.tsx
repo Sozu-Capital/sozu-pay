@@ -14,6 +14,7 @@ type SmartAccountContextValue = {
   connect: (opts?: { prompt?: boolean; fresh?: boolean }) => Promise<{
     contractId: string | null;
     credentialId: string | null;
+    publicKey: Uint8Array | null;
   }>;
   createWallet: (userLabel: string, userName: string) => Promise<CreateWalletResult>;
   disconnect: () => Promise<void>;
@@ -61,12 +62,16 @@ export function SmartAccountKitProvider({ children }: { children: React.ReactNod
       setConnected(true);
       setContractId(res.contractId);
       setCredentialId(res.credentialId ?? null);
-      return { contractId: res.contractId, credentialId: res.credentialId ?? null };
+      return {
+        contractId: res.contractId,
+        credentialId: res.credentialId ?? null,
+        publicKey: res.credential?.publicKey ?? null,
+      };
     }
     setConnected(false);
     setContractId(null);
     setCredentialId(null);
-    return { contractId: null, credentialId: null };
+    return { contractId: null, credentialId: null, publicKey: null };
   }, [kit]);
 
   const createWallet = useCallback(async (userLabel: string, userName: string) => {

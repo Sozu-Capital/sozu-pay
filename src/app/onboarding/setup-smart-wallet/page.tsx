@@ -1,20 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { usePrivy } from "@privy-io/react-auth";
 import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
-
-function b64url(u8: Uint8Array): string {
-  const bin = String.fromCharCode(...u8);
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
+import { getPrivyDisplayName } from "@/lib/auth/privyDisplayName";
+import {
+  registerSmartAccount,
+  resolvePublicKeyFromServer,
+} from "@/lib/stellar/smartAccounts/registerWalletClient";
 
 export default function SetupSmartWalletPage() {
   const router = useRouter();
+  const { user: privyUser } = usePrivy();
   const { ready, kit, connected, contractId, credentialId, error, createWallet, connect } =
     useSmartAccountKitContext();
 
-  const [profileEmail, setProfileEmail] = useState<string>("user");
+  const [profileEmail, setProfileEmail] = useState("");
+  const [fullName, setFullName] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -22,42 +25,46 @@ export default function SetupSmartWalletPage() {
     fetch("/api/profile", { credentials: "include" })
       .then((r) => r.json())
       .then((d) => {
-        if (typeof d.email === "string" && d.email) setProfileEmail(d.email);
+        const email = typeof d.email === "string" ? d.email : "";
+        if (email) setProfileEmail(email);
+        setFullName((prev) => prev || getPrivyDisplayName(privyUser, email));
       })
-      .catch(() => {});
-  }, []);
+      .catch(() => {
+        setFullName((prev) => prev || getPrivyDisplayName(privyUser, ""));
+      });
+  }, [privyUser]);
 
   const canProceed = ready && !!kit;
+  const passkeyLabel = fullName.trim() || "Primary passkey";
 
-  const storeToServer = async (label: string) => {
-    if (!kit || !contractId || !credentialId) throw new Error("Not connected");
-    const all = await kit.credentials.getAll();
-    const match = all.find((c) => c.credentialId === credentialId);
-    if (!match) throw new Error("Credential not found in local storage");
-    const publicKey65b = b64url(match.publicKey);
-
-    const res = await fetch("/api/smart-accounts/register", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "member",
-        contractId,
-        credentialId,
-        publicKey65b,
-        label,
-      }),
+  const persistWallet = async (params: {
+    contractId: string;
+    credentialId: string;
+    publicKey: Uint8Array;
+  }) => {
+    await registerSmartAccount({
+      type: "member",
+      contractId: params.contractId,
+      credentialId: params.credentialId,
+      publicKey: params.publicKey,
+      label: passkeyLabel,
     });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error ?? "Failed to save wallet");
   };
 
   const handleCreate = async () => {
+    if (!fullName.trim()) {
+      setSaveError("Enter your full name for the passkey.");
+      return;
+    }
     setSaveError(null);
     setSaving(true);
     try {
-      await createWallet("SozuPay", profileEmail);
-      await storeToServer("Primary passkey");
+      const wallet = await createWallet("SozuPay", fullName.trim());
+      await persistWallet({
+        contractId: wallet.contractId,
+        credentialId: wallet.credentialId,
+        publicKey: wallet.publicKey,
+      });
       router.replace("/dashboard");
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Failed");
@@ -70,8 +77,22 @@ export default function SetupSmartWalletPage() {
     setSaveError(null);
     setSaving(true);
     try {
-      await connect({ prompt: true });
-      await storeToServer("Passkey");
+      const linked = await connect({ prompt: true });
+      if (!linked.contractId || !linked.credentialId) {
+        throw new Error("No passkey wallet connected");
+      }
+      let publicKey = linked.publicKey;
+      if (!publicKey) {
+        publicKey = await resolvePublicKeyFromServer({
+          contractId: linked.contractId,
+          credentialId: linked.credentialId,
+        });
+      }
+      await persistWallet({
+        contractId: linked.contractId,
+        credentialId: linked.credentialId,
+        publicKey,
+      });
       router.replace("/dashboard");
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Failed");
@@ -85,8 +106,26 @@ export default function SetupSmartWalletPage() {
       <div className="w-full max-w-md rounded-xl border border-white/10 bg-white/5 p-6">
         <h1 className="text-lg font-semibold">Set up your smart wallet</h1>
         <p className="mt-2 text-sm text-gray-300">
-          Create (or connect) a passkey-based smart account. No secret keys are stored on our servers.
+          Create a passkey smart account to sign payouts and disbursements. Your passkey is stored on
+          this device — we never see your private key.
         </p>
+
+        <div className="mt-5">
+          <label htmlFor="full-name" className="text-xs font-medium text-gray-300">
+            Full name (passkey label)
+          </label>
+          <input
+            id="full-name"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            placeholder="e.g. Maria Garcia"
+            disabled={saving}
+            className="mt-1 w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 disabled:opacity-50"
+          />
+          {profileEmail && (
+            <p className="mt-1 text-xs text-gray-500">Account: {profileEmail}</p>
+          )}
+        </div>
 
         {!canProceed && <p className="mt-4 text-sm text-gray-400">Loading…</p>}
         {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
@@ -95,7 +134,7 @@ export default function SetupSmartWalletPage() {
         <div className="mt-6 flex flex-col gap-3">
           <button
             type="button"
-            disabled={!canProceed || saving}
+            disabled={!canProceed || saving || !fullName.trim()}
             onClick={() => void handleCreate()}
             className="rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium disabled:opacity-50"
           >
@@ -112,6 +151,12 @@ export default function SetupSmartWalletPage() {
           {connected && contractId && (
             <p className="text-xs text-gray-400 break-all">
               Connected contract: <span className="font-mono">{contractId}</span>
+              {credentialId ? (
+                <>
+                  {" "}
+                  · credential <span className="font-mono">{credentialId.slice(0, 12)}…</span>
+                </>
+              ) : null}
             </p>
           )}
         </div>
@@ -119,4 +164,3 @@ export default function SetupSmartWalletPage() {
     </main>
   );
 }
-

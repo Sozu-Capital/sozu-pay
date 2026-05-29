@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
+import { getPrivyDisplayName } from "@/lib/auth/privyDisplayName";
+import { registerSmartAccount } from "@/lib/stellar/smartAccounts/registerWalletClient";
+import { usePrivy } from "@privy-io/react-auth";
 
 type OrgType = "store" | "ngo";
 type InviteRole = "member" | "admin" | "guardian" | "treasury_manager";
@@ -29,13 +32,9 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-function b64url(u8: Uint8Array): string {
-  const bin = String.fromCharCode(...u8);
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
 export default function CreateOrganizationPage() {
   const router = useRouter();
+  const { user: privyUser } = usePrivy();
   const { ready, kit, createWallet, error: kitError } = useSmartAccountKitContext();
 
   const [type, setType] = useState<OrgType>("ngo");
@@ -44,6 +43,7 @@ export default function CreateOrganizationPage() {
   const [guardianThreshold, setGuardianThreshold] = useState(2);
   const [invitesText, setInvitesText] = useState("");
   const [profileEmail, setProfileEmail] = useState("user");
+  const [fullName, setFullName] = useState("");
 
   const [step, setStep] = useState<SetupStep>("idle");
   const [error, setError] = useState("");
@@ -64,20 +64,23 @@ export default function CreateOrganizationPage() {
       .then((r) => r.json())
       .then((d) => {
         if (typeof d.email === "string" && d.email) setProfileEmail(d.email);
+        setFullName((prev) => prev || getPrivyDisplayName(privyUser, d.email ?? ""));
       })
-      .catch(() => {});
-  }, []);
+      .catch(() => {
+        setFullName((prev) => prev || getPrivyDisplayName(privyUser, ""));
+      });
+  }, [privyUser]);
 
   const isBusy = step !== "idle" && step !== "done" && step !== "error";
-  const canStart = ready && !!kit && !isBusy && orgName.trim().length > 0;
+  const canStart = ready && !!kit && !isBusy && orgName.trim().length > 0 && fullName.trim().length > 0;
 
   async function handleCreate() {
-    if (!kit) return;
+    if (!kit || !fullName.trim()) return;
     setError("");
     setStep("passkey");
 
     try {
-      const wallet = await createWallet("SozuPay", profileEmail);
+      const wallet = await createWallet("SozuPay", fullName.trim());
       const memberC = wallet.contractId;
       const credId = wallet.credentialId;
       setMemberContractId(memberC);
@@ -101,26 +104,13 @@ export default function CreateOrganizationPage() {
       }
 
       setStep("register");
-      const all = await kit.credentials.getAll();
-      const match = all.find((c) => c.credentialId === credId);
-      if (!match) throw new Error("Passkey credential not found locally");
-
-      const registerRes = await fetch("/api/smart-accounts/register", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "member",
-          contractId: memberC,
-          credentialId: credId,
-          publicKey65b: b64url(match.publicKey),
-          label: "Primary passkey",
-        }),
+      await registerSmartAccount({
+        type: "member",
+        contractId: memberC,
+        credentialId: credId,
+        publicKey: wallet.publicKey,
+        label: fullName.trim(),
       });
-      const registerData = await registerRes.json().catch(() => ({}));
-      if (!registerRes.ok) {
-        throw new Error(registerData.error ?? "Failed to register smart wallet");
-      }
 
       setStep("treasury");
       const treasuryRes = await fetch("/api/profile/org/provision-treasury", {
@@ -224,6 +214,19 @@ export default function CreateOrganizationPage() {
           )}
 
           <div className="mt-5 space-y-3">
+            <div>
+              <label className="text-xs font-medium text-gray-300">Your full name (passkey label)</label>
+              <input
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="e.g. Maria Garcia"
+                className="mt-1 w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20"
+              />
+              {profileEmail && (
+                <p className="mt-1 text-xs text-gray-500">Login: {profileEmail}</p>
+              )}
+            </div>
+
             <div>
               <label className="text-xs font-medium text-gray-300">Organization name</label>
               <input

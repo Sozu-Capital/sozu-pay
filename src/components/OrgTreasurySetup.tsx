@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
+import { registerSmartAccount } from "@/lib/stellar/smartAccounts/registerWalletClient";
 
 type TreasuryStatus = {
   org: {
@@ -21,11 +22,6 @@ type TreasuryStatus = {
   };
   next_steps: string[];
 };
-
-function b64url(u8: Uint8Array): string {
-  const bin = String.fromCharCode(...u8);
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
 
 export function OrgTreasurySetup({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const t = useTranslations("profilePage");
@@ -65,24 +61,14 @@ export function OrgTreasurySetup({ isSuperAdmin }: { isSuperAdmin: boolean }) {
     setErr(null);
     setMsg(null);
     try {
-      const res = await createWallet("SozuPay Org Treasury", "treasury");
-      const all = await kit.credentials.getAll();
-      const match = all.find((c) => c.credentialId === res.credentialId);
-      if (!match) throw new Error(t("treasuryPasskeyFailed"));
-      const registerRes = await fetch("/api/smart-accounts/register", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "org_treasury",
-          contractId: res.contractId,
-          credentialId: res.credentialId,
-          publicKey65b: b64url(match.publicKey),
-          label: "Org treasury passkey",
-        }),
+      const res = await createWallet("SozuPay Org Treasury", "Org treasury");
+      await registerSmartAccount({
+        type: "org_treasury",
+        contractId: res.contractId,
+        credentialId: res.credentialId,
+        publicKey: res.publicKey,
+        label: "Org treasury passkey",
       });
-      const data = await registerRes.json().catch(() => ({}));
-      if (!registerRes.ok) throw new Error(data.error ?? t("treasuryRegisterFailed"));
       setMsg(t("treasuryOrgSaReady"));
       load();
     } catch (e) {

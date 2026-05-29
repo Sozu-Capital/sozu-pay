@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserByPrivyId, promoteOrgCreator, setUserAllowed } from "@/lib/db/users";
 import { getOrganizationById, updateOrganizationTreasuryManager } from "@/lib/db/organizations";
-import { addWebauthnCredential } from "@/lib/db/webauthn-credentials";
+import { upsertWebauthnCredential } from "@/lib/db/webauthn-credentials";
 import { upsertSmartAccount, type SmartAccountType } from "@/lib/db/smart-accounts";
 import { updateOrganizationTreasuryContract } from "@/lib/db/organizations";
 
@@ -41,7 +41,34 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const cred = await addWebauthnCredential({
+  // Validate decoded public key length (65-byte uncompressed secp256r1).
+  try {
+    const padded = publicKey65b.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = padded.length % 4 === 0 ? "" : "=".repeat(4 - (padded.length % 4));
+    const decoded = Buffer.from(padded + pad, "base64");
+    if (decoded.length !== 65) {
+      return NextResponse.json(
+        {
+          error: `Invalid passkey public key length (${decoded.length} bytes, expected 65).`,
+          code: "INVALID_PUBLIC_KEY",
+        },
+        { status: 400 }
+      );
+    }
+    if (decoded[0] !== 0x04) {
+      return NextResponse.json(
+        { error: "Invalid passkey public key format.", code: "INVALID_PUBLIC_KEY" },
+        { status: 400 }
+      );
+    }
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid passkey public key encoding.", code: "INVALID_PUBLIC_KEY" },
+      { status: 400 }
+    );
+  }
+
+  const { row: cred, error: credError } = await upsertWebauthnCredential({
     userId: user.id,
     orgId: user.org_id,
     credentialId,
@@ -49,7 +76,13 @@ export async function POST(request: NextRequest) {
     label,
   });
   if (!cred) {
-    return NextResponse.json({ error: "Failed to store credential." }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: credError?.message ?? "Failed to store credential.",
+        code: credError?.code ?? "CREDENTIAL_STORE_FAILED",
+      },
+      { status: credError?.code === "DB_MIGRATION_REQUIRED" ? 503 : 500 }
+    );
   }
 
   const smart = await upsertSmartAccount({
@@ -59,7 +92,14 @@ export async function POST(request: NextRequest) {
     contractId,
   });
   if (!smart) {
-    return NextResponse.json({ error: "Failed to store smart account." }, { status: 500 });
+    return NextResponse.json(
+      {
+        error:
+          "Failed to store smart account. If this persists, run docs/07-reference/supabase-smart-accounts.sql in Supabase.",
+        code: "SMART_ACCOUNT_STORE_FAILED",
+      },
+      { status: 500 }
+    );
   }
 
   await setUserAllowed(user.privy_user_id, true);

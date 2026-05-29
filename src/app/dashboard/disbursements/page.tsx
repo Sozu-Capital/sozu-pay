@@ -2,6 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslations } from "next-intl";
+import {
+  DisbursementAuthorizeModal,
+  type DisbursementAuthorizeResult,
+} from "@/components/DisbursementAuthorizeModal";
+import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -67,6 +72,8 @@ const PAYMENT_STATUS_COLORS: Record<string, string> = {
   FAILED: "text-red-600",
 };
 
+const DELETABLE_DISBURSEMENT_STATUSES = new Set(["DRAFT", "READY"]);
+
 const EMPTY_FORM: DraftRecipient = {
   name: "",
   email: "",
@@ -92,6 +99,9 @@ function recipientsToCSV(recipients: DraftRecipient[], defaultAmount: string): s
 
 export default function DisbursementsPage() {
   const t = useTranslations("disbursementsPage");
+  const { profile } = useDashboardProfile() ?? { profile: null };
+  const isDisbursementAdmin =
+    profile?.admin_level === "admin" || profile?.admin_level === "super_admin";
 
   // List view
   const [disbursements, setDisbursements] = useState<SdpDisbursement[]>([]);
@@ -129,7 +139,9 @@ export default function DisbursementsPage() {
   // Actions
   const [startingId, setStartingId] = useState<string | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [authorizeDisbursementId, setAuthorizeDisbursementId] = useState<string | null>(null);
 
   // ── Fetch list ────────────────────────────────────────────────────────────
 
@@ -277,18 +289,32 @@ export default function DisbursementsPage() {
     }
   }
 
-  // ── Start disbursement ────────────────────────────────────────────────────
+  // ── Start disbursement (passkey authorization required) ───────────────────
 
-  async function handleStart(id: string) {
-    setStartingId(id);
+  function handleStart(id: string) {
     setActionMsg(null);
+    setAuthorizeDisbursementId(id);
+  }
+
+  async function completeStart(id: string, auth: DisbursementAuthorizeResult) {
+    setStartingId(id);
     try {
-      const res = await fetch(`/api/sdp/disbursements/${id}/start`, { method: "POST" });
+      const res = await fetch(`/api/sdp/disbursements/${id}/start`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: auth.sessionId,
+          credentialId: auth.credentialId,
+          contractId: auth.contractId,
+        }),
+      });
       const data = await res.json();
       if (!res.ok) {
         setActionMsg(`Error: ${data.error ?? res.status}`);
         return;
       }
+      setAuthorizeDisbursementId(null);
       setActionMsg(t("disbursementStarted"));
       await fetchList();
       if (selectedId === id) setSelectedId(null);
@@ -323,6 +349,39 @@ export default function DisbursementsPage() {
       setActionMsg(e instanceof Error ? e.message : "Network error");
     } finally {
       setSendingId(null);
+    }
+  }
+
+  // ── Delete batch (admin only; DRAFT / READY) ───────────────────────────────
+
+  async function handleDelete(id: string, name: string) {
+    if (!isDisbursementAdmin) return;
+    if (!window.confirm(t("deleteConfirm", { name }))) return;
+
+    setDeletingId(id);
+    setActionMsg(null);
+    try {
+      const res = await fetch(`/api/sdp/disbursements/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = data.error ?? t("deleteFailed");
+        setActionMsg(
+          res.status === 400 && /started|cannot delete/i.test(String(msg))
+            ? t("deleteStartedError")
+            : `Error: ${msg}`
+        );
+        return;
+      }
+      setActionMsg(t("deleteSuccess"));
+      if (selectedId === id) {
+        setSelectedId(null);
+        setDetail(null);
+      }
+      await fetchList();
+    } catch (e) {
+      setActionMsg(e instanceof Error ? e.message : t("deleteFailed"));
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -772,6 +831,21 @@ export default function DisbursementsPage() {
                 </p>
               </div>
               <div className="flex items-center gap-3 shrink-0 ml-4">
+                {isDisbursementAdmin &&
+                  DELETABLE_DISBURSEMENT_STATUSES.has(d.status) && (
+                    <button
+                      type="button"
+                      title={t("deleteBatch")}
+                      disabled={deletingId === d.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleDelete(d.id, d.name);
+                      }}
+                      className="px-2 py-1 rounded text-xs font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
+                    >
+                      {deletingId === d.id ? t("deleting") : t("deleteBatch")}
+                    </button>
+                  )}
                 <span
                   className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                     STATUS_COLORS[d.status] ?? STATUS_COLORS.DRAFT
@@ -833,6 +907,17 @@ export default function DisbursementsPage() {
                   >
                     {t("refresh")}
                   </button>
+                  {isDisbursementAdmin &&
+                    DELETABLE_DISBURSEMENT_STATUSES.has(d.status) && (
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(d.id, d.name)}
+                        disabled={deletingId === d.id}
+                        className="px-3 py-1.5 rounded border border-red-300 dark:border-red-800 text-sm text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-60"
+                      >
+                        {deletingId === d.id ? t("deleting") : t("deleteBatch")}
+                      </button>
+                    )}
                 </div>
 
                 {/* Stats */}
@@ -943,6 +1028,15 @@ export default function DisbursementsPage() {
           </div>
         ))}
       </div>
+
+      {authorizeDisbursementId && (
+        <DisbursementAuthorizeModal
+          open
+          disbursementId={authorizeDisbursementId}
+          onClose={() => setAuthorizeDisbursementId(null)}
+          onAuthorized={(auth) => completeStart(authorizeDisbursementId, auth)}
+        />
+      )}
     </div>
   );
 }

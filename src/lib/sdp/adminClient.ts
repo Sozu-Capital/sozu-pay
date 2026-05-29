@@ -316,6 +316,13 @@ export async function getDisbursement(disbursementId: string): Promise<SdpDisbur
   return sdpFetch<SdpDisbursement>(`/disbursements/${disbursementId}`);
 }
 
+/** Delete a disbursement in DRAFT or READY status (not started). */
+export async function deleteDisbursement(disbursementId: string): Promise<SdpDisbursement> {
+  return sdpFetch<SdpDisbursement>(`/disbursements/${disbursementId}`, {
+    method: "DELETE",
+  });
+}
+
 /** List all disbursements (paginated; returns first 100 by default). */
 export async function listDisbursements(): Promise<SdpDisbursement[]> {
   const data = await sdpFetch<{ data: SdpDisbursement[] }>("/disbursements?page=1&page_limit=100");

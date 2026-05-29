@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
+import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
 import {
   getDisbursement,
   listReceivers,
@@ -54,6 +55,9 @@ export async function POST(
 ) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const auth = await requireDisbursementAdmin(session.id);
+  if (!auth.ok) return auth.response;
 
   const { id } = await params;
 
@@ -147,10 +151,14 @@ export async function POST(
           disbursementName: disbursement.name,
         });
         inviteSent = emailResult.sent;
+        if (!emailResult.sent && emailResult.error) {
+          error = emailResult.error;
+        }
       }
 
-      // Step 2 — also trigger SDP's own message channel as a secondary path.
-      if (walletId) {
+      // Step 2 — SDP message channel only as fallback when Resend did not send.
+      // SDP's built-in templates are English; avoid duplicate emails when Spanish Resend succeeded.
+      if (walletId && !inviteSent) {
         try {
           await retryReceiverWalletInvitation(receiver.id, walletId);
           sdpTriggered = true;

@@ -40,45 +40,50 @@ export async function sendSdpInviteEmail(
   const subject = `Tenés un pago de ${params.organizationName}`;
 
   const amountLine = params.amountUsdc
-    ? `\nMonto del pago: ${params.amountUsdc} USDC\n`
+    ? `\nMonto: ${params.amountUsdc} USDC\n`
     : "";
 
   const text = `Hola,
 
-${params.organizationName} te envió un pago a través de Sozu Credit.${amountLine}
-Para recibir tus fondos, registrá tu billetera Sozu con el enlace de abajo:
+${params.organizationName} te envió un pago con Sozu Credit.${amountLine}
+Para recibirlo, registrá tu billetera con este enlace:
 
 ${params.registrationUrl}
 
-Una vez que completes el registro, tu pago se acreditará en tu billetera.
+Cuando termines el registro, el pago se acreditará en tu billetera.
 
 Este enlace es personal — no lo compartas.
 
-¿Tenés preguntas? Respondé este correo o contactá directamente a ${params.organizationName}.
+¿Dudas? Respondé este correo o escribile a ${params.organizationName}.
 
-— El equipo de Sozu
+— Equipo Sozu
 `;
 
   const html = `
 <!DOCTYPE html>
 <html lang="es">
-<head><meta charset="utf-8"></head>
-<body style="font-family:sans-serif;max-width:560px;margin:auto;padding:24px;color:#1a1a1a">
-  <h2 style="color:#0f172a">Tenés un pago de ${escHtml(params.organizationName)}</h2>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tenés un pago de ${escHtml(params.organizationName)}</title>
+</head>
+<body style="font-family:sans-serif;max-width:560px;margin:auto;padding:24px;color:#1a1a1a;line-height:1.5">
+  <p style="font-size:13px;color:#64748b;margin:0 0 16px">Sozu Credit · Invitación de pago</p>
+  <h2 style="color:#0f172a;margin:0 0 12px">Tenés un pago de ${escHtml(params.organizationName)}</h2>
   ${
     params.amountUsdc
-      ? `<p style="font-size:20px;font-weight:700;color:#ea580c">${escHtml(params.amountUsdc)} USDC</p>`
+      ? `<p style="font-size:20px;font-weight:700;color:#ea580c;margin:0 0 16px">${escHtml(params.amountUsdc)} USDC</p>`
       : ""
   }
-  <p>${escHtml(params.organizationName)} te envió un pago a través de <strong>Sozu Credit</strong>.</p>
-  <p>Para recibir tus fondos, registrá tu billetera Sozu:</p>
+  <p style="margin:0 0 12px">${escHtml(params.organizationName)} te envió un pago con <strong>Sozu Credit</strong>.</p>
+  <p style="margin:0 0 16px">Para recibirlo, registrá tu billetera:</p>
   <a href="${escHtml(params.registrationUrl)}"
-     style="display:inline-block;padding:12px 24px;background:rgba(234,88,12,0.15);border:1px solid rgba(234,88,12,0.35);color:#c2410c;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0">
+     style="display:inline-block;padding:12px 24px;background:rgba(234,88,12,0.15);border:1px solid rgba(234,88,12,0.35);color:#c2410c;border-radius:6px;text-decoration:none;font-weight:600;margin:8px 0 20px">
     Registrar billetera y recibir pago
   </a>
-  <p style="font-size:13px;color:#64748b;margin-top:32px">
+  <p style="font-size:13px;color:#64748b;margin:24px 0 0">
     Este enlace es personal — no lo compartas.<br>
-    Desembolso: ${escHtml(params.disbursementName)}
+    Lote: ${escHtml(params.disbursementName)}
   </p>
 </body>
 </html>`;

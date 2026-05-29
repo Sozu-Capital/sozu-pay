@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { getDisbursement, listReceivers } from "@/lib/sdp/adminClient";
+import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
+import { deleteDisbursement, getDisbursement, listReceivers } from "@/lib/sdp/adminClient";
 
 /**
  * GET /api/sdp/disbursements/[id] — status, payments (via receivers), tx hashes.
@@ -16,6 +17,9 @@ export async function GET(
 ) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const auth = await requireDisbursementAdmin(session.id);
+  if (!auth.ok) return auth.response;
 
   const { id } = await params;
 
@@ -47,5 +51,29 @@ export async function GET(
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[api/sdp/disbursements/[id] GET]", msg);
     return NextResponse.json({ error: msg }, { status: 502 });
+  }
+}
+
+/** DELETE /api/sdp/disbursements/[id] — remove a DRAFT or READY batch (admin only). */
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const auth = await requireDisbursementAdmin(session.id);
+  if (!auth.ok) return auth.response;
+
+  const { id } = await params;
+
+  try {
+    const deleted = await deleteDisbursement(id);
+    return NextResponse.json({ ok: true, disbursement: deleted });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[api/sdp/disbursements/[id] DELETE]", msg);
+    const status = /started|cannot delete/i.test(msg) ? 400 : 502;
+    return NextResponse.json({ error: msg }, { status });
   }
 }

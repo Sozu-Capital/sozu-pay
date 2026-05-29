@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Transaction, Keypair } from "@stellar/stellar-sdk";
 
+const CTA_CLASS =
+  "rounded-xl border border-orange-400/35 bg-orange-500/15 hover:bg-orange-500/25 active:bg-orange-500/30 backdrop-blur-md disabled:opacity-50 disabled:cursor-not-allowed text-orange-100 font-semibold py-3 px-6 transition-colors";
+
 type Profile = {
   stellar_public_key: string | null;
   email?: string;
@@ -47,7 +50,9 @@ export function SdpRegisterFlow() {
     setSep10Error(null);
     const secret = secretInput.trim();
     if (!secret || !secret.startsWith("S")) {
-      setSep10Error("Enter your Stellar secret key (starts with S) for the account registered in Profile.");
+      setSep10Error(
+        "Ingresá tu clave secreta de Stellar (empieza con S) de la cuenta registrada en Perfil."
+      );
       return;
     }
 
@@ -58,7 +63,7 @@ export function SdpRegisterFlow() {
       });
       const chData = await chRes.json().catch(() => ({}));
       if (!chRes.ok) {
-        throw new Error(chData.error ?? "Challenge failed");
+        throw new Error(chData.error ?? "No se pudo iniciar la autenticación");
       }
 
       const tx = new Transaction(
@@ -83,12 +88,12 @@ export function SdpRegisterFlow() {
       });
       const tokData = await tokRes.json().catch(() => ({}));
       if (!tokRes.ok) {
-        throw new Error(tokData.error ?? "Token exchange failed");
+        throw new Error(tokData.error ?? "No se pudo completar la autenticación");
       }
       setSep10Done(true);
       setSecretInput("");
     } catch (e) {
-      setSep10Error(e instanceof Error ? e.message : "SEP-10 failed");
+      setSep10Error(e instanceof Error ? e.message : "Falló la autenticación SEP-10");
     } finally {
       setSep10Busy(false);
     }
@@ -104,16 +109,16 @@ export function SdpRegisterFlow() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.error ?? "Deposit start failed");
+        throw new Error(data.error ?? "No se pudo iniciar la verificación");
       }
       const url = data.url as string;
       if (typeof url === "string" && url.startsWith("http")) {
         window.location.assign(url);
       } else {
-        throw new Error("No interactive URL returned");
+        throw new Error("No se recibió la URL de verificación");
       }
     } catch (e) {
-      setDepositError(e instanceof Error ? e.message : "Deposit failed");
+      setDepositError(e instanceof Error ? e.message : "Falló la verificación");
     } finally {
       setDepositBusy(false);
     }
@@ -127,30 +132,27 @@ export function SdpRegisterFlow() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.error ?? "Poll failed");
+        throw new Error(data.error ?? "No se pudo consultar el estado");
       }
       setPollTx(data.transactions ?? []);
     } catch (e) {
-      setPollError(e instanceof Error ? e.message : "Poll failed");
+      setPollError(e instanceof Error ? e.message : "No se pudo consultar el estado");
     }
   };
 
   if (loadingProfile) {
-    return <p className="text-sm text-gray-400">Loading…</p>;
+    return <p className="text-sm text-gray-400">Cargando…</p>;
   }
 
   if (!profile?.stellar_public_key) {
     return (
       <div className="space-y-4 max-w-lg">
-        <h1 className="text-xl font-semibold">Disbursement registration</h1>
+        <h1 className="text-xl font-semibold">Registro de desembolso</h1>
         <p className="text-sm text-gray-300">
-          Add a Stellar wallet to your account first, then return to this page.
+          Primero agregá una billetera Stellar a tu cuenta y volvé a esta página.
         </p>
-        <Link
-          href="/dashboard/profile"
-          className="inline-block rounded-md bg-white text-gray-900 py-2 px-4 text-sm font-medium"
-        >
-          Open Profile
+        <Link href="/dashboard/profile" className={`inline-block ${CTA_CLASS}`}>
+          Ir a Perfil
         </Link>
       </div>
     );
@@ -159,24 +161,28 @@ export function SdpRegisterFlow() {
   return (
     <div className="space-y-8 max-w-lg">
       <div>
-        <h1 className="text-xl font-semibold">Receive your payment</h1>
+        <h1 className="text-xl font-semibold">Recibí tu pago</h1>
         <p className="text-sm text-gray-400 mt-1">
-          Account <span className="text-gray-200 font-mono text-xs break-all">{profile.stellar_public_key}</span>
+          Cuenta{" "}
+          <span className="text-gray-200 font-mono text-xs break-all">
+            {profile.stellar_public_key}
+          </span>
         </p>
         <p className="text-sm text-gray-400 mt-2">
-          Complete Stellar authentication, then open the disbursement site to verify your details. Your secret key is
-          only used in this browser to sign the SEP-10 challenge and is not sent to our servers.
+          Completá la autenticación Stellar y abrí el sitio de desembolso para verificar tus datos.
+          Tu clave secreta solo se usa en este navegador para firmar el desafío SEP-10 y no se envía
+          a nuestros servidores.
         </p>
       </div>
 
       <section className="rounded-lg border border-white/10 bg-black/30 p-4 space-y-3">
-        <h2 className="text-sm font-medium text-white">1. Sign in with Stellar (SEP-10)</h2>
+        <h2 className="text-sm font-medium text-white">1. Iniciar sesión con Stellar (SEP-10)</h2>
         {!sep10Done ? (
           <>
             <input
               type="password"
               autoComplete="off"
-              placeholder="Stellar secret key (S…)"
+              placeholder="Clave secreta Stellar (S…)"
               value={secretInput}
               onChange={(e) => setSecretInput(e.target.value)}
               className="w-full rounded border border-white/15 bg-black/40 px-3 py-2 text-sm font-mono text-white placeholder:text-gray-500"
@@ -185,55 +191,54 @@ export function SdpRegisterFlow() {
               type="button"
               disabled={sep10Busy}
               onClick={() => void runSep10()}
-              className="rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-4 py-2 text-sm font-medium"
+              className={CTA_CLASS}
             >
-              {sep10Busy ? "Signing…" : "Sign challenge"}
+              {sep10Busy ? "Firmando…" : "Firmar desafío"}
             </button>
             {sep10Error && <p className="text-sm text-red-400">{sep10Error}</p>}
           </>
         ) : (
-          <p className="text-sm text-emerald-400">Authenticated with disbursement platform.</p>
+          <p className="text-sm text-orange-300">Autenticado con la plataforma de desembolso.</p>
         )}
       </section>
 
       <section className="rounded-lg border border-white/10 bg-black/30 p-4 space-y-3">
-        <h2 className="text-sm font-medium text-white">2. USDC trustline (if required)</h2>
+        <h2 className="text-sm font-medium text-white">2. Línea de confianza USDC (si hace falta)</h2>
         <p className="text-xs text-gray-400">
-          If the payment is USDC, ensure a trustline exists from Profile → trustline, or Horizon will reject the credit.
+          Si el pago es en USDC, asegurate de tener la trustline en Perfil; si no, Horizon rechazará
+          el crédito.
         </p>
-        <Link
-          href="/dashboard/profile"
-          className="text-sm text-blue-400 hover:underline"
-        >
-          Check trustline in Profile
+        <Link href="/dashboard/profile" className="text-sm text-orange-300 hover:underline">
+          Revisar trustline en Perfil
         </Link>
       </section>
 
       <section className="rounded-lg border border-white/10 bg-black/30 p-4 space-y-3">
-        <h2 className="text-sm font-medium text-white">3. Open registration (SEP-24)</h2>
+        <h2 className="text-sm font-medium text-white">3. Abrir registro (SEP-24)</h2>
         <p className="text-xs text-gray-400">
-          You will complete phone or ID verification on the disbursement site. Do not share codes with anyone.
+          Vas a completar la verificación de teléfono o identidad en el sitio de desembolso. No
+          compartas códigos con nadie.
         </p>
         <button
           type="button"
           disabled={!sep10Done || depositBusy}
           onClick={() => void openDeposit()}
-          className="rounded-md bg-white text-gray-900 hover:bg-gray-100 disabled:opacity-50 px-4 py-2 text-sm font-medium"
+          className={CTA_CLASS}
         >
-          {depositBusy ? "Opening…" : "Continue to verification"}
+          {depositBusy ? "Abriendo…" : "Continuar a verificación"}
         </button>
         {depositError && <p className="text-sm text-red-400">{depositError}</p>}
       </section>
 
       <section className="rounded-lg border border-white/10 bg-black/30 p-4 space-y-3">
-        <h2 className="text-sm font-medium text-white">4. Transaction status</h2>
+        <h2 className="text-sm font-medium text-white">4. Estado de la transacción</h2>
         <button
           type="button"
           disabled={!sep10Done}
           onClick={() => void pollTransactions()}
           className="rounded-md border border-white/20 px-4 py-2 text-sm disabled:opacity-50"
         >
-          Refresh status
+          Actualizar estado
         </button>
         {pollError && <p className="text-sm text-red-400">{pollError}</p>}
         {pollTx && (

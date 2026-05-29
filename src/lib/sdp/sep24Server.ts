@@ -41,12 +41,33 @@ export type Sep24InteractiveResult =
   | { ok: true; url: string; id?: string }
   | { ok: false; error: string };
 
+/** Multi-tenant Railway SDP wallet-registration pages require tenant + lang in the URL. */
+export function augmentSdpInteractiveUrl(
+  url: string,
+  opts: { tenantName?: string; lang?: string }
+): string {
+  try {
+    const u = new URL(url);
+    const tenant = opts.tenantName?.trim();
+    if (tenant && !u.searchParams.has("tenant")) {
+      u.searchParams.set("tenant", tenant);
+    }
+    if (opts.lang) {
+      u.searchParams.set("lang", opts.lang);
+    }
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
 export async function postSep24DepositInteractive(params: {
   sep24Base: string;
   jwt: string;
   account: string;
   assetCode: string;
   assetIssuer: string | null;
+  tenantName?: string;
   /** Extra fields some anchors expect */
   extra?: Record<string, string>;
 }): Promise<Sep24InteractiveResult> {
@@ -79,6 +100,7 @@ export async function postSep24DepositInteractive(params: {
       Accept: "application/json",
       "Content-Type": "application/x-www-form-urlencoded",
       Authorization: `Bearer ${params.jwt}`,
+      ...(params.tenantName ? { "SDP-Tenant-Name": params.tenantName } : {}),
     },
     body: form.toString(),
     redirect: "manual",

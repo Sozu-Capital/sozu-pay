@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSdpApiContext } from "@/lib/sdp/sdpApiContext";
 import { getSdpSep10JwtCookie } from "@/lib/sdp/jwtCookie";
 import { parseSdpAssetParam } from "@/lib/sdp/assetParam";
-import { postSep24DepositInteractive } from "@/lib/sdp/sep24Server";
+import { postSep24DepositInteractive, augmentSdpInteractiveUrl } from "@/lib/sdp/sep24Server";
 
 export async function POST() {
   const ctx = await getSdpApiContext();
@@ -18,7 +18,7 @@ export async function POST() {
     );
   }
 
-  const { invite, stellarAccount } = ctx;
+  const { invite, stellarAccount, tenantName } = ctx;
   const { code, issuer } = parseSdpAssetParam(invite.asset);
 
   const extra: Record<string, string> = {};
@@ -32,6 +32,7 @@ export async function POST() {
     account: stellarAccount,
     assetCode: code,
     assetIssuer: issuer,
+    tenantName: tenantName || undefined,
     extra: Object.keys(extra).length ? extra : undefined,
   });
 
@@ -39,5 +40,8 @@ export async function POST() {
     return NextResponse.json({ error: res.error }, { status: 502 });
   }
 
-  return NextResponse.json({ url: res.url, id: res.id ?? null });
+  return NextResponse.json({
+    url: augmentSdpInteractiveUrl(res.url, { tenantName, lang: "es" }),
+    id: res.id ?? null,
+  });
 }

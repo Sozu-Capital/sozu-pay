@@ -37,48 +37,48 @@ export async function sendSdpInviteEmail(
     return { sent: false, skipped: true, error: "no_resend_key" };
   }
 
-  const subject = `You have a payment from ${params.organizationName}`;
+  const subject = `Tenés un pago de ${params.organizationName}`;
 
   const amountLine = params.amountUsdc
-    ? `\nPayment amount: ${params.amountUsdc} USDC\n`
+    ? `\nMonto del pago: ${params.amountUsdc} USDC\n`
     : "";
 
-  const text = `Hi,
+  const text = `Hola,
 
-${params.organizationName} has sent you a payment through Sozu Credit.${amountLine}
-To receive your funds, you need to register your Sozu wallet using the link below:
+${params.organizationName} te envió un pago a través de Sozu Credit.${amountLine}
+Para recibir tus fondos, registrá tu billetera Sozu con el enlace de abajo:
 
 ${params.registrationUrl}
 
-Once you complete registration, your payment will be processed to your wallet.
+Una vez que completes el registro, tu pago se acreditará en tu billetera.
 
-This link is personal to you — please do not share it.
+Este enlace es personal — no lo compartas.
 
-Questions? Reply to this email or contact ${params.organizationName} directly.
+¿Tenés preguntas? Respondé este correo o contactá directamente a ${params.organizationName}.
 
-— The Sozu team
+— El equipo de Sozu
 `;
 
   const html = `
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head><meta charset="utf-8"></head>
 <body style="font-family:sans-serif;max-width:560px;margin:auto;padding:24px;color:#1a1a1a">
-  <h2 style="color:#0f172a">You have a payment from ${escHtml(params.organizationName)}</h2>
+  <h2 style="color:#0f172a">Tenés un pago de ${escHtml(params.organizationName)}</h2>
   ${
     params.amountUsdc
-      ? `<p style="font-size:20px;font-weight:700;color:#0ea5e9">${escHtml(params.amountUsdc)} USDC</p>`
+      ? `<p style="font-size:20px;font-weight:700;color:#ea580c">${escHtml(params.amountUsdc)} USDC</p>`
       : ""
   }
-  <p>${escHtml(params.organizationName)} has sent you a payment via <strong>Sozu Credit</strong>.</p>
-  <p>To receive your funds, register your Sozu wallet:</p>
+  <p>${escHtml(params.organizationName)} te envió un pago a través de <strong>Sozu Credit</strong>.</p>
+  <p>Para recibir tus fondos, registrá tu billetera Sozu:</p>
   <a href="${escHtml(params.registrationUrl)}"
-     style="display:inline-block;padding:12px 24px;background:#0ea5e9;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0">
-    Register &amp; claim your payment
+     style="display:inline-block;padding:12px 24px;background:rgba(234,88,12,0.15);border:1px solid rgba(234,88,12,0.35);color:#c2410c;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0">
+    Registrar billetera y recibir pago
   </a>
   <p style="font-size:13px;color:#64748b;margin-top:32px">
-    This link is personal — do not share it.<br>
-    Disbursement: ${escHtml(params.disbursementName)}
+    Este enlace es personal — no lo compartas.<br>
+    Desembolso: ${escHtml(params.disbursementName)}
   </p>
 </body>
 </html>`;

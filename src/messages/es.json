@@ -442,6 +442,7 @@
     "payoutPasswordPlaceholder": "Contraseña que configuraste para la billetera de la org",
     "signing": "Firmando…",
     "signAndSend": "Firmar y enviar",
+    "passkeyKitNotReady": "La billetera passkey aún se está cargando. Inténtalo de nuevo en un momento.",
     "unlockTitle": "Desbloquea la billetera para firmar el retiro",
     "unlockBody": "Los retiros se firman con la billetera que aparece en Perfil. Usa la frase secreta de esa billetera o pega su clave secreta.",
     "payoutWalletLabel": "Billetera de retiros:",

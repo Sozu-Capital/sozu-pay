@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import SendUsdcForm, { type PayoutSuccess, type StellarPayoutBody } from "@/components/SendUsdcForm";
 import PayoutStatusModal, { type PayoutModalSuccess } from "@/components/PayoutStatusModal";
+import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
+import { executePasskeySorobanPayout } from "@/lib/stellar/smartAccounts/signSorobanPayout";
 import Link from "next/link";
 
 interface Payout {
@@ -31,6 +33,7 @@ const STELLAR_EXPERT_BASE =
 export default function PayoutsPage() {
   const t = useTranslations("payoutsPage");
   const tc = useTranslations("common");
+  const { kit, credentialId } = useSmartAccountKitContext();
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -204,8 +207,42 @@ export default function PayoutsPage() {
       const body = pendingConfirmBody;
       setPendingConfirmBody(null);
       submitPayoutBody(body)
-        .then(({ ok, data: d }) => {
-          const data = d as { payout?: { amount?: string; stellarTxHash?: string; stellarAddress?: string; recipientLabel?: string }; error?: string; requireUnlock?: boolean; requirePayoutPassword?: boolean; unsignedEnvelopeXdr?: string; payoutId?: string; network?: string; amount?: string; destination?: string; recipientLabel?: string };
+        .then(async ({ ok, data: d }) => {
+          const data = d as { payout?: { amount?: string; stellarTxHash?: string; stellarAddress?: string; recipientLabel?: string }; error?: string; requireUnlock?: boolean; requirePayoutPassword?: boolean; requirePasskeySign?: boolean; unsignedEnvelopeXdr?: string; payoutId?: string; network?: string; amount?: string; destination?: string; recipientLabel?: string };
+          if (data.requirePasskeySign && data.payoutId && data.destination) {
+            if (!kit) {
+              setPayoutModalStatus("failed");
+              setPayoutModalError(t("passkeyKitNotReady"));
+              return;
+            }
+            try {
+              const result = await executePasskeySorobanPayout({
+                kit,
+                credentialId,
+                payoutId: String(data.payoutId),
+                recipientAddress: String(data.destination),
+                amount: String(data.amount ?? body.amount),
+              });
+              setPayoutModalStatus("success");
+              setPayoutModalSuccess({
+                amount: result.payout.amount ?? body.amount,
+                destination: result.payout.stellarAddress ?? body.destination,
+                recipientLabel: result.payout.recipientLabel ?? body.recipientLabel,
+                stellarTxHash: result.stellarTxHash,
+              });
+              setLastSuccess({
+                amount: body.amount,
+                destination: body.destination,
+                recipientLabel: body.recipientLabel,
+                stellarTxHash: result.stellarTxHash,
+              });
+              loadPayouts();
+            } catch (err) {
+              setPayoutModalStatus("failed");
+              setPayoutModalError(err instanceof Error ? err.message : t("alertPayoutFailed"));
+            }
+            return;
+          }
           if (data.requirePayoutPassword && data.unsignedEnvelopeXdr && data.payoutId) {
             setPayoutModalOpen(false);
             setPendingConfirmBody(null);

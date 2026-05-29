@@ -16,8 +16,8 @@ export async function POST(request: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const user = await getUserByPrivyId(session.id);
-  if (!user?.org_id || user.admin_level !== "super_admin") {
-    return NextResponse.json({ error: "Only super admins can prepare Soroban payouts." }, { status: 403 });
+  if (!user?.org_id || (user.admin_level !== "super_admin" && user.admin_level !== "admin")) {
+    return NextResponse.json({ error: "Only admins can prepare Soroban payouts." }, { status: 403 });
   }
 
   const org = await getOrganizationForUser(user.org_id);

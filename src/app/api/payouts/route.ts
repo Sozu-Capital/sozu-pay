@@ -4,6 +4,7 @@ import { Keypair } from "@stellar/stellar-sdk";
 import { getSession } from "@/lib/auth/session";
 import { getUserByPrivyId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
+import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { createPayout, listPayouts, completePayout, failPayout } from "@/lib/payouts";
 import { getRecipient } from "@/lib/recipients";
 import { appendAuditEvent } from "@/lib/audit";
@@ -165,7 +166,8 @@ export async function POST(request: NextRequest) {
     }
 
     const user = await getUserByPrivyId(session.id);
-    const isSuperAdmin = user?.admin_level === "super_admin";
+    const canStellarPayout =
+      user?.admin_level === "super_admin" || user?.admin_level === "admin";
 
     const body = await request.json().catch(() => ({}));
     const twoFactorVerified = body.twoFactorVerified === true;
@@ -190,15 +192,25 @@ export async function POST(request: NextRequest) {
     let orgSorobanContractId: string | null = null;
     let batchOrg: Organization | null = null;
     if (hasStellarInBatch) {
-      if (!isSuperAdmin) {
+      if (!canStellarPayout) {
         return NextResponse.json(
-          { error: "Only super admins can perform Stellar payouts." },
+          { error: "Only admins can perform Stellar payouts." },
           { status: 403 }
         );
       }
       const org = user?.org_id ? await getOrganizationForUser(user.org_id) : null;
       batchOrg = org;
       orgSorobanContractId = org?.soroban_contract_id ?? null;
+      if (orgSorobanContractId) {
+        return NextResponse.json(
+          {
+            error:
+              "Batch Stellar payouts with Soroban treasury require passkey signing one recipient at a time.",
+            code: "SOROBAN_BATCH_NOT_SUPPORTED",
+          },
+          { status: 400 }
+        );
+      }
       const cookieStore = await cookies();
       const unlockCookie = cookieStore.get(UNLOCK_COOKIE_NAME)?.value;
       const { signerSecretKey, requireUnlock, requirePayoutPassword } = resolveStellarSigner(session.id, unlockCookie, org);
@@ -293,9 +305,9 @@ export async function POST(request: NextRequest) {
   }
 
   if (body.toStellar === true && typeof body.destination === "string") {
-    if (!isSuperAdmin) {
+    if (!canStellarPayout) {
       return NextResponse.json(
-        { error: "Only super admins can perform Stellar payouts." },
+        { error: "Only admins can perform Stellar payouts." },
         { status: 403 }
       );
     }
@@ -307,12 +319,42 @@ export async function POST(request: NextRequest) {
     const destination = body.destination.trim();
     const recipientLabel = body.recipientLabel;
 
-    if (requirePayoutPassword && org?.stellar_disbursement_public_key) {
-      const record = createPayout(session.id, amount, {
-        type: "to_stellar",
-        stellarAddress: destination,
+    const record = createPayout(session.id, amount, {
+      type: "to_stellar",
+      stellarAddress: destination,
+      recipientLabel,
+    });
+
+    /** Soroban treasury: passkey signs disbursement_wallet.payout on client. */
+    if (sorobanContractId) {
+      if (!user?.org_id) {
+        failPayout(record.id);
+        return NextResponse.json({ error: "No organization." }, { status: 400 });
+      }
+      const memberSa = await getMemberSmartAccount(user.org_id, user.id);
+      if (!memberSa) {
+        failPayout(record.id);
+        return NextResponse.json(
+          {
+            error: "Set up your passkey smart wallet first.",
+            code: "MEMBER_SMART_WALLET_REQUIRED",
+            setupUrl: "/onboarding/setup-smart-wallet",
+          },
+          { status: 403 }
+        );
+      }
+      return NextResponse.json({
+        requirePasskeySign: true,
+        payoutId: record.id,
+        amount,
+        destination,
         recipientLabel,
+        disbursementContractId: sorobanContractId,
+        callerSmartAccountId: memberSa.contract_id,
       });
+    }
+
+    if (requirePayoutPassword && org?.stellar_disbursement_public_key) {
       try {
         const { envelopeXdr, network } = await buildUnsignedUsdcEnvelope(
           org.stellar_disbursement_public_key,
@@ -343,29 +385,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (sorobanContractId && !signerSecretKey) {
-      return NextResponse.json(
-        { error: "Unlock your payout wallet to send Soroban payouts.", requireUnlock: true },
-        { status: 403 }
-      );
-    }
     if (requireUnlock) {
+      failPayout(record.id);
       return NextResponse.json(
         { error: "Unlock your payout wallet to send Stellar payouts.", requireUnlock: true },
         { status: 403 }
       );
     }
     if (!signerSecretKey && !org?.stellar_disbursement_public_key && !getOrgDisbursementPublicKey()) {
+      failPayout(record.id);
       return NextResponse.json(
-        { error: "Org disbursement wallet not configured. Create an organization with a wallet or set ORG_DISBURSEMENT_SECRET in env." },
+        { error: "Org disbursement wallet not configured. Create an organization with a treasury or set ORG_DISBURSEMENT_SECRET in env." },
         { status: 503 }
       );
     }
-    const record = createPayout(session.id, amount, {
-      type: "to_stellar",
-      stellarAddress: destination,
-      recipientLabel,
-    });
     try {
       const txHash = await executeStellarPayout(
         destination,

@@ -442,6 +442,7 @@
     "payoutPasswordPlaceholder": "Password you set for this org wallet",
     "signing": "Signing…",
     "signAndSend": "Sign and send",
+    "passkeyKitNotReady": "Passkey wallet is still loading. Try again in a moment.",
     "unlockTitle": "Unlock wallet to sign payout",
     "unlockBody": "Payouts are signed with the wallet shown on Profile. Use that wallet's passphrase or paste its secret key.",
     "payoutWalletLabel": "Payout wallet:",

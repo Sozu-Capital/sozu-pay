@@ -19,10 +19,22 @@ RPC_URL="${SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}"
 NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
 
 if [[ -f "$ROOT/.env.local" ]]; then
-  # shellcheck disable=SC1091
-  set -a
-  source "$ROOT/.env.local" 2>/dev/null || true
-  set +a
+  # Load only scalar vars (avoid multiline PEM blocks breaking source).
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "${line// }" ]] && continue
+    [[ "$line" == *"="* ]] || continue
+    key="${line%%=*}"
+    val="${line#*=}"
+    key="${key// /}"
+    case "$key" in
+      STELLAR_FUNDER_SECRET|SOROBAN_RPC_URL|DISBURSEMENT_WALLET_WASM_HASH)
+        if [[ -z "${!key:-}" ]]; then
+          export "${key}=${val}"
+        fi
+        ;;
+    esac
+  done < "$ROOT/.env.local"
 fi
 
 if [[ -z "${STELLAR_FUNDER_SECRET:-}" ]]; then

@@ -23,7 +23,7 @@ One deployment **per org** at onboarding. WASM is uploaded once; each org gets i
 
 ## Shared WASM (testnet)
 
-- **DISBURSEMENT_WALLET_WASM_HASH:** Set after running `scripts/deploy-testnet-contracts.sh`
+- **DISBURSEMENT_WALLET_WASM_HASH:** `8c82ffa374bfc538cd8f908dd8baa1ee0b9918262dca5a8e00aadaddb61fb0f6`
 - Per-org instances deploy via `POST /api/profile/org/provision-treasury`
 
 ## OpenZeppelin smart accounts (passkey)

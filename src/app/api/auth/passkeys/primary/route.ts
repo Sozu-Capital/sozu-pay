@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { listAuthPasskeysForUser } from "@/lib/db/auth-passkeys";
-import { publicKeyToBase64Url } from "@/lib/stellar/smartAccounts/passkeyPublicKey";
+import { parseAuthPasskeyPublicKey65 } from "@/lib/auth/parse-auth-passkey-public-key";
 
 /**
  * GET /api/auth/passkeys/primary — login passkey for linking smart account (same credential as sign-in).
@@ -24,20 +24,7 @@ export async function GET() {
     return NextResponse.json({ error: "No passkey on this account." }, { status: 404 });
   }
 
-  let publicKey65b: string | null = null;
-  const raw = primary.public_key?.trim();
-  if (raw) {
-    try {
-      const padded = raw.replace(/-/g, "+").replace(/_/g, "/");
-      const pad = padded.length % 4 === 0 ? "" : "=".repeat(4 - (padded.length % 4));
-      const decoded = Buffer.from(padded + pad, "base64");
-      if (decoded.length === 65 && decoded[0] === 0x04) {
-        publicKey65b = publicKeyToBase64Url(new Uint8Array(decoded));
-      }
-    } catch {
-      // legacy rows may not store 65-byte key
-    }
-  }
+  const publicKey65b = parseAuthPasskeyPublicKey65(primary.public_key);
 
   return NextResponse.json({
     credentialId: primary.credential_id,

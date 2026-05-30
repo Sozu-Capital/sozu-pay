@@ -12,7 +12,12 @@ type SmartAccountContextValue = {
   contractId: string | null;
   credentialId: string | null;
   error: string | null;
-  connect: (opts?: { prompt?: boolean; fresh?: boolean }) => Promise<{
+  connect: (opts?: {
+    prompt?: boolean;
+    fresh?: boolean;
+    credentialId?: string;
+    contractId?: string;
+  }) => Promise<{
     contractId: string | null;
     credentialId: string | null;
     publicKey: Uint8Array | null;
@@ -61,7 +66,13 @@ export function SmartAccountKitProvider({ children }: { children: React.ReactNod
     };
   }, []);
 
-  const connect = useCallback(async (opts?: { prompt?: boolean; fresh?: boolean }) => {
+  const connect = useCallback(
+    async (opts?: {
+      prompt?: boolean;
+      fresh?: boolean;
+      credentialId?: string;
+      contractId?: string;
+    }) => {
     if (!kit) throw new Error("Smart account kit not ready");
     setError(null);
     const res = (await kit.connectWallet(opts)) as ConnectWalletResult | null;
@@ -79,7 +90,9 @@ export function SmartAccountKitProvider({ children }: { children: React.ReactNod
     setContractId(null);
     setCredentialId(null);
     return { contractId: null, credentialId: null, publicKey: null };
-  }, [kit]);
+  },
+  [kit]
+  );
 
   const createWallet = useCallback(async (userLabel: string, userName: string) => {
     if (!kit) throw new Error("Smart account kit not ready");

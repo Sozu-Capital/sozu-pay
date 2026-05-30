@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase/server";
+import type { OrgTaxProfile } from "@/lib/org-tax";
 
 export type OrgType = "store" | "ngo";
 
@@ -69,6 +70,7 @@ function parseMissingOrganizationsColumn(message: string): string | null {
 export async function createOrganization(params: {
   name: string;
   type: OrgType;
+  tax?: OrgTaxProfile | null;
   stellar_disbursement_public_key?: string | null;
   stellar_disbursement_secret_encrypted?: string | null;
   recovery_encrypted_secret?: string | null;
@@ -77,6 +79,7 @@ export async function createOrganization(params: {
   treasury_guardian_threshold?: number | null;
   treasury_manager_user_id?: number | null;
 }): Promise<Organization> {
+  const tax = params.tax;
   const payload: Record<string, unknown> = {
     name: params.name,
     type: params.type,
@@ -87,6 +90,13 @@ export async function createOrganization(params: {
     treasury_contract_id: params.treasury_contract_id ?? null,
     treasury_guardian_threshold: params.treasury_guardian_threshold ?? null,
     treasury_manager_user_id: params.treasury_manager_user_id ?? null,
+    ...(tax?.entityType && { tax_entity_type: tax.entityType }),
+    ...(tax?.legalName && { legal_name: tax.legalName }),
+    ...(tax?.taxId && { tax_id: tax.taxId }),
+    ...(tax?.registeredAddress && { registered_address: tax.registeredAddress }),
+    ...(tax?.city && { tax_city: tax.city }),
+    ...(tax?.state && { tax_state: tax.state }),
+    ...(tax?.country && { tax_country: tax.country }),
   };
 
   const attemptInsert = async (p: Record<string, unknown>) => {

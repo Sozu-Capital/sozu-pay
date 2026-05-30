@@ -7,6 +7,12 @@ import { clearUserOrgId, getUserBySessionId, promoteOrgCreator } from "@/lib/db/
 import { createOrganization, getOrganizationById } from "@/lib/db/organizations";
 import { createOrgInvites, type OrgInviteRole } from "@/lib/db/org-invites";
 import { applyOrganizationSozuTag } from "@/lib/org-sozu-tag";
+import {
+  orgTypeFromTaxEntity,
+  parseTaxEntityType,
+  trimOrNull,
+  type OrgTaxProfile,
+} from "@/lib/org-tax";
 import { randomUUID } from "crypto";
 
 /**
@@ -17,7 +23,7 @@ import { randomUUID } from "crypto";
  * Treasury provisioning (disbursement contract) runs via POST /api/profile/org/provision-treasury
  * after passkey smart wallet registration during onboarding.
  *
- * Body: { name?, type?, guardianThreshold?, invites?, sozuTag? }
+ * Body: { name?, type?, tax?, guardianThreshold?, invites?, sozuTag? }
  */
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -50,8 +56,24 @@ export async function POST(request: NextRequest) {
     typeof body.name === "string" && body.name.trim()
       ? body.name.trim()
       : "My organization";
+  const taxBody = body.tax && typeof body.tax === "object" ? (body.tax as Record<string, unknown>) : null;
+  const taxEntity = taxBody ? parseTaxEntityType(taxBody.entityType) : null;
+  const taxProfile: OrgTaxProfile | null = taxBody
+    ? {
+        entityType: taxEntity,
+        legalName: trimOrNull(taxBody.legalName, 200),
+        taxId: trimOrNull(taxBody.taxId, 64),
+        registeredAddress: trimOrNull(taxBody.registeredAddress, 300),
+        city: trimOrNull(taxBody.city, 120),
+        state: trimOrNull(taxBody.state, 120),
+        country: trimOrNull(taxBody.country, 80),
+      }
+    : null;
+
   const type =
-    body.type === "store" || body.type === "ngo" ? body.type : "ngo";
+    body.type === "store" || body.type === "ngo"
+      ? body.type
+      : orgTypeFromTaxEntity(taxEntity);
 
   const guardianThresholdRaw =
     typeof body.guardianThreshold === "number" ? body.guardianThreshold : null;
@@ -75,6 +97,7 @@ export async function POST(request: NextRequest) {
     const org = await createOrganization({
       name,
       type,
+      tax: taxProfile,
       treasury_manager_user_id: activeUser.id,
       treasury_guardian_threshold: guardianThreshold,
     });

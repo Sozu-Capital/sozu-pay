@@ -54,12 +54,30 @@ export async function POST(request: NextRequest) {
       throw e;
     }
 
-    const publicKey =
+    let publicKey =
       typeof publicKey65bRaw === "string" && publicKey65bRaw.trim()
         ? publicKey65bRaw.trim()
-        : credential.response?.publicKey ||
-          credential.response?.attestationObject ||
-          credential.id;
+        : "";
+    if (!publicKey) {
+      const { parseAuthPasskeyPublicKey65 } = await import(
+        "@/lib/auth/parse-auth-passkey-public-key"
+      );
+      const att = credential.response?.attestationObject;
+      const pk = credential.response?.publicKey;
+      publicKey =
+        parseAuthPasskeyPublicKey65(att) ??
+        parseAuthPasskeyPublicKey65(pk) ??
+        "";
+    }
+    if (!publicKey) {
+      return NextResponse.json(
+        {
+          error:
+            "Could not read passkey public key. Try another device/browser or register again.",
+        },
+        { status: 400 }
+      );
+    }
 
     const passkey = await insertAuthPasskey({
       userId: user.id,

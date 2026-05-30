@@ -1,6 +1,8 @@
 import type { SmartAccountKit } from "smart-account-kit";
 import { base64URLToBuffer, normalizeCredentialId } from "@/lib/webauthn/utils";
-import { resolvePublicKeyFromServer } from "@/lib/stellar/smartAccounts/registerWalletClient";
+import {
+  resolvePublicKeyFromServer,
+} from "@/lib/stellar/smartAccounts/registerWalletClient";
 
 type ConnectResult = {
   contractId: string | null;
@@ -22,18 +24,45 @@ function isNotDeployedError(message: string): boolean {
   );
 }
 
+async function resolveLoginPasskeyPublicKey(
+  credentialId: string
+): Promise<Uint8Array | null> {
+  const res = await fetch("/api/auth/passkeys/primary", { credentials: "include" });
+  const data = (await res.json().catch(() => ({}))) as {
+    credentialId?: string;
+    publicKey65b?: string;
+  };
+  if (!res.ok || !data.publicKey65b) return null;
+  if (
+    data.credentialId &&
+    normalizeCredentialId(data.credentialId) !== normalizeCredentialId(credentialId)
+  ) {
+    return null;
+  }
+  return new Uint8Array(base64URLToBuffer(data.publicKey65b));
+}
+
 async function finishLink(
   linked: ConnectResult
 ): Promise<{ contractId: string; credentialId: string; publicKey: Uint8Array }> {
   if (!linked.contractId || !linked.credentialId) {
     throw new Error("PASSKEY_WALLET_NOT_LINKED");
   }
-  let publicKey = linked.publicKey ?? null;
+  let publicKey =
+    linked.publicKey ??
+    (await resolveLoginPasskeyPublicKey(linked.credentialId)) ??
+    null;
   if (!publicKey) {
-    publicKey = await resolvePublicKeyFromServer({
-      contractId: linked.contractId,
-      credentialId: linked.credentialId,
-    });
+    try {
+      publicKey = await resolvePublicKeyFromServer({
+        contractId: linked.contractId,
+        credentialId: linked.credentialId,
+      });
+    } catch {
+      const fromPrimary = await resolveLoginPasskeyPublicKey(linked.credentialId);
+      if (fromPrimary) publicKey = fromPrimary;
+      else throw new Error("PASSKEY_PUBLIC_KEY_MISSING");
+    }
   }
   return {
     contractId: linked.contractId,

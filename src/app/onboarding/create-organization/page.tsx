@@ -8,7 +8,7 @@ import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider"
 import { checkUsernameAvailable } from "@/lib/auth/passkey-client";
 import { registerSmartAccount } from "@/lib/stellar/smartAccounts/registerWalletClient";
 
-type OrgType = "store" | "ngo";
+type TaxEntityType = "private_company" | "ngo";
 type InviteRole = "member" | "admin" | "guardian" | "treasury_manager";
 type InviteRow = { email: string; role: InviteRole };
 
@@ -39,8 +39,15 @@ export default function CreateOrganizationPage() {
   const t = useTranslations("onboardingPages.createOrg");
   const { ready, kit, linkMemberWallet, error: kitError } = useSmartAccountKitContext();
 
-  const [type, setType] = useState<OrgType>("ngo");
   const [orgName, setOrgName] = useState("");
+  const [taxOpen, setTaxOpen] = useState(false);
+  const [taxEntityType, setTaxEntityType] = useState<TaxEntityType>("ngo");
+  const [taxLegalName, setTaxLegalName] = useState("");
+  const [taxId, setTaxId] = useState("");
+  const [taxAddress, setTaxAddress] = useState("");
+  const [taxCity, setTaxCity] = useState("");
+  const [taxState, setTaxState] = useState("");
+  const [taxCountry, setTaxCountry] = useState("");
   const [orgSozuTagInput, setOrgSozuTagInput] = useState("");
   const [orgTagAvailable, setOrgTagAvailable] = useState<boolean | null>(null);
   const [orgTagCheckError, setOrgTagCheckError] = useState("");
@@ -153,10 +160,20 @@ export default function CreateOrganizationPage() {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          type,
           name: orgName,
           guardianThreshold,
           invites,
+          ...(taxOpen && {
+            tax: {
+              entityType: taxEntityType,
+              legalName: taxLegalName.trim() || undefined,
+              taxId: taxId.trim() || undefined,
+              registeredAddress: taxAddress.trim() || undefined,
+              city: taxCity.trim() || undefined,
+              state: taxState.trim() || undefined,
+              country: taxCountry.trim() || undefined,
+            },
+          }),
         }),
       });
       const orgData = await orgRes.json().catch(() => ({}));
@@ -223,8 +240,13 @@ export default function CreateOrganizationPage() {
       setStep("error");
       const code = e instanceof Error ? e.message : "";
       if (code === "WRONG_PASSKEY") setError(t("wrongPasskey"));
-      else if (code === "PASSKEY_PUBLIC_KEY_MISSING") setError(t("passkeyKeyMissing"));
-      else setError(e instanceof Error ? e.message : t("somethingWentWrong"));
+      else if (
+        code === "PASSKEY_PUBLIC_KEY_MISSING" ||
+        /passkey public key not found/i.test(code) ||
+        /could not resolve passkey public key/i.test(code)
+      ) {
+        setError(t("passkeyKeyMissing"));
+      } else setError(e instanceof Error ? e.message : t("somethingWentWrong"));
     }
   }
 
@@ -374,29 +396,107 @@ export default function CreateOrganizationPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-md border border-white/10 bg-black/25 overflow-hidden">
               <button
                 type="button"
-                onClick={() => setType("store")}
-                className={`w-full rounded-md border py-3 px-3 text-left font-medium transition-colors ${
-                  type === "store"
-                    ? "border-white/30 bg-white/10 text-white"
-                    : "border-white/15 bg-white/5 text-gray-200 hover:bg-white/10"
-                }`}
+                onClick={() => setTaxOpen((o) => !o)}
+                className="w-full flex items-center justify-between px-3 py-2.5 text-left text-sm font-medium text-gray-200 hover:bg-white/5"
               >
-                {t("typeStore")}
+                {t("setTaxNow")}
+                <span className="text-gray-500" aria-hidden>
+                  {taxOpen ? "−" : "+"}
+                </span>
               </button>
-              <button
-                type="button"
-                onClick={() => setType("ngo")}
-                className={`w-full rounded-md border py-3 px-3 text-left font-medium transition-colors ${
-                  type === "ngo"
-                    ? "border-white/30 bg-white/10 text-white"
-                    : "border-white/15 bg-white/5 text-gray-200 hover:bg-white/10"
-                }`}
-              >
-                {t("typeNgo")}
-              </button>
+              {taxOpen ? (
+                <div className="space-y-3 border-t border-white/10 px-3 py-3">
+                  <p className="text-[11px] text-gray-500">{t("taxSectionHint")}</p>
+                  <div>
+                    <p className="text-xs font-medium text-gray-300">{t("taxEntityLabel")}</p>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setTaxEntityType("private_company")}
+                        className={`rounded-md border py-2.5 px-2 text-left text-xs font-medium transition-colors ${
+                          taxEntityType === "private_company"
+                            ? "border-white/30 bg-white/10 text-white"
+                            : "border-white/15 bg-white/5 text-gray-300 hover:bg-white/10"
+                        }`}
+                      >
+                        {t("taxEntityPrivateCompany")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTaxEntityType("ngo")}
+                        className={`rounded-md border py-2.5 px-2 text-left text-xs font-medium transition-colors ${
+                          taxEntityType === "ngo"
+                            ? "border-white/30 bg-white/10 text-white"
+                            : "border-white/15 bg-white/5 text-gray-300 hover:bg-white/10"
+                        }`}
+                      >
+                        {t("taxEntityNgo")}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-300">{t("taxLegalNameLabel")}</label>
+                    <input
+                      value={taxLegalName}
+                      onChange={(e) => setTaxLegalName(e.target.value)}
+                      placeholder={t("taxLegalNamePlaceholder")}
+                      className="mt-1 w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-300">{t("taxIdLabel")}</label>
+                    <input
+                      value={taxId}
+                      onChange={(e) => setTaxId(e.target.value)}
+                      placeholder={t("taxIdPlaceholder")}
+                      className="mt-1 w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-300">{t("taxAddressLabel")}</label>
+                    <input
+                      value={taxAddress}
+                      onChange={(e) => setTaxAddress(e.target.value)}
+                      placeholder={t("taxAddressPlaceholder")}
+                      className="mt-1 w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs font-medium text-gray-300">{t("taxCityLabel")}</label>
+                      <input
+                        value={taxCity}
+                        onChange={(e) => setTaxCity(e.target.value)}
+                        placeholder={t("taxCityLabel")}
+                        aria-label={t("taxCityLabel")}
+                        className="mt-1 w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-300">{t("taxStateLabel")}</label>
+                      <input
+                        value={taxState}
+                        onChange={(e) => setTaxState(e.target.value)}
+                        placeholder={t("taxStateLabel")}
+                        aria-label={t("taxStateLabel")}
+                        className="mt-1 w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-300">{t("taxCountryLabel")}</label>
+                    <input
+                      value={taxCountry}
+                      onChange={(e) => setTaxCountry(e.target.value)}
+                      placeholder={t("taxCountryPlaceholder")}
+                      className="mt-1 w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20"
+                    />
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div>

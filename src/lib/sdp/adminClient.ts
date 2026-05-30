@@ -8,12 +8,7 @@
  * memory; short-lived, re-authenticated on 401). Never exposed to the browser.
  */
 
-const SDP_API_URL = process.env.SDP_API_URL ?? "";
-const SDP_ADMIN_EMAIL = process.env.SDP_ADMIN_EMAIL ?? "";
-const SDP_ADMIN_PASSWORD = process.env.SDP_ADMIN_PASSWORD ?? "";
-// Tenant name header required on every request in SDP v6 multi-tenant mode.
-// Defaults to "mujeres-admin" (the tenant created during Railway setup).
-const SDP_TENANT_NAME = process.env.SDP_TENANT_NAME ?? "mujeres-admin";
+import { getSdpEnv } from "@/lib/sdp/env";
 
 // In-memory token cache (per-process; sufficient for a serverless warm instance).
 let _token: string | null = null;
@@ -111,20 +106,23 @@ export interface RegisterWalletParams {
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
 function sdpUrl(path: string): string {
-  return `${SDP_API_URL.replace(/\/$/, "")}${path}`;
+  const { apiUrl } = getSdpEnv();
+  return `${apiUrl.replace(/\/$/, "")}${path}`;
 }
 
 async function authenticate(): Promise<string> {
   const now = Date.now();
   if (_token && now < _tokenExpiry) return _token;
 
+  const { adminEmail, adminPassword, tenantName } = getSdpEnv();
+
   const res = await fetch(sdpUrl("/login"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "SDP-Tenant-Name": SDP_TENANT_NAME,
+      "SDP-Tenant-Name": tenantName,
     },
-    body: JSON.stringify({ email: SDP_ADMIN_EMAIL, password: SDP_ADMIN_PASSWORD }),
+    body: JSON.stringify({ email: adminEmail, password: adminPassword }),
   });
 
   if (!res.ok) {
@@ -144,11 +142,12 @@ async function sdpFetch<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const token = await authenticate();
+  const { tenantName } = getSdpEnv();
   const res = await fetch(sdpUrl(path), {
     ...options,
     headers: {
       Authorization: `Bearer ${token}`,
-      "SDP-Tenant-Name": SDP_TENANT_NAME,
+      "SDP-Tenant-Name": tenantName,
       ...options.headers,
     },
   });
@@ -278,9 +277,10 @@ export async function uploadInstructions(
   const blob = new Blob([new Uint8Array(csvBuffer)], { type: "text/csv" });
   formData.append("file", blob, fileName);
 
+  const { tenantName } = getSdpEnv();
   const res = await fetch(sdpUrl(`/disbursements/${disbursementId}/instructions`), {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "SDP-Tenant-Name": SDP_TENANT_NAME },
+    headers: { Authorization: `Bearer ${token}`, "SDP-Tenant-Name": tenantName },
     body: formData,
   });
 

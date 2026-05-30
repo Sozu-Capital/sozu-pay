@@ -1,10 +1,9 @@
 import "server-only";
 
-const SDP_API_URL = process.env.SDP_API_URL ?? "";
-const SDP_TENANT_NAME = process.env.SDP_TENANT_NAME?.trim() ?? "mujeres-admin";
+import { getSdpEnv } from "@/lib/sdp/env";
 
 export function getConfiguredSdpTenantName(): string {
-  return SDP_TENANT_NAME;
+  return getSdpEnv().tenantName;
 }
 
 /** Probe whether SDP recognizes a tenant name (login rejects bad tenant before password check). */
@@ -13,11 +12,12 @@ export async function probeSdpTenantName(tenantName: string): Promise<{
   tenantName: string;
   detail: string;
 }> {
-  if (!SDP_API_URL) {
+  const { apiUrl } = getSdpEnv();
+  if (!apiUrl) {
     return { ok: false, tenantName, detail: "SDP_API_URL is not configured." };
   }
 
-  const res = await fetch(`${SDP_API_URL.replace(/\/$/, "")}/login`, {
+  const res = await fetch(`${apiUrl.replace(/\/$/, "")}/login`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -53,7 +53,7 @@ export async function preflightWalletRegistrationUrl(
   url: string,
   tenantName?: string
 ): Promise<string | null> {
-  const tenant = tenantName?.trim() || SDP_TENANT_NAME;
+  const tenant = tenantName?.trim() || getSdpEnv().tenantName;
   try {
     const res = await fetch(url, {
       method: "GET",

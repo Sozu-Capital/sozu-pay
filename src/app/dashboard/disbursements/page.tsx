@@ -96,7 +96,9 @@ function recipientsToCSV(recipients: DraftRecipient[], defaultAmount: string): s
 }
 
 function isSdpConfigError(message: string): boolean {
-  return /SDP_API_URL|SDP_ADMIN_EMAIL|SDP_ADMIN_PASSWORD|not configured/i.test(message);
+  return /SDP_API_URL|SDP_ADMIN_EMAIL|SDP_ADMIN_PASSWORD|not configured|missing at runtime/i.test(
+    message
+  );
 }
 
 // ── Component ────────────────────────────────────────────────────────────────

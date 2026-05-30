@@ -9,16 +9,10 @@ import {
   listAssets,
   ensureSozuCreditWallet,
 } from "@/lib/sdp/adminClient";
+import { isSdpConfigured, sdpNotConfiguredMessage } from "@/lib/sdp/env";
 
 function notConfigured() {
-  return NextResponse.json(
-    { error: "SDP_API_URL, SDP_ADMIN_EMAIL, or SDP_ADMIN_PASSWORD not configured" },
-    { status: 503 }
-  );
-}
-
-function isSdpConfigured() {
-  return !!(process.env.SDP_API_URL && process.env.SDP_ADMIN_EMAIL && process.env.SDP_ADMIN_PASSWORD);
+  return NextResponse.json({ error: sdpNotConfiguredMessage() }, { status: 503 });
 }
 
 /** GET /api/sdp/disbursements — list all disbursements */

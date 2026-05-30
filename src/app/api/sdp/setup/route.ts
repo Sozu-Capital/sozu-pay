@@ -1,14 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { listAssets, ensureSozuCreditWallet, listWallets } from "@/lib/sdp/adminClient";
-
-function isSdpConfigured() {
-  return !!(
-    process.env.SDP_API_URL &&
-    process.env.SDP_ADMIN_EMAIL &&
-    process.env.SDP_ADMIN_PASSWORD
-  );
-}
+import { isSdpConfigured, sdpNotConfiguredMessage } from "@/lib/sdp/env";
 
 async function runSetup() {
   const assets = await listAssets();
@@ -42,10 +35,7 @@ export async function GET(request: Request) {
   }
 
   if (!isSdpConfigured()) {
-    return NextResponse.json(
-      { error: "SDP_API_URL, SDP_ADMIN_EMAIL, or SDP_ADMIN_PASSWORD not configured" },
-      { status: 503 }
-    );
+    return NextResponse.json({ error: sdpNotConfiguredMessage() }, { status: 503 });
   }
 
   try {
@@ -73,10 +63,7 @@ export async function POST() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!isSdpConfigured()) {
-    return NextResponse.json(
-      { error: "SDP_API_URL, SDP_ADMIN_EMAIL, or SDP_ADMIN_PASSWORD not configured" },
-      { status: 503 }
-    );
+    return NextResponse.json({ error: sdpNotConfiguredMessage() }, { status: 503 });
   }
 
   try {

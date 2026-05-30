@@ -9,6 +9,7 @@ import {
   ensureSozuCreditWallet,
 } from "@/lib/sdp/adminClient";
 import { sendSdpInviteEmail } from "@/lib/email/sdp-invite";
+import { getSdpEnv } from "@/lib/sdp/env";
 import { signSdpInviteUrl } from "@/lib/sdp/signInviteUrl";
 
 const WALLET_BASE_URL =
@@ -48,7 +49,7 @@ function receiverVerificationDob(receiver: {
  * e.g. "https://sdp-v2-production-f6c7.up.railway.app" → "sdp-v2-production-f6c7.up.railway.app"
  */
 function sdpDomainFromEnv(): string {
-  const raw = process.env.SDP_API_URL ?? "";
+  const raw = getSdpEnv().apiUrl;
   try {
     return new URL(raw).hostname;
   } catch {

@@ -68,7 +68,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
       {/* Mobile: minimal header (no heavy navbar) */}
       <header className="md:hidden sticky top-0 z-30 flex items-center gap-3 border-b border-white/5 bg-black/20 backdrop-blur-md px-3 py-2.5">
-        <DashboardBrandHeader className="flex-1" />
+        <DashboardBrandHeader className="flex-1 min-w-0" />
         <button
           type="button"
           onClick={() => setMobileOpen((o) => !o)}
@@ -100,8 +100,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       ) : null}
       <aside
         id="dashboard-mobile-nav"
-        className={`md:hidden fixed inset-y-0 left-0 z-50 w-[min(18rem,85vw)] flex flex-col border-r border-white/10 bg-black/90 backdrop-blur-md p-4 transition-transform duration-200 ease-out ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full pointer-events-none"
+        className={`md:hidden fixed inset-y-0 right-0 z-50 w-[min(18rem,85vw)] flex flex-col border-l border-white/10 bg-black/90 backdrop-blur-md p-4 transition-transform duration-200 ease-out ${
+          mobileOpen ? "translate-x-0" : "translate-x-full pointer-events-none"
         }`}
         aria-label={t("navAria")}
         aria-hidden={!mobileOpen}

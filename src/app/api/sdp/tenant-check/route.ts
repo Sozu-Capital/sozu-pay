@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
+import { getSdpConfigStatus } from "@/lib/sdp/env";
 import {
   getConfiguredSdpTenantName,
   probeSdpTenantName,
@@ -21,10 +22,16 @@ export async function GET() {
 
   const tenantName = getConfiguredSdpTenantName();
   const probe = await probeSdpTenantName(tenantName);
+  const sdpStatus = getSdpConfigStatus();
 
   return NextResponse.json({
     tenantName,
-    sdpApiUrl: process.env.SDP_API_URL ?? null,
+    sdpConfigured: sdpStatus.configured,
+    sdpEnv: {
+      hasApiUrl: sdpStatus.hasApiUrl,
+      hasAdminEmail: sdpStatus.hasAdminEmail,
+      hasAdminPassword: sdpStatus.hasAdminPassword,
+    },
     tenantRecognized: probe.ok,
     detail: probe.detail,
     walletRegistrationHint: probe.ok

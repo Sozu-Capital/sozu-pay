@@ -858,6 +858,8 @@
     "errorMissingEmail": "Every recipient must have an email address.",
     "loading": "Loading disbursements…",
     "sdpError": "Could not load disbursements",
+    "sessionExpiredTitle": "Session expired",
+    "sessionExpiredHint": "Sign out and sign in again with your passkey, then return to Disbursements.",
     "sdpConfigTitle": "SDP is not configured on the server",
     "profileNotActivatedTitle": "Your profile is not activated",
     "profileNotActivatedHint": "Refresh the page after completing onboarding, or ask your org admin to activate you under Admin.",

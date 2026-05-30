@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
+
+export const dynamic = "force-dynamic";
 import {
   createDisbursement,
   listDisbursements,

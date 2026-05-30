@@ -95,10 +95,10 @@ function recipientsToCSV(recipients: DraftRecipient[], defaultAmount: string): s
   return "email,id,amount,verification\n" + rows.join("\n");
 }
 
-function isSdpConfigError(message: string): boolean {
-  return /SDP_API_URL|SDP_ADMIN_EMAIL|SDP_ADMIN_PASSWORD|not configured|missing at runtime/i.test(
-    message
-  );
+function isSdpConfigError(message: string, status?: number): boolean {
+  if (status === 401) return false;
+  if (/^unauthorized$/i.test(message.trim())) return false;
+  return /SDP_|not configured|missing at runtime/i.test(message);
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -162,8 +162,17 @@ export default function DisbursementsPage() {
       const res = await fetch("/api/sdp/disbursements");
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        setListError(typeof j.error === "string" ? j.error : `Error ${res.status}`);
-        setListErrorCode(typeof j.code === "string" ? j.code : null);
+        const errMsg = typeof j.error === "string" ? j.error : `Error ${res.status}`;
+        setListError(errMsg);
+        setListErrorCode(
+          typeof j.code === "string"
+            ? j.code
+            : res.status === 401
+              ? "SESSION_EXPIRED"
+              : res.status === 503
+                ? "SDP_NOT_CONFIGURED"
+                : null
+        );
         return;
       }
       const data = await res.json();
@@ -820,9 +829,11 @@ export default function DisbursementsPage() {
                 ? t("profileNotActivatedTitle")
                 : listErrorCode === "INSUFFICIENT_ROLE"
                   ? t("roleRequiredTitle")
-                  : isSdpConfigError(listError)
-                    ? t("sdpConfigTitle")
-                    : t("sdpError")}
+                  : listErrorCode === "SESSION_EXPIRED"
+                    ? t("sessionExpiredTitle")
+                    : isSdpConfigError(listError ?? "")
+                      ? t("sdpConfigTitle")
+                      : t("sdpError")}
             </p>
             <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">{listError}</p>
             <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
@@ -830,7 +841,11 @@ export default function DisbursementsPage() {
                 ? t("profileNotActivatedHint")
                 : listErrorCode === "INSUFFICIENT_ROLE"
                   ? t("roleRequiredHint")
-                  : t("sdpEnvHint")}
+                  : listErrorCode === "SESSION_EXPIRED"
+                    ? t("sessionExpiredHint")
+                    : listErrorCode === "SDP_NOT_CONFIGURED"
+                      ? t("sdpEnvHint")
+                      : null}
             </p>
           </div>
         )}

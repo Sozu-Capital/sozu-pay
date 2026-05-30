@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { getUserByPrivyId, promoteOrgCreator, setUserAllowed, type User } from "@/lib/db/users";
+import {
+  getUserBySessionId,
+  promoteOrgCreator,
+  setUserAllowed,
+  type User,
+} from "@/lib/db/users";
 import {
   getOrganizationById,
   updateOrganizationTreasuryManager,
@@ -36,7 +41,7 @@ export async function userCanManageDisbursements(user: User): Promise<boolean> {
 export async function ensureDisbursementManagerActivated(user: User): Promise<User> {
   if (user.allowed) return user;
   if (!(await userCanManageDisbursements(user))) return user;
-  const updated = await setUserAllowed(user.privy_user_id, true);
+  const updated = await setUserAllowed(String(user.id), true);
   return updated ?? user;
 }
 
@@ -69,18 +74,24 @@ export async function repairOrgCreatorAccess(user: User): Promise<User> {
 
 /** Admin gate for creating batches and sending invites (no passkey required). */
 export async function requireDisbursementAdmin(
-  privyUserId: string
+  sessionId: string
 ): Promise<AdminOk | AuthFailure> {
-  let user = await getUserByPrivyId(privyUserId);
+  let user = await getUserBySessionId(sessionId);
   if (!user) {
-    return { ok: false, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "Unauthorized", code: "SESSION_USER_NOT_FOUND" },
+        { status: 401 }
+      ),
+    };
   }
 
   user = await repairOrgCreatorAccess(user);
 
   if (!(await userCanManageDisbursements(user))) {
     logDenied("insufficient role for disbursements", {
-      privyUserId,
+      sessionId,
       userId: user.id,
       admin_level: user.admin_level,
       orgId: user.org_id,
@@ -107,15 +118,15 @@ export async function requireDisbursementAdmin(
 
 /** Full gate for starting payments — requires registered passkey smart account. */
 export async function requireDisbursementAuthorized(
-  privyUserId: string
+  sessionId: string
 ): Promise<AuthorizedOk | AuthFailure> {
-  const admin = await requireDisbursementAdmin(privyUserId);
+  const admin = await requireDisbursementAdmin(sessionId);
   if (!admin.ok) return admin;
 
   const smartAccount = await getMemberSmartAccount(admin.user.org_id!, admin.user.id);
   if (!smartAccount) {
     logDenied("no passkey smart account", {
-      privyUserId,
+      sessionId,
       userId: admin.user.id,
       orgId: admin.user.org_id,
     });

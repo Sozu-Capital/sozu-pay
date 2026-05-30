@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
-import { getPrivyDisplayName } from "@/lib/auth/privyDisplayName";
 import { registerSmartAccount } from "@/lib/stellar/smartAccounts/registerWalletClient";
 
 type OrgType = "store" | "ngo";
@@ -28,14 +27,14 @@ function normalizeEmail(email: string): string {
 export default function CreateOrganizationPage() {
   const router = useRouter();
   const t = useTranslations("onboardingPages.createOrg");
-  const { ready, kit, createWallet, error: kitError } = useSmartAccountKitContext();
+  const { ready, kit, linkMemberWallet, error: kitError } = useSmartAccountKitContext();
 
   const [type, setType] = useState<OrgType>("ngo");
   const [orgName, setOrgName] = useState("");
-  const [sozuTag, setSozuTag] = useState("");
   const [guardianThreshold, setGuardianThreshold] = useState(2);
   const [invitesText, setInvitesText] = useState("");
-  const [profileEmail, setProfileEmail] = useState("user");
+  const [userSozuTag, setUserSozuTag] = useState<string | null>(null);
+  const [loginCredentialId, setLoginCredentialId] = useState<string | null>(null);
   const [fullName, setFullName] = useState("");
 
   const [step, setStep] = useState<SetupStep>("idle");
@@ -58,15 +57,21 @@ export default function CreateOrganizationPage() {
 
   useEffect(() => {
     fetch("/api/profile", { credentials: "include" })
-      .then((r) => r.json())
+      .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (typeof d.email === "string" && d.email) setProfileEmail(d.email);
-        const tag = typeof d.username === "string" ? d.username : "";
-        const name =
-          tag && !tag.includes("@")
-            ? `$${tag.replace(/^\$/, "")}`
-            : getPrivyDisplayName(null, d.email ?? "");
-        setFullName((prev) => prev || name);
+        const tag = typeof d?.username === "string" ? d.username.replace(/^\$/, "") : "";
+        if (tag) setUserSozuTag(tag);
+      })
+      .catch(() => {});
+
+    fetch("/api/auth/passkeys/primary", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (typeof d?.credentialId === "string") setLoginCredentialId(d.credentialId);
+        if (typeof d?.username === "string") {
+          const tag = d.username.replace(/^\$/, "");
+          if (tag) setUserSozuTag((prev) => prev ?? tag);
+        }
       })
       .catch(() => {});
   }, []);
@@ -77,14 +82,8 @@ export default function CreateOrganizationPage() {
   async function handleCreate() {
     if (!kit || !fullName.trim()) return;
     setError("");
-    setStep("passkey");
 
     try {
-      const wallet = await createWallet("SozuPay", fullName.trim());
-      const memberC = wallet.contractId;
-      const credId = wallet.credentialId;
-      setMemberContractId(memberC);
-
       setStep("org");
       const orgRes = await fetch("/api/profile/org", {
         method: "POST",
@@ -93,15 +92,25 @@ export default function CreateOrganizationPage() {
         body: JSON.stringify({
           type,
           name: orgName,
-          sozuTag,
           guardianThreshold,
           invites,
         }),
       });
       const orgData = await orgRes.json().catch(() => ({}));
+      if (orgRes.status === 401 || orgRes.status === 404) {
+        throw new Error(
+          orgRes.status === 401 ? t("sessionExpired") : (orgData.error ?? t("createOrgFailed"))
+        );
+      }
       if (!orgRes.ok) {
         throw new Error(orgData.error ?? t("createOrgFailed"));
       }
+
+      setStep("passkey");
+      const wallet = await linkMemberWallet(loginCredentialId ?? undefined);
+      const memberC = wallet.contractId;
+      const credId = wallet.credentialId;
+      setMemberContractId(memberC);
 
       setStep("register");
       await registerSmartAccount({
@@ -126,7 +135,10 @@ export default function CreateOrganizationPage() {
       setStep("done");
     } catch (e) {
       setStep("error");
-      setError(e instanceof Error ? e.message : t("somethingWentWrong"));
+      const code = e instanceof Error ? e.message : "";
+      if (code === "WRONG_PASSKEY") setError(t("wrongPasskey"));
+      else if (code === "PASSKEY_PUBLIC_KEY_MISSING") setError(t("passkeyKeyMissing"));
+      else setError(e instanceof Error ? e.message : t("somethingWentWrong"));
     }
   }
 
@@ -152,17 +164,17 @@ export default function CreateOrganizationPage() {
             <div className="mt-6 flex flex-col gap-2">
               <button
                 type="button"
-                onClick={() => router.replace("/dashboard/disbursements")}
+                onClick={() => router.replace("/onboarding/organizations")}
                 className="w-full rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium hover:opacity-90 transition-opacity"
               >
-                {t("goDisbursements")}
+                {t("goOrgPicker")}
               </button>
               <button
                 type="button"
-                onClick={() => router.replace("/dashboard/profile")}
+                onClick={() => router.replace("/dashboard/disbursements")}
                 className="w-full rounded-md border border-white/20 bg-white/5 py-2.5 px-4 text-sm font-medium text-white hover:bg-white/10"
               >
-                {t("goProfile")}
+                {t("goDisbursements")}
               </button>
             </div>
           </div>
@@ -210,6 +222,14 @@ export default function CreateOrganizationPage() {
           )}
 
           <div className="mt-5 space-y-3">
+            {userSozuTag ? (
+              <div className="rounded-md border border-white/10 bg-black/25 px-3 py-2.5">
+                <p className="text-xs font-medium text-gray-400">{t("yourSozuTagLabel")}</p>
+                <p className="mt-0.5 font-mono text-sm text-white">${userSozuTag}</p>
+                <p className="mt-1 text-[11px] text-gray-500">{t("yourSozuTagHint")}</p>
+              </div>
+            ) : null}
+
             <div>
               <label className="text-xs font-medium text-gray-300">{t("fullNameLabel")}</label>
               <input
@@ -218,9 +238,7 @@ export default function CreateOrganizationPage() {
                 placeholder={t("fullNamePlaceholder")}
                 className="mt-1 w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20"
               />
-              {profileEmail && (
-                <p className="mt-1 text-xs text-gray-500">{t("loginLabel", { email: profileEmail })}</p>
-              )}
+              <p className="mt-1 text-[11px] text-gray-500">{t("fullNameHint")}</p>
             </div>
 
             <div>
@@ -230,16 +248,6 @@ export default function CreateOrganizationPage() {
                 onChange={(e) => setOrgName(e.target.value)}
                 placeholder={t("orgNamePlaceholder")}
                 disabled={false}
-                className="mt-1 w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-medium text-gray-300">{t("sozuTagLabel")}</label>
-              <input
-                value={sozuTag}
-                onChange={(e) => setSozuTag(e.target.value)}
-                placeholder={t("sozuTagPlaceholder")}
                 className="mt-1 w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20"
               />
             </div>

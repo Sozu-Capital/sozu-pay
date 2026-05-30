@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
-import { getPrivyDisplayName } from "@/lib/auth/privyDisplayName";
 import {
   registerSmartAccount,
   resolvePublicKeyFromServer,
@@ -14,8 +13,9 @@ export default function SetupSmartWalletPage() {
   const router = useRouter();
   const t = useTranslations("onboardingPages.smartWallet");
   const tCommon = useTranslations("onboardingPages");
-  const { ready, kit, connected, contractId, credentialId, error, createWallet, connect } =
+  const { ready, kit, connected, contractId, credentialId, error, linkMemberWallet, connect } =
     useSmartAccountKitContext();
+  const [loginCredentialId, setLoginCredentialId] = useState<string | null>(null);
 
   const [profileEmail, setProfileEmail] = useState("");
   const [fullName, setFullName] = useState("");
@@ -24,16 +24,17 @@ export default function SetupSmartWalletPage() {
 
   useEffect(() => {
     fetch("/api/profile", { credentials: "include" })
-      .then((r) => r.json())
+      .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        const email = typeof d.email === "string" ? d.email : "";
+        const email = typeof d?.email === "string" ? d.email : "";
         if (email) setProfileEmail(email);
-        const tag = typeof d.username === "string" ? d.username : "";
-        const name =
-          tag && !tag.includes("@")
-            ? `$${tag.replace(/^\$/, "")}`
-            : getPrivyDisplayName(null, email);
-        setFullName((prev) => prev || name);
+      })
+      .catch(() => {});
+
+    fetch("/api/auth/passkeys/primary", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (typeof d?.credentialId === "string") setLoginCredentialId(d.credentialId);
       })
       .catch(() => {});
   }, []);
@@ -56,14 +57,10 @@ export default function SetupSmartWalletPage() {
   };
 
   const handleCreate = async () => {
-    if (!fullName.trim()) {
-      setSaveError(t("enterFullName"));
-      return;
-    }
     setSaveError(null);
     setSaving(true);
     try {
-      const wallet = await createWallet("SozuPay", fullName.trim());
+      const wallet = await linkMemberWallet(loginCredentialId ?? undefined);
       await persistWallet({
         contractId: wallet.contractId,
         credentialId: wallet.credentialId,
@@ -135,11 +132,11 @@ export default function SetupSmartWalletPage() {
         <div className="mt-6 flex flex-col gap-3">
           <button
             type="button"
-            disabled={!canProceed || saving || !fullName.trim()}
+            disabled={!canProceed || saving}
             onClick={() => void handleCreate()}
             className="rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium disabled:opacity-50"
           >
-            {t("createCta")}
+            {t("linkCta")}
           </button>
           <button
             type="button"

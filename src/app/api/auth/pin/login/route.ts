@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyRecoveryPin, isValidPinFormat } from "@/lib/auth/pin-crypto";
-import { establishSessionForUser } from "@/lib/auth/establish-session";
+import { jsonResponseWithSession } from "@/lib/auth/establish-session";
 import { resolvePostAuthRedirect } from "@/lib/auth/post-login-redirect";
 import { getUserByUsername } from "@/lib/db/users";
 import { normalizeUsername } from "@/lib/webauthn/utils";
@@ -31,13 +31,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Could not sign in" }, { status: 401 });
     }
 
-    await establishSessionForUser(user);
     const redirect = await resolvePostAuthRedirect(
       user,
       typeof returnTo === "string" ? returnTo : undefined
     );
 
-    return NextResponse.json({
+    return jsonResponseWithSession(user, {
       success: true,
       userId: user.id,
       username: user.username,

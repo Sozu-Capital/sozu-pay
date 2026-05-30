@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { attachSessionCookie } from "@/lib/auth/establish-session";
 import { getSession, setSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationById } from "@/lib/db/organizations";
@@ -29,15 +30,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Organization not found" }, { status: 404 });
   }
 
-  const canSelect = user.org_id === orgId || user.admin_level === "super_admin";
+  const isManager = org.treasury_manager_user_id === user.id;
+  const canSelect =
+    user.org_id === orgId ||
+    user.admin_level === "super_admin" ||
+    isManager;
+
   if (!canSelect) {
     return NextResponse.json({ error: "You do not have access to this organization" }, { status: 403 });
   }
 
-  await setSession({
-    ...session,
-    orgId,
-  });
-
-  return NextResponse.json({ ok: true, orgId });
+  const nextSession = { ...session, orgId };
+  await setSession(nextSession);
+  return attachSessionCookie(NextResponse.json({ ok: true, orgId }), nextSession);
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { base64URLToBuffer, bufferToBase64URL } from "@/lib/webauthn/utils";
+import { extractPublicKey65FromRegistration } from "@/lib/webauthn/extractPublicKey65";
 
 export type PasskeyChallenge = {
   challenge: string;
@@ -189,6 +190,13 @@ export async function verifyRegistration(params: {
   challenge: string;
   returnTo?: string;
 }): Promise<{ redirect: string }> {
+  let publicKey65b: string | undefined;
+  try {
+    publicKey65b = extractPublicKey65FromRegistration(params.credential.response);
+  } catch {
+    // server may still accept legacy storage
+  }
+
   const res = await fetch("/api/auth/register/verify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -198,6 +206,7 @@ export async function verifyRegistration(params: {
       credential: params.credential,
       challenge: params.challenge,
       returnTo: params.returnTo,
+      publicKey65b,
     }),
   });
   const data = await res.json().catch(() => ({}));

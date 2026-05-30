@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { SmartAccountKit, ConnectWalletResult, CreateWalletResult } from "smart-account-kit";
 import { getSmartAccountKit } from "@/lib/stellar/smartAccounts/client";
+import { linkMemberWalletWithLoginPasskey } from "@/lib/stellar/smartAccounts/linkMemberWallet";
 
 type SmartAccountContextValue = {
   ready: boolean;
@@ -17,6 +18,12 @@ type SmartAccountContextValue = {
     publicKey: Uint8Array | null;
   }>;
   createWallet: (userLabel: string, userName: string) => Promise<CreateWalletResult>;
+  /** Link/deploy member wallet with login passkey (assertion), not a new passkey. */
+  linkMemberWallet: (loginCredentialId?: string) => Promise<{
+    contractId: string;
+    credentialId: string;
+    publicKey: Uint8Array;
+  }>;
   disconnect: () => Promise<void>;
 };
 
@@ -84,6 +91,14 @@ export function SmartAccountKitProvider({ children }: { children: React.ReactNod
     return res;
   }, [kit]);
 
+  const linkMemberWallet = useCallback(
+    async (loginCredentialId?: string) => {
+      if (!kit) throw new Error("Smart account kit not ready");
+      return linkMemberWalletWithLoginPasskey({ kit, connect, loginCredentialId });
+    },
+    [kit, connect]
+  );
+
   const disconnect = useCallback(async () => {
     if (!kit) return;
     await kit.disconnect();
@@ -101,8 +116,9 @@ export function SmartAccountKitProvider({ children }: { children: React.ReactNod
     error,
     connect,
     createWallet,
+    linkMemberWallet,
     disconnect,
-  }), [ready, kit, connected, contractId, credentialId, error, connect, createWallet, disconnect]);
+  }), [ready, kit, connected, contractId, credentialId, error, connect, createWallet, linkMemberWallet, disconnect]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { challengeStore } from "@/lib/webauthn/config";
-import { establishSessionForUser } from "@/lib/auth/establish-session";
+import { jsonResponseWithSession } from "@/lib/auth/establish-session";
 import { resolvePostAuthRedirect } from "@/lib/auth/post-login-redirect";
 import { insertAuthPasskey } from "@/lib/db/auth-passkeys";
 import { createPasskeyUser, isUsernameAvailable } from "@/lib/db/users";
 import { isValidUsername, normalizeUsername } from "@/lib/webauthn/utils";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request: NextRequest) {
   try {
-    const { username: raw, credential, challenge: providedChallenge, returnTo } =
-      await request.json();
+    const {
+      username: raw,
+      credential,
+      challenge: providedChallenge,
+      returnTo,
+      publicKey65b: publicKey65bRaw,
+    } = await request.json();
 
     if (!raw || !credential?.id) {
       return NextResponse.json({ error: "Invalid registration payload" }, { status: 400 });
@@ -48,9 +55,11 @@ export async function POST(request: NextRequest) {
     }
 
     const publicKey =
-      credential.response?.publicKey ||
-      credential.response?.attestationObject ||
-      credential.id;
+      typeof publicKey65bRaw === "string" && publicKey65bRaw.trim()
+        ? publicKey65bRaw.trim()
+        : credential.response?.publicKey ||
+          credential.response?.attestationObject ||
+          credential.id;
 
     const passkey = await insertAuthPasskey({
       userId: user.id,
@@ -63,13 +72,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to store passkey" }, { status: 500 });
     }
 
-    await establishSessionForUser(user);
     const redirect = await resolvePostAuthRedirect(
       user,
       typeof returnTo === "string" ? returnTo : undefined
     );
 
-    return NextResponse.json({
+    return jsonResponseWithSession(user, {
       success: true,
       userId: user.id,
       username: user.username,

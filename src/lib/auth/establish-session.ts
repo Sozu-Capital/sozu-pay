@@ -1,3 +1,10 @@
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import {
+  buildSessionCookieValue,
+  getSessionCookieOptions,
+  SESSION_COOKIE,
+} from "@/lib/auth/session-cookie";
 import { setSession, type SessionUser } from "@/lib/auth/session";
 import type { User } from "@/lib/db/users";
 
@@ -15,4 +22,33 @@ export async function establishSessionForUser(user: User): Promise<SessionUser> 
   const sessionUser = sessionUserFromDbUser(user);
   await setSession(sessionUser);
   return sessionUser;
+}
+
+/** Attach session cookie to a Route Handler JSON response (required for reliable Set-Cookie). */
+export function attachSessionCookie(
+  response: NextResponse,
+  sessionUser: SessionUser
+): NextResponse {
+  response.cookies.set(
+    SESSION_COOKIE,
+    buildSessionCookieValue(sessionUser),
+    getSessionCookieOptions()
+  );
+  return response;
+}
+
+export async function jsonResponseWithSession(
+  user: User,
+  body: Record<string, unknown>,
+  init?: ResponseInit
+): Promise<NextResponse> {
+  const sessionUser = await establishSessionForUser(user);
+  const cookieStore = await cookies();
+  cookieStore.set(
+    SESSION_COOKIE,
+    buildSessionCookieValue(sessionUser),
+    getSessionCookieOptions()
+  );
+  const response = NextResponse.json(body, init);
+  return attachSessionCookie(response, sessionUser);
 }

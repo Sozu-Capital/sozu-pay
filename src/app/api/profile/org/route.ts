@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { attachSessionCookie } from "@/lib/auth/establish-session";
 import { getSession, setSession } from "@/lib/auth/session";
+
+export const dynamic = "force-dynamic";
 import { clearUserOrgId, getUserBySessionId, promoteOrgCreator } from "@/lib/db/users";
 import { createOrganization, getOrganizationById } from "@/lib/db/organizations";
 import { createOrgInvites, type OrgInviteRole } from "@/lib/db/org-invites";
@@ -97,8 +100,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const nextSession = { ...session, orgId: org.id };
     try {
-      await setSession({ ...session, orgId: org.id });
+      await setSession(nextSession);
     } catch {
       // non-fatal
     }
@@ -112,13 +116,16 @@ export async function POST(request: NextRequest) {
       sozuTag = { username: tagRes.username, tag: `$${tagRes.username}` };
     }
 
-    return NextResponse.json({
-      ok: true,
-      organization: { id: org.id, name: org.name, type: org.type },
-      guardianThreshold,
-      invitesCount: invites.length,
-      ...(sozuTag && { sozu_tag: sozuTag }),
-    });
+    return attachSessionCookie(
+      NextResponse.json({
+        ok: true,
+        organization: { id: org.id, name: org.name, type: org.type },
+        guardianThreshold,
+        invitesCount: invites.length,
+        ...(sozuTag && { sozu_tag: sozuTag }),
+      }),
+      nextSession
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to create organization";
     return NextResponse.json({ error: msg }, { status: 500 });

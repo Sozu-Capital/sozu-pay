@@ -61,6 +61,9 @@ export function middleware(request: NextRequest) {
     if (returnTo && returnTo.startsWith("/")) {
       return NextResponse.redirect(new URL(returnTo, request.url));
     }
+    if (usePasskeyAuth || usePrivyAuth) {
+      return NextResponse.redirect(new URL("/onboarding/organizations", request.url));
+    }
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

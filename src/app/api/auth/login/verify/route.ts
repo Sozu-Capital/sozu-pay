@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { challengeStore } from "@/lib/webauthn/config";
-import { establishSessionForUser } from "@/lib/auth/establish-session";
+import { jsonResponseWithSession } from "@/lib/auth/establish-session";
 import { resolvePostAuthRedirect } from "@/lib/auth/post-login-redirect";
 import {
   findAuthPasskeyByCredentialId,
@@ -8,6 +8,8 @@ import {
 } from "@/lib/db/auth-passkeys";
 import { getUserById, getUserByUsername } from "@/lib/db/users";
 import { base64URLToBuffer } from "@/lib/webauthn/utils";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
@@ -64,13 +66,12 @@ export async function POST(request: NextRequest) {
 
     await touchAuthPasskey(passkey.id);
 
-    await establishSessionForUser(user);
     const redirect = await resolvePostAuthRedirect(
       user,
       typeof returnTo === "string" ? returnTo : undefined
     );
 
-    return NextResponse.json({
+    return jsonResponseWithSession(user, {
       success: true,
       userId: user.id,
       username: user.username,

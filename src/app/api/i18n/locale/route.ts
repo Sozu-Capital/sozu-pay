@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
-
-const LOCALE_COOKIE = "sozupay_locale";
-const SUPPORTED_LOCALES = ["es", "en"] as const;
-type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
-
-function isSupportedLocale(value: unknown): value is SupportedLocale {
-  return typeof value === "string" && (SUPPORTED_LOCALES as readonly string[]).includes(value);
-}
+import {
+  DEFAULT_LOCALE,
+  isSupportedLocale,
+  LOCALE_COOKIE,
+  type SupportedLocale,
+} from "@/lib/i18n/locale";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
-  const locale = isSupportedLocale(body?.locale) ? body.locale : "es";
+  const locale: SupportedLocale = isSupportedLocale(body?.locale) ? body.locale : DEFAULT_LOCALE;
 
   const res = NextResponse.json({ ok: true, locale });
   res.cookies.set({

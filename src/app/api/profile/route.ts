@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, setSession } from "@/lib/auth/session";
-import { getUserBySessionId, getOrCreateUserByPrivy, setUserAllowed } from "@/lib/db/users";
+import { getUserBySessionId, setUserAllowed } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
@@ -19,18 +19,14 @@ export async function GET() {
 
   let user = await getUserBySessionId(session.id);
   if (!user) {
-    try {
-      user = await getOrCreateUserByPrivy(session.id, session.email ?? "");
-    } catch {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
   const org_payout_wallet_public_key = getOrgDisbursementPublicKey();
 
   let org = user.org_id ? await getOrganizationForUser(user.org_id) : null;
 
-  user = await repairOrgCreatorAccess(user);
+  user = (await repairOrgCreatorAccess(user)) ?? user;
   if (user.org_id) {
     org = await getOrganizationForUser(user.org_id);
   }

@@ -1,24 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import {
   LOCALE_TRANSITION_STORAGE_KEY,
   useHomeLandingTransitionOptional,
 } from "@/components/HomeLandingTransition";
-
-type Locale = "es" | "en";
-const LOCALE_COOKIE = "sozupay_locale";
-
-function readLocaleCookie(): Locale {
-  const match = document.cookie
-    .split(";")
-    .map((s) => s.trim())
-    .find((c) => c.startsWith(`${LOCALE_COOKIE}=`));
-  const value = match ? decodeURIComponent(match.split("=").slice(1).join("=")) : "";
-  return value === "en" ? "en" : "es";
-}
+import {
+  readClientLocaleCookie,
+  writeClientLocaleCookie,
+  type SupportedLocale,
+} from "@/lib/i18n/locale";
 
 export function LanguageSwitcher({
   className,
@@ -29,16 +22,15 @@ export function LanguageSwitcher({
 }) {
   const t = useTranslations("languageSwitcher");
   const landingTransition = useHomeLandingTransitionOptional();
-  const [locale, setLocale] = useState<Locale>("es");
+  const [locale, setLocale] = useState<SupportedLocale>(() => readClientLocaleCookie());
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    setLocale(readLocaleCookie());
-  }, []);
-
   const onChange = useCallback(
-    async (next: Locale) => {
+    async (next: SupportedLocale) => {
+      if (next === locale) return;
       setSaving(true);
+      setLocale(next);
+      writeClientLocaleCookie(next);
       try {
         await landingTransition?.beginLocaleSwitch();
         await fetch("/api/i18n/locale", {
@@ -53,11 +45,11 @@ export function LanguageSwitcher({
         setSaving(false);
       }
     },
-    [landingTransition]
+    [landingTransition, locale]
   );
 
   if (variant === "compact") {
-    const next: Locale = locale === "es" ? "en" : "es";
+    const next: SupportedLocale = locale === "es" ? "en" : "es";
     const label = locale === "es" ? "EN" : "ES";
 
     return (
@@ -94,7 +86,7 @@ export function LanguageSwitcher({
       <div className="mt-1 flex items-center gap-2">
         <select
           value={locale}
-          onChange={(e) => onChange((e.target.value as Locale) || "es")}
+          onChange={(e) => onChange((e.target.value as SupportedLocale) || "es")}
           disabled={saving}
           className="w-full rounded-md border border-white/10 bg-black/30 text-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-white/20 disabled:opacity-60"
           aria-label={t("aria")}

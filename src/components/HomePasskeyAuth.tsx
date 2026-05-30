@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
+  checkUsernameAvailable,
   createPasskey,
   fetchLoginChallenge,
   fetchRegisterChallenge,
@@ -37,6 +38,15 @@ export function HomePasskeyAuth({ returnTo, onBusyChange }: HomePasskeyAuthProps
   };
 
   const cleanTag = username.replace(/^\$/, "").trim().toLowerCase();
+  const showTagField = mode === "register" || (mode === "login" && usePin);
+
+  function goAfterAuth(redirect: string) {
+    if (typeof window !== "undefined") {
+      window.location.assign(redirect);
+      return;
+    }
+    router.replace(redirect);
+  }
 
   async function handlePasskey() {
     setError("");
@@ -47,6 +57,15 @@ export function HomePasskeyAuth({ returnTo, onBusyChange }: HomePasskeyAuthProps
           setError(t("passkeyTagTooShort"));
           return;
         }
+        const tagCheck = await checkUsernameAvailable(cleanTag);
+        if (!tagCheck.available) {
+          setError(
+            tagCheck.error === "Invalid format"
+              ? t("passkeyTagInvalid")
+              : t("passkeyTagTaken")
+          );
+          return;
+        }
         const ch = await fetchRegisterChallenge(cleanTag);
         const cred = await createPasskey(ch);
         const { redirect } = await verifyRegistration({
@@ -55,19 +74,18 @@ export function HomePasskeyAuth({ returnTo, onBusyChange }: HomePasskeyAuthProps
           challenge: ch.challenge,
           returnTo,
         });
-        router.replace(redirect);
+        goAfterAuth(redirect);
         return;
       }
 
-      const ch = await fetchLoginChallenge(cleanTag || undefined);
+      const ch = await fetchLoginChallenge(undefined);
       const cred = await getPasskey(ch);
       const { redirect } = await verifyLogin({
-        username: cleanTag || undefined,
         credential: cred,
         challenge: ch.challenge,
         returnTo,
       });
-      router.replace(redirect);
+      goAfterAuth(redirect);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("somethingWentWrong"));
     } finally {
@@ -88,7 +106,7 @@ export function HomePasskeyAuth({ returnTo, onBusyChange }: HomePasskeyAuthProps
         pin,
         returnTo,
       });
-      router.replace(redirect);
+      goAfterAuth(redirect);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("somethingWentWrong"));
     } finally {
@@ -117,19 +135,21 @@ export function HomePasskeyAuth({ returnTo, onBusyChange }: HomePasskeyAuthProps
         ))}
       </div>
 
-      <label className="block space-y-1.5">
-        <span className="text-[11px] uppercase tracking-[0.2em] text-white/50">
-          {t("passkeyTagLabel")}
-        </span>
-        <input
-          type="text"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          placeholder={t("passkeyTagPlaceholder")}
-          autoComplete="username"
-          className="w-full rounded-lg border border-white/20 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-white/40 focus:outline-none"
-        />
-      </label>
+      {showTagField ? (
+        <label className="block space-y-1.5">
+          <span className="text-[11px] uppercase tracking-[0.2em] text-white/50">
+            {t("passkeyTagLabel")}
+          </span>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder={t("passkeyTagPlaceholder")}
+            autoComplete="username"
+            className="w-full rounded-lg border border-white/20 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-white/40 focus:outline-none"
+          />
+        </label>
+      ) : null}
 
       {mode === "login" && (
         <label className="flex items-center gap-2 text-xs text-white/60">

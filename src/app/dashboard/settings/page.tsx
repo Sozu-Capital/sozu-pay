@@ -8,6 +8,7 @@ import { useSignOut } from "@/lib/auth/useSignOut";
 import { resolveAccountDisplayName } from "@/lib/display-name";
 import { isPasskeyAuth } from "@/lib/auth/provider";
 import { ProfileCollapsibleCard } from "@/components/profile/ProfileCollapsibleCard";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 export default function SettingsPage() {
   const t = useTranslations("settingsPage");
@@ -146,6 +147,17 @@ export default function SettingsPage() {
           {t("profileLink")}
         </Link>
       </div>
+      <section
+        className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4"
+        id="language"
+      >
+        <h2 className="text-lg font-semibold">{t("languageSectionTitle")}</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("languageSectionBody")}</p>
+        <div className="mt-4 max-w-xs">
+          <LanguageSwitcher />
+        </div>
+      </section>
+
       <section className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4" id="personal">
         <h2 className="text-lg font-semibold">{t("personalInfoTitle")}</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("personalInfoBody")}</p>

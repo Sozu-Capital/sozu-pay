@@ -3,11 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 const FRIENDBOT_URL = "https://friendbot.stellar.org";
 
 export default function SetPayoutWalletPage() {
   const router = useRouter();
+  const t = useTranslations("onboardingPages.payoutWallet");
+  const tCommon = useTranslations("onboardingPages");
   const [passphrase, setPassphrase] = useState("");
   const [confirmPassphrase, setConfirmPassphrase] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -18,11 +21,11 @@ export default function SetPayoutWalletPage() {
     e.preventDefault();
     setError("");
     if (passphrase.length < 8) {
-      setError("Passphrase must be at least 8 characters.");
+      setError(t("passphraseMin"));
       return;
     }
     if (passphrase !== confirmPassphrase) {
-      setError("Passphrases do not match.");
+      setError(t("passphraseMismatch"));
       return;
     }
     setSubmitting(true);
@@ -45,7 +48,7 @@ export default function SetPayoutWalletPage() {
         setSuccessPublicKey(d.publicKey ?? null);
       })
       .catch(() => {
-        setError("Something went wrong.");
+        setError(tCommon("somethingWentWrong"));
         setSubmitting(false);
       });
   }
@@ -54,12 +57,8 @@ export default function SetPayoutWalletPage() {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
         <div className="w-full max-w-md rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-            Admin payout wallet ready
-          </h1>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-            Fund this address with XLM and add a USDC trustline so you can send payouts to recipients.
-          </p>
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">{t("successTitle")}</h1>
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{t("successBody")}</p>
           <div className="mt-4 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <code className="flex-1 min-w-0 font-mono text-sm break-all bg-gray-100 dark:bg-gray-700 px-2 py-1.5 rounded">
@@ -70,20 +69,20 @@ export default function SetPayoutWalletPage() {
                 onClick={() => navigator.clipboard.writeText(successPublicKey)}
                 className="rounded-md border border-gray-300 dark:border-gray-600 px-2 py-1.5 text-xs font-medium shrink-0"
               >
-                Copy
+                {t("copy")}
               </button>
             </div>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              On testnet: use{" "}
+              {t("testnetHintBefore")}
               <a
                 href={`${FRIENDBOT_URL}/?addr=${encodeURIComponent(successPublicKey)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-600 dark:text-blue-400 hover:underline"
               >
-                Friendbot
-              </a>{" "}
-              to fund with XLM, then add the USDC trustline (e.g. via Stellar Laboratory or your wallet).
+                {t("friendbot")}
+              </a>
+              {t("testnetHintAfter")}
             </p>
           </div>
           <div className="mt-6 flex flex-col gap-2">
@@ -92,13 +91,13 @@ export default function SetPayoutWalletPage() {
               onClick={() => router.replace("/dashboard/profile")}
               className="w-full rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 py-2.5 px-4 font-medium"
             >
-              Continue to Profile
+              {t("continueProfile")}
             </button>
             <Link
               href="/dashboard"
               className="w-full text-center rounded-md border border-gray-300 dark:border-gray-600 py-2.5 px-4 text-sm font-medium"
             >
-              Go to dashboard
+              {t("goDashboard")}
             </Link>
           </div>
         </div>
@@ -109,17 +108,12 @@ export default function SetPayoutWalletPage() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
       <div className="w-full max-w-md rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-          Set your payout wallet passphrase
-        </h1>
-        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-          This passphrase is used to derive the Stellar key that signs payouts when you are a super admin.
-          Choose something strong and memorable. We never store the passphrase—only the derived public key.
-        </p>
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">{t("title")}</h1>
+        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{t("subtitle")}</p>
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
             <label htmlFor="passphrase" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Passphrase
+              {t("passphraseLabel")}
             </label>
             <input
               id="passphrase"
@@ -128,13 +122,16 @@ export default function SetPayoutWalletPage() {
               minLength={8}
               value={passphrase}
               onChange={(e) => setPassphrase(e.target.value)}
-              placeholder="At least 8 characters"
+              placeholder={t("passphrasePlaceholder")}
               className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
             />
           </div>
           <div>
-            <label htmlFor="confirmPassphrase" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Confirm passphrase
+            <label
+              htmlFor="confirmPassphrase"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              {t("confirmLabel")}
             </label>
             <input
               id="confirmPassphrase"
@@ -143,7 +140,7 @@ export default function SetPayoutWalletPage() {
               minLength={8}
               value={confirmPassphrase}
               onChange={(e) => setConfirmPassphrase(e.target.value)}
-              placeholder="Same as above"
+              placeholder={t("confirmPlaceholder")}
               className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
             />
           </div>
@@ -157,12 +154,10 @@ export default function SetPayoutWalletPage() {
             disabled={submitting}
             className="w-full rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 py-2.5 px-4 font-medium disabled:opacity-50"
           >
-            {submitting ? "Setting…" : "Set passphrase and continue"}
+            {submitting ? t("submitting") : t("submit")}
           </button>
         </form>
-        <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
-          You will need this passphrase when you perform Stellar payouts as a super admin. Store it securely.
-        </p>
+        <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">{t("footer")}</p>
       </div>
     </main>
   );

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
 import { getPrivyDisplayName } from "@/lib/auth/privyDisplayName";
 import {
@@ -11,6 +12,8 @@ import {
 
 export default function SetupSmartWalletPage() {
   const router = useRouter();
+  const t = useTranslations("onboardingPages.smartWallet");
+  const tCommon = useTranslations("onboardingPages");
   const { ready, kit, connected, contractId, credentialId, error, createWallet, connect } =
     useSmartAccountKitContext();
 
@@ -36,7 +39,7 @@ export default function SetupSmartWalletPage() {
   }, []);
 
   const canProceed = ready && !!kit;
-  const passkeyLabel = fullName.trim() || "Primary passkey";
+  const passkeyLabel = fullName.trim() || t("primaryPasskey");
 
   const persistWallet = async (params: {
     contractId: string;
@@ -54,7 +57,7 @@ export default function SetupSmartWalletPage() {
 
   const handleCreate = async () => {
     if (!fullName.trim()) {
-      setSaveError("Enter your full name for the passkey.");
+      setSaveError(t("enterFullName"));
       return;
     }
     setSaveError(null);
@@ -68,7 +71,7 @@ export default function SetupSmartWalletPage() {
       });
       router.replace("/dashboard");
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Failed");
+      setSaveError(e instanceof Error ? e.message : t("failed"));
     } finally {
       setSaving(false);
     }
@@ -80,7 +83,7 @@ export default function SetupSmartWalletPage() {
     try {
       const linked = await connect({ prompt: true });
       if (!linked.contractId || !linked.credentialId) {
-        throw new Error("No passkey wallet connected");
+        throw new Error(t("noWalletConnected"));
       }
       let publicKey = linked.publicKey;
       if (!publicKey) {
@@ -96,7 +99,7 @@ export default function SetupSmartWalletPage() {
       });
       router.replace("/dashboard");
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Failed");
+      setSaveError(e instanceof Error ? e.message : t("failed"));
     } finally {
       setSaving(false);
     }
@@ -105,30 +108,27 @@ export default function SetupSmartWalletPage() {
   return (
     <main className="min-h-screen flex items-center justify-center p-4 bg-gray-950 text-white">
       <div className="w-full max-w-md rounded-xl border border-white/10 bg-white/5 p-6">
-        <h1 className="text-lg font-semibold">Set up your smart wallet</h1>
-        <p className="mt-2 text-sm text-gray-300">
-          Create a passkey smart account to sign payouts and disbursements. Your passkey is stored on
-          this device — we never see your private key.
-        </p>
+        <h1 className="text-lg font-semibold">{t("title")}</h1>
+        <p className="mt-2 text-sm text-gray-300">{t("subtitle")}</p>
 
         <div className="mt-5">
           <label htmlFor="full-name" className="text-xs font-medium text-gray-300">
-            Full name (passkey label)
+            {t("fullNameLabel")}
           </label>
           <input
             id="full-name"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            placeholder="e.g. Maria Garcia"
+            placeholder={t("fullNamePlaceholder")}
             disabled={saving}
             className="mt-1 w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 disabled:opacity-50"
           />
           {profileEmail && (
-            <p className="mt-1 text-xs text-gray-500">Account: {profileEmail}</p>
+            <p className="mt-1 text-xs text-gray-500">{t("accountLabel", { email: profileEmail })}</p>
           )}
         </div>
 
-        {!canProceed && <p className="mt-4 text-sm text-gray-400">Loading…</p>}
+        {!canProceed && <p className="mt-4 text-sm text-gray-400">{tCommon("loading")}</p>}
         {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
         {saveError && <p className="mt-4 text-sm text-red-400">{saveError}</p>}
 
@@ -139,7 +139,7 @@ export default function SetupSmartWalletPage() {
             onClick={() => void handleCreate()}
             className="rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium disabled:opacity-50"
           >
-            Create smart wallet (passkey)
+            {t("createCta")}
           </button>
           <button
             type="button"
@@ -147,15 +147,17 @@ export default function SetupSmartWalletPage() {
             onClick={() => void handleConnectExisting()}
             className="rounded-md border border-white/20 bg-white/5 py-2.5 px-4 font-medium disabled:opacity-50"
           >
-            Connect existing passkey
+            {t("connectCta")}
           </button>
           {connected && contractId && (
             <p className="text-xs text-gray-400 break-all">
-              Connected contract: <span className="font-mono">{contractId}</span>
+              {t("connectedContract")}{" "}
+              <span className="font-mono">{contractId}</span>
               {credentialId ? (
                 <>
                   {" "}
-                  · credential <span className="font-mono">{credentialId.slice(0, 12)}…</span>
+                  · {t("credential")}{" "}
+                  <span className="font-mono">{credentialId.slice(0, 12)}…</span>
                 </>
               ) : null}
             </p>

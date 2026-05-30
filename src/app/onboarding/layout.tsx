@@ -1,8 +1,7 @@
-import { CreditPortalShell } from "@/components/CreditPortalShell";
-import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
+import { NextIntlClientProvider } from "next-intl";
 
-export default async function CreditLayout({
+export default async function OnboardingLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -12,9 +11,7 @@ export default async function CreditLayout({
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages}>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-        <CreditPortalShell>{children}</CreditPortalShell>
-      </div>
+      {children}
     </NextIntlClientProvider>
   );
 }

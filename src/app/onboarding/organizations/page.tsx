@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import { useSignOut } from "@/lib/auth/useSignOut";
 
@@ -10,8 +11,9 @@ type Org = { id: string; name: string };
 
 export default function OrganizationsPage() {
   const router = useRouter();
+  const t = useTranslations("onboardingPages.organizations");
+  const tCommon = useTranslations("onboardingPages");
   const [organizations, setOrganizations] = useState<Org[]>([]);
-  const [canCreate, setCanCreate] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectingId, setSelectingId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -29,11 +31,9 @@ export default function OrganizationsPage() {
       )
       .then((d) => {
         setOrganizations(d.organizations ?? []);
-        setCanCreate(d.canCreate ?? true);
       })
       .catch(() => {
         setOrganizations([]);
-        setCanCreate(true);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -50,12 +50,12 @@ export default function OrganizationsPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error ?? "Failed to select organization");
+        setError(data.error ?? t("selectFailed"));
         return;
       }
       router.replace("/dashboard");
     } catch {
-      setError("Something went wrong");
+      setError(tCommon("somethingWentWrong"));
     } finally {
       setSelectingId(null);
     }
@@ -65,7 +65,7 @@ export default function OrganizationsPage() {
     return (
       <DarkGradientBg>
         <main className="min-h-screen flex flex-col items-center justify-center p-4 dark text-white">
-          <p className="text-sm text-gray-300">Loading…</p>
+          <p className="text-sm text-gray-300">{tCommon("loading")}</p>
         </main>
       </DarkGradientBg>
     );
@@ -77,16 +77,10 @@ export default function OrganizationsPage() {
     <DarkGradientBg>
       <main className="min-h-screen flex flex-col items-center justify-center p-4 dark text-white">
         <div className="w-full max-w-md rounded-xl border border-white/10 bg-black/40 backdrop-blur-sm p-6 shadow-xl">
-          <h1 className="text-xl font-semibold text-white">
-            Choose organization
-          </h1>
-          <p className="mt-2 text-sm text-gray-300">
-            Select which organization you want to manage, or create a new one.
-          </p>
+          <h1 className="text-xl font-semibold text-white">{t("title")}</h1>
+          <p className="mt-2 text-sm text-gray-300">{t("subtitle")}</p>
 
-          {error && (
-            <p className="mt-3 text-sm text-red-400">{error}</p>
-          )}
+          {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
 
           {hasOrgs && (
             <ul className="mt-6 space-y-2">
@@ -100,7 +94,7 @@ export default function OrganizationsPage() {
                   >
                     <span className="block truncate">{org.name}</span>
                     <span className="block text-xs text-gray-400 mt-0.5">
-                      {selectingId === org.id ? "Opening…" : "Continue to dashboard →"}
+                      {selectingId === org.id ? t("opening") : t("continue")}
                     </span>
                   </button>
                 </li>
@@ -113,22 +107,20 @@ export default function OrganizationsPage() {
               href="/onboarding/create-organization"
               className="w-full text-center rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium hover:opacity-90 transition-opacity"
             >
-              Create new organization
+              {t("createNew")}
             </Link>
           </div>
 
           {!hasOrgs && (
             <div className="mt-4 space-y-3">
-              <p className="text-sm text-gray-400">
-                No organization linked yet. You can create one above, or ask an admin to invite you to an existing team.
-              </p>
+              <p className="text-sm text-gray-400">{t("noOrgHint")}</p>
               <button
                 type="button"
                 onClick={() => signOut()}
                 disabled={signingOut}
                 className="w-full rounded-md border border-white/20 bg-white/5 py-2.5 px-4 text-sm font-medium text-white hover:bg-white/10 disabled:opacity-50"
               >
-                {signingOut ? "Signing out…" : "Log out"}
+                {signingOut ? t("signingOut") : t("logOut")}
               </button>
             </div>
           )}

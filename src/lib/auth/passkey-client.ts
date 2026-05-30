@@ -39,6 +39,27 @@ function base64URLToArrayBuffer(base64url: string): ArrayBuffer {
   return base64URLToBuffer(base64url);
 }
 
+export async function checkUsernameAvailable(username: string): Promise<{
+  available: boolean;
+  pinSet?: boolean;
+  error?: string;
+}> {
+  const res = await fetch("/api/auth/username/check", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error ?? "Could not verify Sozu tag");
+  }
+  return {
+    available: !!data.available,
+    pinSet: data.pinSet,
+    error: typeof data.error === "string" ? data.error : undefined,
+  };
+}
+
 export async function fetchRegisterChallenge(username: string): Promise<PasskeyChallenge> {
   const res = await fetch("/api/auth/register/challenge", {
     method: "POST",

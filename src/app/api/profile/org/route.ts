@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, setSession } from "@/lib/auth/session";
-import { clearUserOrgId, getOrCreateUserByPrivy, promoteOrgCreator } from "@/lib/db/users";
+import { clearUserOrgId, getUserBySessionId, promoteOrgCreator } from "@/lib/db/users";
 import { createOrganization, getOrganizationById } from "@/lib/db/organizations";
 import { createOrgInvites, type OrgInviteRole } from "@/lib/db/org-invites";
 import { applyOrganizationSozuTag } from "@/lib/org-sozu-tag";
@@ -22,9 +22,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let user = await getOrCreateUserByPrivy(session.id, session.email);
-  if (user.org_id) {
-    const existingOrg = await getOrganizationById(user.org_id);
+  const user = await getUserBySessionId(session.id);
+  if (!user) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
+  let activeUser = user;
+  if (activeUser.org_id) {
+    const existingOrg = await getOrganizationById(activeUser.org_id);
     if (!existingOrg) {
       const cleared = await clearUserOrgId(session.id);
       if (!cleared) {
@@ -33,7 +38,7 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
-      user = cleared;
+      activeUser = cleared;
     }
   }
 
@@ -67,7 +72,7 @@ export async function POST(request: NextRequest) {
     const org = await createOrganization({
       name,
       type,
-      treasury_manager_user_id: user.id,
+      treasury_manager_user_id: activeUser.id,
       treasury_guardian_threshold: guardianThreshold,
     });
 

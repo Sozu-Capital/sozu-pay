@@ -5,15 +5,22 @@ import Link from "next/link";
 import BankAccountsSection from "@/components/BankAccountsSection";
 import { useTranslations } from "next-intl";
 import { useSignOut } from "@/lib/auth/useSignOut";
-import { usePrivy } from "@privy-io/react-auth";
 import { resolveAccountDisplayName } from "@/lib/display-name";
+import { isPasskeyAuth } from "@/lib/auth/provider";
 import { ProfileCollapsibleCard } from "@/components/profile/ProfileCollapsibleCard";
 
 export default function SettingsPage() {
   const t = useTranslations("settingsPage");
   const tc = useTranslations("common");
-  const { user: privyUser } = usePrivy();
-  const [user, setUser] = useState<{ email: string; twoFactorEnabled?: boolean } | null>(null);
+  const [user, setUser] = useState<{
+    email: string;
+    username?: string | null;
+    twoFactorEnabled?: boolean;
+  } | null>(null);
+  const [pin, setPin] = useState("");
+  const [pinConfirm, setPinConfirm] = useState("");
+  const [pinBusy, setPinBusy] = useState(false);
+  const [pinMsg, setPinMsg] = useState<string | null>(null);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [totpCode, setTotpCode] = useState("");
   const [showTotpSetup, setShowTotpSetup] = useState(false);
@@ -63,14 +70,50 @@ export default function SettingsPage() {
   }
 
   useEffect(() => {
+    fetch("/api/profile", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data?.email) return;
+        setUser({
+          email: data.email,
+          username: data.username ?? null,
+          twoFactorEnabled: false,
+        });
+      })
+      .catch(() => setUser(null));
     fetch("/api/auth/session")
       .then((r) => r.json())
       .then((data) => {
-        setUser(data.user);
         setTwoFactorEnabled(data.user?.twoFactorEnabled ?? false);
       })
-      .catch(() => setUser(null));
+      .catch(() => {});
   }, []);
+
+  async function saveBackupPin() {
+    setPinMsg(null);
+    if (pin.length < 6 || pin !== pinConfirm) {
+      setPinMsg(t("pinMismatch"));
+      return;
+    }
+    setPinBusy(true);
+    try {
+      const res = await fetch("/api/auth/pin/set", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ pin }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      setPin("");
+      setPinConfirm("");
+      setPinMsg(t("pinSaved"));
+    } catch (e) {
+      setPinMsg(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setPinBusy(false);
+    }
+  }
 
   useEffect(() => {
     loadSozuTagInfo();
@@ -111,7 +154,7 @@ export default function SettingsPage() {
             <div>
               <dt className="text-gray-500 dark:text-gray-400">{t("displayNameLabel")}</dt>
               <dd className="font-medium text-gray-900 dark:text-white">
-                {resolveAccountDisplayName(privyUser, user.email, tc("you"))}
+                {resolveAccountDisplayName(null, user.email, tc("you"), user.username)}
               </dd>
             </div>
             <div>
@@ -124,6 +167,36 @@ export default function SettingsPage() {
 
       <section className="mt-8" id="security">
         <h2 className="text-lg font-semibold">{t("security")}</h2>
+        {isPasskeyAuth() && (
+          <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-600 p-4 space-y-3">
+            <p className="text-sm text-gray-600 dark:text-gray-400">{t("backupPinBody")}</p>
+            <input
+              type="password"
+              inputMode="numeric"
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 12))}
+              placeholder={t("backupPinPlaceholder")}
+              className="w-full max-w-xs rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm"
+            />
+            <input
+              type="password"
+              inputMode="numeric"
+              value={pinConfirm}
+              onChange={(e) => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 12))}
+              placeholder={t("backupPinConfirmPlaceholder")}
+              className="w-full max-w-xs rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm"
+            />
+            <button
+              type="button"
+              disabled={pinBusy}
+              onClick={saveBackupPin}
+              className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              {t("backupPinSave")}
+            </button>
+            {pinMsg ? <p className="text-sm text-gray-600 dark:text-gray-400">{pinMsg}</p> : null}
+          </div>
+        )}
         <div className="mt-4 flex items-center gap-4">
           <span className="text-sm text-gray-700 dark:text-gray-300">
             {t("totpLabel", { state: twoFactorEnabled ? t("totpOn") : t("totpOff") })}

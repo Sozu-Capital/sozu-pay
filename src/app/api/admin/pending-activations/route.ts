@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId, getPendingActivationUsers } from "@/lib/db/users";
+import { getUserBySessionId, getPendingActivationUsers } from "@/lib/db/users";
 import { getOrganizationById } from "@/lib/db/organizations";
 import type { User } from "@/lib/db/users";
 
@@ -14,7 +14,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const currentUser = await getUserByPrivyId(session.id);
+  const currentUser = await getUserBySessionId(session.id);
   if (!currentUser || currentUser.admin_level !== "super_admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

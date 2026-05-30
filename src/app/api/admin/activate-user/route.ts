@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId, setUserAllowed, updateUserOrgId } from "@/lib/db/users";
+import { getUserBySessionId, setUserAllowed, updateUserOrgId } from "@/lib/db/users";
 import { getOrganizationById } from "@/lib/db/organizations";
 import { fundClassicAccount, fundSmartAccount, isClassicAccount, isSmartAccount } from "@/lib/stellar/fund";
 
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const currentUser = await getUserByPrivyId(session.id);
+  const currentUser = await getUserBySessionId(session.id);
   if (!currentUser || currentUser.admin_level !== "super_admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

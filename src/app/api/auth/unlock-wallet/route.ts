@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { Keypair } from "@stellar/stellar-sdk";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId } from "@/lib/db/users";
+import { getUserBySessionId } from "@/lib/db/users";
 import {
   deriveKeypairFromPassphrase,
   setUnlockedKey,
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const user = await getUserByPrivyId(session.id);
+  const user = await getUserBySessionId(session.id);
   if (!user || user.admin_level !== "super_admin") {
     return NextResponse.json(
       { error: "Only super admins can unlock the payout wallet." },

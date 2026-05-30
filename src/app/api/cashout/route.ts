@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId } from "@/lib/db/users";
+import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getUsdcBalance } from "@/lib/stellar/balance";
 import { rampProvider } from "@/lib/ramp/provider";
@@ -13,7 +13,7 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const user = await getUserByPrivyId(session.id);
+  const user = await getUserBySessionId(session.id);
   const orgId = session.orgId ?? user?.org_id ?? null;
   if (!orgId) return NextResponse.json({ withdrawals: [] });
 
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "bankAccountHolder, bankCountry, and bankAccountNumber are required" }, { status: 400 });
   }
 
-  const user = await getUserByPrivyId(session.id);
+  const user = await getUserBySessionId(session.id);
   const orgId = session.orgId ?? user?.org_id ?? null;
   if (!orgId) return NextResponse.json({ error: "No organization" }, { status: 403 });
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId } from "@/lib/db/users";
+import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationById } from "@/lib/db/organizations";
 
 /**
@@ -14,7 +14,7 @@ export async function GET() {
   }
 
   try {
-    const user = await getUserByPrivyId(session.id);
+    const user = await getUserBySessionId(session.id);
     if (!user) {
       // Session exists but user row missing (should be rare). Still allow creating an org.
       return NextResponse.json({ organizations: [], canCreate: true });

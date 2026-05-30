@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Keypair } from "@stellar/stellar-sdk";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId, updateUserStellarPublicKey } from "@/lib/db/users";
+import { getUserBySessionId, updateUserStellarPublicKey } from "@/lib/db/users";
 import { createSmartAccountForSigner } from "@/lib/stellar/smart-account";
 
 const REGISTRATION_MESSAGE_PREFIX = "SozuPay wallet registration";
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const user = await getUserByPrivyId(session.id);
+  const user = await getUserBySessionId(session.id);
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }

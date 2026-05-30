@@ -11,6 +11,7 @@ import {
 
 export type DashboardProfile = {
   email?: string | null;
+  username?: string | null;
   org_name?: string | null;
   org_soroban_contract_id?: string | null;
   needsPayoutWalletSetup?: boolean;

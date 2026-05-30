@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { Keypair } from "@stellar/stellar-sdk";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId } from "@/lib/db/users";
+import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { createPayout, listPayouts, completePayout, failPayout } from "@/lib/payouts";
@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const user = await getUserByPrivyId(session.id);
+    const user = await getUserBySessionId(session.id);
     const canStellarPayout =
       user?.admin_level === "super_admin" || user?.admin_level === "admin";
 

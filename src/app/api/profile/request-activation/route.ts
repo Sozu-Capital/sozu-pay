@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId, setActivationRequested } from "@/lib/db/users";
+import { getUserBySessionId, setActivationRequested } from "@/lib/db/users";
 
 /**
  * POST /api/profile/request-activation – user requests profile/wallet activation by admin.
@@ -12,7 +12,7 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const user = await getUserByPrivyId(session.id);
+  const user = await getUserBySessionId(session.id);
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }

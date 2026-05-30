@@ -2,7 +2,7 @@ import "server-only";
 
 import { cookies } from "next/headers";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId } from "@/lib/db/users";
+import { getUserBySessionId } from "@/lib/db/users";
 import {
   parseInviteCookie,
   SDP_INVITE_COOKIE_NAME,
@@ -56,7 +56,7 @@ export async function getSdpApiContext(): Promise<SdpApiContext> {
     };
   }
 
-  const user = await getUserByPrivyId(session.id);
+  const user = await getUserBySessionId(session.id);
   const stellarAccount = user?.stellar_public_key?.trim();
   if (!stellarAccount) {
     return {

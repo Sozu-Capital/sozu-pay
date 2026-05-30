@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId, promoteOrgCreator, setUserAllowed } from "@/lib/db/users";
+import { getUserBySessionId, promoteOrgCreator, setUserAllowed } from "@/lib/db/users";
 import { getOrganizationById, updateOrganizationTreasuryManager } from "@/lib/db/organizations";
 import { upsertWebauthnCredential } from "@/lib/db/webauthn-credentials";
 import { upsertSmartAccount, type SmartAccountType } from "@/lib/db/smart-accounts";
@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const user = await getUserByPrivyId(session.id);
+  const user = await getUserBySessionId(session.id);
   if (!user?.org_id) {
     return NextResponse.json({ error: "No organization selected." }, { status: 400 });
   }
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
     const org = await getOrganizationById(user.org_id);
     if (org && org.treasury_manager_user_id == null) {
       await updateOrganizationTreasuryManager(org.id, user.id);
-      await promoteOrgCreator(user.privy_user_id, org.id);
+      await promoteOrgCreator(String(user.id), org.id);
     }
   }
 

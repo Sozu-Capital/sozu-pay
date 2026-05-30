@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId } from "@/lib/db/users";
+import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount, getOrgTreasurySmartAccount } from "@/lib/db/smart-accounts";
 import { orgTreasuryMigrationStatus } from "@/lib/stellar/org-treasury";
@@ -10,7 +10,7 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const user = await getUserByPrivyId(session.id);
+  const user = await getUserBySessionId(session.id);
   if (!user?.org_id) {
     return NextResponse.json({ error: "No organization." }, { status: 400 });
   }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId } from "@/lib/db/users";
+import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { migrateClassicUsdcToDisbursementContract } from "@/lib/stellar/org-treasury";
 
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const user = await getUserByPrivyId(session.id);
+  const user = await getUserBySessionId(session.id);
   if (!user?.org_id || user.admin_level !== "super_admin") {
     return NextResponse.json({ error: "Only super admins can migrate treasury funds." }, { status: 403 });
   }

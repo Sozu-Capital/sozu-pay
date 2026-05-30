@@ -2,9 +2,9 @@
 
 ## Overview
 
-1. **Visit /** – Home is the login gate. Session is kept by default; **`/?fresh=1`** (after logout) clears session and Privy so the user can pick email again.
-2. **Log in** – User clicks “Log in”; Privy modal (email / passkey) runs. User chooses which email to use.
-3. **Session sync** – When Privy reports `authenticated`, the app calls `POST /api/auth/privy` with `Authorization: Bearer <accessToken>` and `{ email }`. Backend verifies the token, creates or loads the user in DB, sets the `sozupay_session` cookie, returns `{ ok: true }`.
+1. **Visit /** – Home is the login gate. Session is kept by default; **`/?fresh=1`** (after logout) clears session (and Privy when `AUTH_PROVIDER=privy`).
+2. **Log in (passkey, default)** – Sozu tag + WebAuthn passkey, or tag + backup PIN. See [passkey-auth-migration.md](./passkey-auth-migration.md).
+3. **Log in (Privy, legacy)** – Privy modal → `POST /api/auth/privy` → `sozupay_session` cookie.
 4. **Organization picker** – Client redirects to `/onboarding/organizations`. User sees:
    - **Organizations they can access** – “Continue to dashboard” sets the current org in session and goes to dashboard.
    - **Create new organization** – Shown if super_admin with no org (or always for super_admin); links to `/onboarding/create-organization`. After creating, they return to the org picker and select the new org.

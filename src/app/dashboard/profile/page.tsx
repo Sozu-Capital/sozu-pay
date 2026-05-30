@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { usePrivy } from "@privy-io/react-auth";
 import { useTranslations } from "next-intl";
 import { OrgTreasurySetup } from "@/components/OrgTreasurySetup";
 import { ProfileAddressRow } from "@/components/profile/ProfileAddressRow";
@@ -11,6 +10,7 @@ import { resolveAccountDisplayName } from "@/lib/display-name";
 
 type ProfileData = {
   email: string;
+  username?: string | null;
   stellar_public_key: string | null;
   stellar_payout_public_key: string | null;
   org_payout_wallet_public_key: string | null;
@@ -41,7 +41,6 @@ const REGISTRATION_MESSAGE_PREFIX = "SozuPay wallet registration";
 export default function ProfilePage() {
   const t = useTranslations("profilePage");
   const tc = useTranslations("common");
-  const { user: privyUser } = usePrivy();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [requestingActivation, setRequestingActivation] = useState(false);
@@ -172,11 +171,12 @@ export default function ProfilePage() {
   };
 
   const displayName = resolveAccountDisplayName(
-    privyUser,
+    null,
     profile?.email,
-    t("userFallback")
+    t("userFallback"),
+    profile?.username
   );
-  const avatarUrl = (privyUser as { avatar?: string })?.avatar ?? null;
+  const avatarUrl = null;
   const orgDisplayName = profile?.org_name?.trim() || t("organizationFallback");
 
   const handleRequestActivation = async () => {

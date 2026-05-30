@@ -10,7 +10,7 @@ const SPLINE_EMBED_URL =
 const SPLINE_LOAD_TIMEOUT_MS = 14_000;
 
 /**
- * Full-viewport Spline (fixed on mobile for true edge-to-edge height).
+ * Full-viewport Spline (fixed on mobile; top-aligned, uniform scale preserves aspect ratio).
  * UI above uses pointer-events-none except CTA/chrome.
  */
 export function HomeSplineBackground() {
@@ -33,7 +33,7 @@ export function HomeSplineBackground() {
 
   return (
     <div
-      className="fixed inset-0 z-[5] h-[100dvh] min-h-[100dvh] w-full overflow-hidden md:absolute md:inset-0 md:h-full md:min-h-full"
+      className="home-spline-root fixed inset-0 z-[5] h-[100dvh] min-h-[100dvh] w-full overflow-hidden max-md:bottom-auto max-md:min-h-0 max-md:h-[100svh] md:absolute md:inset-0 md:h-full md:min-h-full"
       aria-hidden
     >
       {showLogoFallback ? <HomePageHero /> : null}
@@ -49,22 +49,18 @@ export function HomeSplineBackground() {
       <div className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-t from-black/35 via-transparent to-black/15" />
 
       {!showLogoFallback ? (
-        <div
-          className="absolute inset-0 z-[1] h-full w-full opacity-[0.42]"
-          style={{
-            transform: "scale(-1.2, 1.2)",
-            transformOrigin: "center center",
-          }}
-        >
-          <iframe
-            src={SPLINE_EMBED_URL}
-            title="Sozu background animation"
-            className="pointer-events-auto h-full min-h-[100dvh] w-full border-0 touch-manipulation md:min-h-full"
-            style={{ WebkitTouchCallout: "none" }}
-            loading="eager"
-            onLoad={onLoad}
-            onError={onError}
-          />
+        <div className="absolute inset-0 z-[1] overflow-hidden opacity-[0.42] max-md:top-0">
+          <div className="home-spline-embed-layer h-full w-full md:origin-center md:[transform:scale(-1.2,1.2)]">
+            <iframe
+              src={SPLINE_EMBED_URL}
+              title="Sozu background animation"
+              className="home-spline-iframe pointer-events-auto h-full w-full border-0 touch-manipulation max-md:min-h-0 md:min-h-full"
+              style={{ WebkitTouchCallout: "none" }}
+              loading="eager"
+              onLoad={onLoad}
+              onError={onError}
+            />
+          </div>
         </div>
       ) : null}
     </div>

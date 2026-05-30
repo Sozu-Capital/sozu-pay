@@ -1,5 +1,5 @@
 import { getSession, type SessionUser } from "@/lib/auth/session";
-import { getUserByPrivyId, type User } from "@/lib/db/users";
+import { getUserBySessionId, type User } from "@/lib/db/users";
 
 export async function getSessionUser(): Promise<{
   session: SessionUser;
@@ -7,7 +7,7 @@ export async function getSessionUser(): Promise<{
 } | null> {
   const session = await getSession();
   if (!session) return null;
-  const user = await getUserByPrivyId(session.id);
+  const user = await getUserBySessionId(session.id);
   if (!user) return null;
   return { session, user };
 }

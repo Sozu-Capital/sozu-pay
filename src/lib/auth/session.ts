@@ -9,8 +9,11 @@ const SESSION_COOKIE = "sozupay_session";
 const SECRET = process.env.AUTH_SECRET ?? "dev-secret-change-in-production";
 
 export interface SessionUser {
+  /** Numeric user id (passkey) or legacy Privy subject id. */
   id: string;
   email: string;
+  /** Sozu tag when using passkey auth. */
+  username?: string;
   twoFactorEnabled?: boolean;
   /** Selected organization to manage; set after user picks on org selection page. */
   orgId?: string | null;

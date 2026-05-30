@@ -40,3 +40,68 @@ body {
     opacity: 1;
   }
 }
+
+.home-landing-fade {
+  transition-property: opacity;
+  transition-timing-function: ease-out;
+}
+
+.home-landing-fade-in {
+  opacity: 1;
+  transition-duration: 500ms;
+}
+
+.home-landing-fade-out {
+  opacity: 0;
+  transition-duration: 400ms;
+}
+
+/* Mobile landing: pin Spline to physical top; offset iframe "contain" letterboxing */
+:root {
+  /* py-6 + h-7 logo row — keep in sync with HomeLandingNav */
+  --home-landing-nav-height: 4.75rem;
+}
+
+@media (max-width: 767px) {
+  .home-spline-root {
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 100svh;
+    max-height: 100svh;
+    min-height: 0;
+  }
+
+  .home-spline-embed-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100svh;
+    transform-origin: top center;
+    /* ~16:9 letterbox + scale — multiply offset by scale so scene stays at screen top */
+    --spline-mobile-scale: 2.15;
+    --spline-scene-height: 56.25vw;
+    --spline-letterbox-top: max(0px, calc((100svh - var(--spline-scene-height)) / 2));
+    --spline-chrome-top: 28px;
+    --spline-pull-up: calc(
+      (var(--spline-letterbox-top) + var(--spline-chrome-top)) * var(--spline-mobile-scale)
+    );
+    transform: translate3d(0, calc(-1 * var(--spline-pull-up)), 0)
+      scaleX(calc(-1 * var(--spline-mobile-scale)))
+      scaleY(var(--spline-mobile-scale));
+  }
+
+  .home-spline-iframe {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+}

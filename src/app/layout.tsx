@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
 import "./globals.css";
-import { LazyPrivyWrapper } from "@/components/LazyPrivyWrapper";
+import { AppProviders } from "@/components/AppProviders";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 
@@ -28,7 +28,7 @@ export default async function RootLayout({
     <html lang={locale} className={manrope.variable}>
       <body className={`${manrope.variable} font-sans antialiased min-h-screen`}>
         <NextIntlClientProvider locale={locale} messages={messages}>
-          <LazyPrivyWrapper>{children}</LazyPrivyWrapper>
+          <AppProviders>{children}</AppProviders>
         </NextIntlClientProvider>
       </body>
     </html>

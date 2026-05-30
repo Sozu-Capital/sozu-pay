@@ -17,8 +17,14 @@ export function isInternalOrOpaqueLabel(value: string): boolean {
 export function resolveAccountDisplayName(
   privyUser: unknown,
   email: string | null | undefined,
-  fallback: string
+  fallback: string,
+  username?: string | null
 ): string {
+  const tag = (username ?? "").trim().replace(/^\$/, "");
+  if (tag && !isInternalOrOpaqueLabel(tag)) {
+    return `$${tag}`;
+  }
+
   const fromPrivy = getPrivyDisplayName(privyUser, email ?? "");
   if (!isInternalOrOpaqueLabel(fromPrivy)) return fromPrivy;
 

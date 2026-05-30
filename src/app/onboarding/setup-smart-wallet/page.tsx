@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { usePrivy } from "@privy-io/react-auth";
 import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
 import { getPrivyDisplayName } from "@/lib/auth/privyDisplayName";
 import {
@@ -12,7 +11,6 @@ import {
 
 export default function SetupSmartWalletPage() {
   const router = useRouter();
-  const { user: privyUser } = usePrivy();
   const { ready, kit, connected, contractId, credentialId, error, createWallet, connect } =
     useSmartAccountKitContext();
 
@@ -27,12 +25,15 @@ export default function SetupSmartWalletPage() {
       .then((d) => {
         const email = typeof d.email === "string" ? d.email : "";
         if (email) setProfileEmail(email);
-        setFullName((prev) => prev || getPrivyDisplayName(privyUser, email));
+        const tag = typeof d.username === "string" ? d.username : "";
+        const name =
+          tag && !tag.includes("@")
+            ? `$${tag.replace(/^\$/, "")}`
+            : getPrivyDisplayName(null, email);
+        setFullName((prev) => prev || name);
       })
-      .catch(() => {
-        setFullName((prev) => prev || getPrivyDisplayName(privyUser, ""));
-      });
-  }, [privyUser]);
+      .catch(() => {});
+  }, []);
 
   const canProceed = ready && !!kit;
   const passkeyLabel = fullName.trim() || "Primary passkey";

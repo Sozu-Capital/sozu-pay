@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId } from "@/lib/db/users";
+import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationById } from "@/lib/db/organizations";
 import { provisionOrgTestnetClassicDisbursement } from "@/lib/stellar/provisionOrgTestnetDisbursement";
 import { applyOrganizationSozuTag, getOrganizationSozuTag } from "@/lib/org-sozu-tag";
@@ -22,7 +22,7 @@ export async function POST() {
     );
   }
 
-  const user = await getUserByPrivyId(session.id);
+  const user = await getUserBySessionId(session.id);
   if (!user) return NextResponse.json({ error: "User not found." }, { status: 404 });
   if (user.admin_level !== "admin" && user.admin_level !== "super_admin") {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });

@@ -4,19 +4,17 @@ import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 import { DashboardNav } from "@/components/DashboardNav";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
-import { usePrivy } from "@privy-io/react-auth";
 import { resolveAccountDisplayName } from "@/lib/display-name";
 import { useTranslations } from "next-intl";
 
 function DashboardBrandHeader({ className = "" }: { className?: string }) {
   const { profile, loading } = useDashboardProfile() ?? { profile: null, loading: true };
-  const { user: privyUser } = usePrivy();
   const t = useTranslations("dashboardLayout");
 
   const orgLabel = profile?.org_name?.trim() || (loading ? "…" : t("noOrganization"));
   const accountLabel = loading
     ? "…"
-    : resolveAccountDisplayName(privyUser, profile?.email, t("accountFallback"));
+    : resolveAccountDisplayName(null, profile?.email, t("accountFallback"), profile?.username);
 
   return (
     <div className={`flex min-w-0 items-center gap-2.5 ${className}`}>

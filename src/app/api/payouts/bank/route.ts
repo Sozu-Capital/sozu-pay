@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId } from "@/lib/db/users";
+import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getUsdcBalance } from "@/lib/stellar/balance";
 import { rampProvider } from "@/lib/ramp/provider";
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const user = await getUserByPrivyId(session.id);
+  const user = await getUserBySessionId(session.id);
   const orgId = session.orgId ?? user?.org_id ?? null;
   if (!orgId) return NextResponse.json({ error: "No organization" }, { status: 403 });
 

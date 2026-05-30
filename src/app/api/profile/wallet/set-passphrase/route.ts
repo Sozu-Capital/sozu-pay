@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId, updateUserPayoutPublicKey } from "@/lib/db/users";
+import { getUserBySessionId, updateUserPayoutPublicKey } from "@/lib/db/users";
 import { deriveKeypairFromPassphrase } from "@/lib/auth/wallet-unlock";
 
 /**
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const user = await getUserByPrivyId(session.id);
+  const user = await getUserBySessionId(session.id);
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }

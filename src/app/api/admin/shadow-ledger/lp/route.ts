@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId } from "@/lib/db/users";
+import { getUserBySessionId } from "@/lib/db/users";
 import { getUsdcBalance } from "@/lib/stellar/balance";
 
 function isAdmin(level: string) {
@@ -22,7 +22,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const user = await getUserByPrivyId(session.id);
+  const user = await getUserBySessionId(session.id);
   if (!user || !isAdmin(user.admin_level)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

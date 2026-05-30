@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId } from "@/lib/db/users";
+import { getUserBySessionId } from "@/lib/db/users";
 import { formatOrderForApi, listPendingPaymentOrdersForAdmin } from "@/lib/db/shadow-ledger";
 
 function isAdmin(level: string) {
@@ -14,7 +14,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const currentUser = await getUserByPrivyId(session.id);
+  const currentUser = await getUserBySessionId(session.id);
   if (!currentUser || !isAdmin(currentUser.admin_level)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

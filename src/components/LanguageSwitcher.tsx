@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
+import {
+  LOCALE_TRANSITION_STORAGE_KEY,
+  useHomeLandingTransitionOptional,
+} from "@/components/HomeLandingTransition";
 
 type Locale = "es" | "en";
 const LOCALE_COOKIE = "sozupay_locale";
@@ -24,6 +28,7 @@ export function LanguageSwitcher({
   variant?: "default" | "compact";
 }) {
   const t = useTranslations("languageSwitcher");
+  const landingTransition = useHomeLandingTransitionOptional();
   const [locale, setLocale] = useState<Locale>("es");
   const [saving, setSaving] = useState(false);
 
@@ -33,26 +38,27 @@ export function LanguageSwitcher({
 
   const onChange = useCallback(
     async (next: Locale) => {
-      setLocale(next);
       setSaving(true);
       try {
+        await landingTransition?.beginLocaleSwitch();
         await fetch("/api/i18n/locale", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({ locale: next }),
         });
-      } finally {
-        setSaving(false);
+        sessionStorage.setItem(LOCALE_TRANSITION_STORAGE_KEY, "1");
         window.location.reload();
+      } catch {
+        setSaving(false);
       }
     },
-    []
+    [landingTransition]
   );
 
   if (variant === "compact") {
     const next: Locale = locale === "es" ? "en" : "es";
-    const label = locale === "es" ? "ES" : "EN";
+    const label = locale === "es" ? "EN" : "ES";
 
     return (
       <button
@@ -60,14 +66,22 @@ export function LanguageSwitcher({
         disabled={saving}
         onClick={() => onChange(next)}
         className={cn(
-          "rounded-full border border-white/25 bg-black/25 px-3 py-1 text-[11px] font-medium tracking-wide text-white/90 backdrop-blur-md",
+          "inline-flex min-h-[28px] min-w-[42px] items-center justify-center rounded-full border border-white/25 bg-black/25 px-3 py-1 text-[11px] font-medium tracking-wide text-white/90 backdrop-blur-md",
           "transition-colors hover:bg-white/15 hover:text-white",
-          "disabled:cursor-not-allowed disabled:opacity-50",
+          "disabled:cursor-not-allowed disabled:opacity-100",
           className
         )}
         aria-label={t("aria")}
+        {...(saving ? { "aria-busy": true as const } : {})}
       >
-        {label}
+        {saving ? (
+          <span
+            className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/25 border-t-white"
+            aria-hidden
+          />
+        ) : (
+          label
+        )}
       </button>
     );
   }

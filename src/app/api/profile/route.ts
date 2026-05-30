@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, setSession } from "@/lib/auth/session";
-import { getUserByPrivyId, getOrCreateUserByPrivy, setUserAllowed } from "@/lib/db/users";
+import { getUserBySessionId, getOrCreateUserByPrivy, setUserAllowed } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
@@ -17,7 +17,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let user = await getUserByPrivyId(session.id);
+  let user = await getUserBySessionId(session.id);
   if (!user) {
     try {
       user = await getOrCreateUserByPrivy(session.id, session.email ?? "");
@@ -82,6 +82,7 @@ export async function GET() {
 
   return NextResponse.json({
     email: user.email,
+    username: user.username ?? null,
     org_name: org?.name ?? null,
     stellar_public_key: user.stellar_public_key,
     stellar_payout_public_key: user.stellar_payout_public_key ?? null,

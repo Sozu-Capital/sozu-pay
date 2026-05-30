@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId } from "@/lib/db/users";
+import { getUserBySessionId } from "@/lib/db/users";
 import { listCheckoutSessionsForOrg } from "@/lib/db/checkout-sessions";
 
 /**
@@ -13,7 +13,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const user = await getUserByPrivyId(session.id);
+  const user = await getUserBySessionId(session.id);
   const orgId = session.orgId ?? user?.org_id ?? null;
   if (!orgId) {
     return NextResponse.json({ sessions: [] });

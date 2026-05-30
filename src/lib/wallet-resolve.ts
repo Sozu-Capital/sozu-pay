@@ -1,5 +1,5 @@
 import { getSession } from "@/lib/auth/session";
-import { getUserByPrivyId } from "@/lib/db/users";
+import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { resolveOrgDisbursementContractId } from "@/lib/stellar/org-treasury";
 
@@ -11,7 +11,7 @@ export async function getWalletPublicKey(): Promise<string | null> {
   const session = await getSession();
   if (!session) return null;
 
-  const user = await getUserByPrivyId(session.id);
+  const user = await getUserBySessionId(session.id);
   if (!user) return null;
 
   return user.stellar_public_key ?? null;
@@ -25,7 +25,7 @@ export async function getDashboardBalancePublicKey(): Promise<string | null> {
   const session = await getSession();
   if (!session) return null;
 
-  const user = await getUserByPrivyId(session.id);
+  const user = await getUserBySessionId(session.id);
   const orgId = user?.org_id ?? session.orgId ?? null;
   if (!orgId) return null;
 

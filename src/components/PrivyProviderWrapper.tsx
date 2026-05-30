@@ -1,6 +1,7 @@
 "use client";
 
-import { PrivyProvider } from "@privy-io/react-auth";
+import { PrivyProvider, usePrivy } from "@privy-io/react-auth";
+import { SignOutProvider } from "@/lib/auth/sign-out-context";
 
 // Client needs NEXT_PUBLIC_ prefix (Next.js only exposes these to the browser).
 // Use same value as PRIVY_APP_ID.
@@ -35,7 +36,16 @@ export function PrivyProviderWrapper({
         },
       }}
     >
-      {children}
+      <PrivySignOutBridge>{children}</PrivySignOutBridge>
     </PrivyProvider>
+  );
+}
+
+function PrivySignOutBridge({ children }: { children: React.ReactNode }) {
+  const { logout } = usePrivy();
+  return (
+    <SignOutProvider privyLogout={typeof logout === "function" ? logout : null}>
+      {children}
+    </SignOutProvider>
   );
 }

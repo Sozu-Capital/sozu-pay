@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, setSession } from "@/lib/auth/session";
-import { getUserByPrivyId } from "@/lib/db/users";
+import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationById } from "@/lib/db/organizations";
 import { applyOrganizationSozuTag, getOrganizationSozuTag } from "@/lib/org-sozu-tag";
 import { getOrgReceiveDiagnostics } from "@/lib/org-receive-address";
@@ -9,7 +9,7 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const user = await getUserByPrivyId(session.id);
+  const user = await getUserBySessionId(session.id);
   /** Prefer DB org (source of truth); session.orgId can be stale after org create/switch. */
   const orgId = user?.org_id ?? session.orgId ?? null;
   if (!orgId) return NextResponse.json({ error: "No organization." }, { status: 404 });
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const user = await getUserByPrivyId(session.id);
+  const user = await getUserBySessionId(session.id);
   if (!user) return NextResponse.json({ error: "User not found." }, { status: 404 });
   if (user.admin_level !== "admin" && user.admin_level !== "super_admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

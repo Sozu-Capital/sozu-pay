@@ -6,7 +6,6 @@ import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
 import { getPrivyDisplayName } from "@/lib/auth/privyDisplayName";
 import { registerSmartAccount } from "@/lib/stellar/smartAccounts/registerWalletClient";
-import { usePrivy } from "@privy-io/react-auth";
 
 type OrgType = "store" | "ngo";
 type InviteRole = "member" | "admin" | "guardian" | "treasury_manager";
@@ -34,7 +33,6 @@ function normalizeEmail(email: string): string {
 
 export default function CreateOrganizationPage() {
   const router = useRouter();
-  const { user: privyUser } = usePrivy();
   const { ready, kit, createWallet, error: kitError } = useSmartAccountKitContext();
 
   const [type, setType] = useState<OrgType>("ngo");
@@ -64,12 +62,15 @@ export default function CreateOrganizationPage() {
       .then((r) => r.json())
       .then((d) => {
         if (typeof d.email === "string" && d.email) setProfileEmail(d.email);
-        setFullName((prev) => prev || getPrivyDisplayName(privyUser, d.email ?? ""));
+        const tag = typeof d.username === "string" ? d.username : "";
+        const name =
+          tag && !tag.includes("@")
+            ? `$${tag.replace(/^\$/, "")}`
+            : getPrivyDisplayName(null, d.email ?? "");
+        setFullName((prev) => prev || name);
       })
-      .catch(() => {
-        setFullName((prev) => prev || getPrivyDisplayName(privyUser, ""));
-      });
-  }, [privyUser]);
+      .catch(() => {});
+  }, []);
 
   const isBusy = step !== "idle" && step !== "done" && step !== "error";
   const canStart = ready && !!kit && !isBusy && orgName.trim().length > 0 && fullName.trim().length > 0;

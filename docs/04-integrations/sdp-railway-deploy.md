@@ -87,9 +87,13 @@ DISTRIBUTION_SEED=<your-distribution-secret>
 DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE=<random-32-char-passphrase>
 CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE=<random-32-char-passphrase>
 
-# Messaging — use DRY_RUN initially; dashboard sends Resend invites
+# Messaging — DRY_RUN until SendGrid is configured (Step 7b); dashboard invites use Resend on Vercel
 EMAIL_SENDER_TYPE=DRY_RUN
 SMS_SENDER_TYPE=DRY_RUN
+# After Step 7b (OTP email):
+# EMAIL_SENDER_TYPE=TWILIO_EMAIL
+# TWILIO_SENDGRID_API_KEY=SG....
+# TWILIO_SENDGRID_SENDER_ADDRESS=verified@yourdomain.com
 
 # Security
 EC256_PRIVATE_KEY=<generate-EC256-P256-private-key>
@@ -206,6 +210,62 @@ railway run --service sdp-api -- \
 
 ---
 
+## Step 7b — OTP email via SendGrid (free tier)
+
+SDP OTP codes during wallet registration are sent by **SDP on Railway**, not by SozuCredit or the dashboard. With `EMAIL_SENDER_TYPE=DRY_RUN`, codes are only logged — recipients never receive them.
+
+SDP natively supports **SendGrid** (`EMAIL_SENDER_TYPE=TWILIO_EMAIL`). You do **not** need a Twilio SMS account — only a SendGrid API key.
+
+### 1. Create SendGrid account (free)
+
+1. Sign up at [SendGrid](https://sendgrid.com/) (Twilio login is OK — free tier: ~100 emails/day).
+2. **Settings → Sender Authentication → Verify a Single Sender**
+   - Use an address you control, e.g. `inboxblessedux@gmail.com` or `noreply@sozu.capital` (domain verification is better for production).
+   - Complete the verification link SendGrid emails you.
+3. **Settings → API Keys → Create API Key** → name `sdp-railway-otp` → **Restricted Access** with **Mail Send → Full Access** (or Full Access for testing).
+4. Copy the key once (starts with `SG.`).
+
+> **Note:** Dashboard batch **invite** emails use **Resend** on Vercel (`RESEND_API_KEY`). SDP **OTP** emails use SendGrid on Railway. Two providers, two configs.
+
+### 2. Apply on Railway
+
+From this repo (linked to project `strong-dedication`, service `sdp-v2`):
+
+```bash
+chmod +x scripts/configure-sdp-sendgrid-railway.sh
+
+./scripts/configure-sdp-sendgrid-railway.sh \
+  "SG.your_api_key_here" \
+  "inboxblessedux@gmail.com"
+```
+
+Or set variables manually:
+
+```bash
+railway variables set \
+  EMAIL_SENDER_TYPE=TWILIO_EMAIL \
+  TWILIO_SENDGRID_API_KEY=SG.... \
+  TWILIO_SENDGRID_SENDER_ADDRESS=verified@yourdomain.com \
+  --service sdp-v2
+
+railway redeploy --service sdp-v2 -y
+```
+
+`TWILIO_SENDGRID_SENDER_ADDRESS` must be a **plain email** (no `Name <email>` wrapper) and must match the verified Single Sender in SendGrid.
+
+### 3. Test OTP
+
+1. Retry wallet registration on SDP (`/wallet-registration/start?...`).
+2. Enter the **batch recipient email** (same as in Distribuciones), e.g. `inboxblessedux@gmail.com`.
+3. Request OTP → check inbox (and SendGrid **Activity** if nothing arrives).
+4. Enter OTP + DOB matching the NGO batch row → registration completes.
+
+### Alternative: AWS SES
+
+Set `EMAIL_SENDER_TYPE=AWS_EMAIL` plus `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_SES_SENDER_ID`. SES sandbox only delivers to verified addresses — more setup than SendGrid for quick tests.
+
+---
+
 ## Step 8 — Register SozuCredit wallet in SDP
 
 Log in as the tenant owner (via SDP admin UI at `https://<sdp-url>`) or via the API:
@@ -289,6 +349,8 @@ Redeploy SozuCredit, then re-run the preflight script.
 | `502` on disbursement create | SDP API unreachable | Verify `SDP_API_URL` has no trailing `/`; check Railway service is deployed |
 | Payments stuck in `PENDING` | TSS not running or not funded | Check sdp-tss service logs; fund distribution wallet on Friendbot |
 | SozuCredit 503 on TOML | `SEP10_CLIENT_SIGNING_SECRET` not set | Verify Vercel env on SozuCredit project; redeploy |
+| SDP OTP never arrives | `EMAIL_SENDER_TYPE=DRY_RUN` on Railway | Complete Step 7b (SendGrid); sender must be verified in SendGrid |
+| SendGrid 403 / bounce | Unverified sender address | Verify Single Sender in SendGrid; `TWILIO_SENDGRID_SENDER_ADDRESS` must match exactly |
 | Recipient wallet registration 500: `Failed to load tenant by name` | JWT `home_domain` is a flat Railway URL; SDP parses the first subdomain as tenant name (`sdp-v2-production-f6c7`, not `mujeres-admin`) | Set `SINGLE_TENANT_MODE=true` when you have one tenant on a flat hostname, **or** set tenant `base_url` to `https://<tenant-name>.your-domain` with matching DNS |
 | Tenant schema missing (rare after create) | Step 7 tenant migrations not run | `railway run --service sdp-api -- ./stellar-disbursement-platform db migrate up --tenant-id <uuid>` |
 | `Tenant not found in context` on dashboard SDP calls | Wrong `SDP_TENANT_NAME` | Must match tenant `name` from Railway setup (probe: `POST /login` with header should return "Incorrect email or password", not "Tenant not found") |

@@ -2,7 +2,7 @@
 
 ## Overview
 
-1. **Visit /login** – Session and Privy state are cleared so the user must authenticate and choose email every time (no “already logged in” redirect to dashboard).
+1. **Visit /** – Home is the login gate. Session is kept by default; **`/?fresh=1`** (after logout) clears session and Privy so the user can pick email again.
 2. **Log in** – User clicks “Log in”; Privy modal (email / passkey) runs. User chooses which email to use.
 3. **Session sync** – When Privy reports `authenticated`, the app calls `POST /api/auth/privy` with `Authorization: Bearer <accessToken>` and `{ email }`. Backend verifies the token, creates or loads the user in DB, sets the `sozupay_session` cookie, returns `{ ok: true }`.
 4. **Organization picker** – Client redirects to `/onboarding/organizations`. User sees:
@@ -10,7 +10,7 @@
    - **Create new organization** – Shown if super_admin with no org (or always for super_admin); links to `/onboarding/create-organization`. After creating, they return to the org picker and select the new org.
    - **No access** – If they have no orgs and cannot create, they see “Contact your administrator” and Log out.
 5. **Dashboard** – After selecting an org (or creating one and selecting it), session includes `orgId` and the user is on the dashboard. Balance, tx history, and DeFi are for the **organization wallet**.
-6. **Logout** – `POST /api/auth/logout` clears session and redirects to `/login`.
+6. **Logout** – Clears session and redirects to `/?fresh=1`. Legacy `/login` redirects to `/`.
 
 ## APIs
 
@@ -20,8 +20,8 @@
 
 ## Middleware
 
-- **With Privy:** No session → redirect `/dashboard`, `/onboarding/*`, `/auth/success` to `/login`. **No redirect from /login to /dashboard** when session exists, so the user always sees the login page and can choose email.
-- **Mock auth (no Privy, dev):** Session on `/login` → redirect to `/dashboard`.
+- **With Privy:** No session → protected routes redirect to `/?returnTo=…`. Logged-in users on `/` go to `/dashboard` unless `?fresh=1`.
+- **Mock auth (no Privy, dev):** Session on `/` → redirect to `/dashboard`.
 
 ## Session
 

@@ -1,25 +1,50 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { usePrivy, useLogin } from "@privy-io/react-auth";
 import { useTranslations } from "next-intl";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { HomeSplineBackground } from "@/components/HomeSplineBackground";
+import { HomeLandingNav } from "@/components/HomeLandingNav";
+import { HomePageIntro } from "@/components/HomePageIntro";
+import { HomeLandingCta } from "@/components/HomeLandingCta";
+import { HomeLandingFooter } from "@/components/HomeLandingFooter";
 
 type LoginPageContentProps = {
-  /**
-   * When true (e.g. /login), clear app session + Privy so the user must pick email each time.
-   * When false (e.g. /), keep existing sessions so the home route is not a forced logout.
-   */
+  /** When true (e.g. `/?fresh=1` after logout), clear app session + Privy on mount. */
   clearSessionOnMount?: boolean;
   /** After successful login, redirect here instead of default onboarding. */
   returnTo?: string;
 };
 
-export function LoginPageContent({ clearSessionOnMount = true, returnTo }: LoginPageContentProps) {
+function HomeLandingShell({
+  introCta,
+  status,
+  footerExtra,
+}: {
+  introCta?: ReactNode;
+  status?: ReactNode;
+  footerExtra?: ReactNode;
+}) {
+  return (
+    <div className="relative isolate flex min-h-[100dvh] min-h-screen flex-col overflow-hidden font-manrope">
+      <HomeSplineBackground />
+      <div className="pointer-events-none relative z-20 flex min-h-[100dvh] min-h-screen flex-1 flex-col [&_*]:pointer-events-none">
+        <HomeLandingNav />
+        <div className="pointer-events-none flex flex-1 flex-col justify-center px-6 md:px-10 lg:px-12 lg:pb-8">
+          <HomePageIntro cta={introCta} status={status} />
+        </div>
+        <HomeLandingFooter>{footerExtra}</HomeLandingFooter>
+      </div>
+    </div>
+  );
+}
+
+export function LoginPageContent({
+  clearSessionOnMount = false,
+  returnTo,
+}: LoginPageContentProps) {
   const router = useRouter();
   const { ready, authenticated, user, getAccessToken, logout: privyLogout } = usePrivy();
   const { login: openLoginModal } = useLogin();
@@ -54,7 +79,6 @@ export function LoginPageContent({ clearSessionOnMount = true, returnTo }: Login
   }, [ready, privyLogout, clearSessionOnMount]);
 
   useEffect(() => {
-    // Do not re-sync Privy while we are clearing session (logout → /login race).
     if (clearSessionOnMount && clearing) return;
     if (!ready || !authenticated || !user) return;
 
@@ -147,84 +171,40 @@ export function LoginPageContent({ clearSessionOnMount = true, returnTo }: Login
   const usePrivyAuth = !!process.env.NEXT_PUBLIC_PRIVY_APP_ID;
   const isClearingSession = clearing && authenticated;
 
+  const statusBlock = (
+    <>
+      {syncing && <p className="text-sm font-light tracking-wide text-gray-300">{t("redirecting")}</p>}
+      {error && <p className="text-sm text-red-400/90">{error}</p>}
+    </>
+  );
+
+  const signInCta = usePrivyAuth && (!authenticated || isClearingSession) && !syncing && (
+    <HomeLandingCta onClick={() => ready && openLoginModal()} disabled={!ready}>
+      {t("homeCta")}
+    </HomeLandingCta>
+  );
+
   if (usePrivyAuth && authenticated && !isClearingSession) {
     return (
-      <DarkGradientBg>
-        <main className="min-h-screen flex flex-col items-center justify-center gap-4 p-4 dark text-white">
-          <div className="w-full max-w-sm">
-            <LanguageSwitcher />
-          </div>
-          <Image
-            src="/sozucapital_logo.png"
-            alt="Sozu Capital"
-            width={120}
-            height={120}
-            className="mb-2 object-contain"
-            priority
-          />
-          {syncing && <p className="text-sm text-gray-300">{t("redirecting")}</p>}
-          {error && <p className="text-sm text-red-400">{error}</p>}
-        </main>
+      <DarkGradientBg landing>
+        <HomeLandingShell status={statusBlock} />
       </DarkGradientBg>
     );
   }
 
   if (usePrivyAuth) {
     return (
-      <DarkGradientBg>
-        <main className="min-h-screen flex flex-col items-center justify-center gap-4 p-4 dark text-white">
-          <div className="w-full max-w-sm">
-            <LanguageSwitcher />
-          </div>
-          <Image
-            src="/sozucapital_logo.png"
-            alt="Sozu Capital"
-            width={120}
-            height={120}
-            className="mb-2 object-contain"
-            priority
-          />
-          <button
-            type="button"
-            onClick={() => ready && openLoginModal()}
-            disabled={!ready}
-            className="rounded-md bg-white text-gray-900 py-2.5 px-6 font-medium hover:opacity-90 transition-opacity disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {t("logIn")}
-          </button>
-        </main>
+      <DarkGradientBg landing>
+        <HomeLandingShell introCta={signInCta} status={statusBlock || undefined} />
       </DarkGradientBg>
     );
   }
 
   return (
-    <DarkGradientBg>
-      <main className="min-h-screen flex flex-col items-center justify-center gap-4 p-4 dark text-white">
-        <div className="w-full max-w-sm">
-          <LanguageSwitcher />
-        </div>
-        <Image
-          src="/sozucapital_logo.png"
-          alt="Sozu Capital"
-          width={120}
-          height={120}
-          className="mb-2 object-contain"
-          priority
-        />
-        <div className="w-full max-w-sm rounded-lg border border-white/10 bg-black/40 backdrop-blur-sm p-6 shadow-lg text-center">
-          <p className="text-sm text-gray-300">
-            {t("privyNotConfigured")}
-          </p>
-          {clearSessionOnMount && (
-            <Link
-              href="/"
-              className="mt-4 inline-block rounded-md border border-white/20 bg-white/10 py-2 px-4 text-sm font-medium text-white hover:bg-white/20"
-            >
-              {t("goHome")}
-            </Link>
-          )}
-        </div>
-      </main>
+    <DarkGradientBg landing>
+      <HomeLandingShell
+        status={<p className="text-sm font-light text-gray-400">{t("privyNotConfigured")}</p>}
+      />
     </DarkGradientBg>
   );
 }

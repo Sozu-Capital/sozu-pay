@@ -10,6 +10,9 @@ import {
 } from "react";
 
 export type DashboardProfile = {
+  email?: string | null;
+  org_name?: string | null;
+  org_soroban_contract_id?: string | null;
   needsPayoutWalletSetup?: boolean;
   needsSmartWalletSetup?: boolean;
   needsOrgCreation?: boolean;

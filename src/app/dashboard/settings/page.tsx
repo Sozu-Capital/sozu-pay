@@ -5,10 +5,14 @@ import Link from "next/link";
 import BankAccountsSection from "@/components/BankAccountsSection";
 import { useTranslations } from "next-intl";
 import { useSignOut } from "@/lib/auth/useSignOut";
+import { usePrivy } from "@privy-io/react-auth";
+import { resolveAccountDisplayName } from "@/lib/display-name";
+import { ProfileCollapsibleCard } from "@/components/profile/ProfileCollapsibleCard";
 
 export default function SettingsPage() {
   const t = useTranslations("settingsPage");
   const tc = useTranslations("common");
+  const { user: privyUser } = usePrivy();
   const [user, setUser] = useState<{ email: string; twoFactorEnabled?: boolean } | null>(null);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [totpCode, setTotpCode] = useState("");
@@ -18,7 +22,45 @@ export default function SettingsPage() {
   const [orgTagBusy, setOrgTagBusy] = useState(false);
   const [orgTagError, setOrgTagError] = useState<string | null>(null);
   const [orgTagSaved, setOrgTagSaved] = useState(false);
+  const [receiveInfo, setReceiveInfo] = useState<{
+    classicG: string | null;
+    sorobanC: string | null;
+    tagReceiveAddress: string | null;
+    tagDirectoryPublicKey: string | null;
+    warnings: string[];
+  } | null>(null);
+  const [classicRepairBusy, setClassicRepairBusy] = useState(false);
   const { signOut, signingOut } = useSignOut();
+
+  function loadSozuTagInfo() {
+    fetch("/api/profile/org/sozu-tag", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: {
+        username?: string | null;
+        receive?: {
+          classicG?: string | null;
+          sorobanC?: string | null;
+          tagReceiveAddress?: string | null;
+        };
+        tag_directory_public_key?: string | null;
+        warnings?: string[];
+      } | null) => {
+        if (!d) return;
+        const username = typeof d.username === "string" ? d.username : null;
+        setOrgTag(username);
+        setOrgTagInput(username ? `$${username}` : "");
+        if (d.receive) {
+          setReceiveInfo({
+            classicG: d.receive.classicG ?? null,
+            sorobanC: d.receive.sorobanC ?? null,
+            tagReceiveAddress: d.receive.tagReceiveAddress ?? null,
+            tagDirectoryPublicKey: d.tag_directory_public_key ?? null,
+            warnings: Array.isArray(d.warnings) ? d.warnings : [],
+          });
+        }
+      })
+      .catch(() => {});
+  }
 
   useEffect(() => {
     fetch("/api/auth/session")
@@ -31,14 +73,7 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/profile/org/sozu-tag", { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { username?: string | null } | null) => {
-        const username = typeof d?.username === "string" ? d.username : null;
-        setOrgTag(username);
-        setOrgTagInput(username ? `$${username}` : "");
-      })
-      .catch(() => {});
+    loadSozuTagInfo();
   }, []);
 
   function handleToggle2FA() {
@@ -68,9 +103,24 @@ export default function SettingsPage() {
           {t("profileLink")}
         </Link>
       </div>
-      {user && (
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
-      )}
+      <section className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4" id="personal">
+        <h2 className="text-lg font-semibold">{t("personalInfoTitle")}</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("personalInfoBody")}</p>
+        {user && (
+          <dl className="mt-4 space-y-2 text-sm">
+            <div>
+              <dt className="text-gray-500 dark:text-gray-400">{t("displayNameLabel")}</dt>
+              <dd className="font-medium text-gray-900 dark:text-white">
+                {resolveAccountDisplayName(privyUser, user.email, tc("you"))}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-gray-500 dark:text-gray-400">{t("emailLabel")}</dt>
+              <dd className="font-medium text-gray-900 dark:text-white break-all">{user.email}</dd>
+            </div>
+          </dl>
+        )}
+      </section>
 
       <section className="mt-8" id="security">
         <h2 className="text-lg font-semibold">{t("security")}</h2>
@@ -143,6 +193,7 @@ export default function SettingsPage() {
               setOrgTag(username);
               setOrgTagInput(username ? `$${username}` : orgTagInput);
               setOrgTagSaved(true);
+              loadSozuTagInfo();
               setTimeout(() => setOrgTagSaved(false), 2000);
             } finally {
               setOrgTagBusy(false);
@@ -174,30 +225,94 @@ export default function SettingsPage() {
           </button>
           {orgTagSaved && <p className="text-xs text-emerald-600 dark:text-emerald-400">{t("sozuTagSaved")}</p>}
         </form>
+        {receiveInfo && (
+          <div className="mt-4 max-w-md space-y-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4 text-xs text-gray-600 dark:text-gray-400">
+            {receiveInfo.classicG && (
+              <p>
+                <span className="font-medium text-gray-700 dark:text-gray-300">{t("receiveClassicG")}</span>{" "}
+                <code className="break-all">{receiveInfo.classicG}</code>
+              </p>
+            )}
+            {receiveInfo.sorobanC && (
+              <p>
+                <span className="font-medium text-gray-700 dark:text-gray-300">{t("receiveSorobanC")}</span>{" "}
+                <code className="break-all">{receiveInfo.sorobanC}</code>
+              </p>
+            )}
+            {receiveInfo.warnings.includes("tag_without_stellar_wallets_row") && (
+              <p className="text-amber-700 dark:text-amber-400">{t("sozuTagWalletNotFoundHint")}</p>
+            )}
+            {receiveInfo.warnings.includes("soroban_only_no_classic_g") && (
+              <p className="text-amber-700 dark:text-amber-400">{t("sozuTagNeedsClassicHint")}</p>
+            )}
+            {receiveInfo.warnings.includes("classic_missing_usdc_trustline") && (
+              <p className="text-amber-700 dark:text-amber-400">{t("sozuTagNeedsTrustlineHint")}</p>
+            )}
+          </div>
+        )}
+        {receiveInfo?.warnings.includes("soroban_only_no_classic_g") ||
+        receiveInfo?.warnings.includes("tag_without_stellar_wallets_row") ? (
+          <button
+            type="button"
+            disabled={classicRepairBusy}
+            onClick={async () => {
+              setClassicRepairBusy(true);
+              setOrgTagError(null);
+              try {
+                const res = await fetch("/api/profile/org/ensure-classic-wallet", {
+                  method: "POST",
+                  credentials: "include",
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                  setOrgTagError((data.error as string) ?? t("sozuTagRepairFailed"));
+                  return;
+                }
+                loadSozuTagInfo();
+                setOrgTagSaved(true);
+                setTimeout(() => setOrgTagSaved(false), 2000);
+              } finally {
+                setClassicRepairBusy(false);
+              }
+            }}
+            className="mt-3 rounded-md border border-amber-500/50 px-3 py-1.5 text-sm text-amber-800 dark:text-amber-300 hover:bg-amber-500/10 disabled:opacity-60"
+          >
+            {classicRepairBusy ? t("sozuTagRepairing") : t("sozuTagRepairReceive")}
+          </button>
+        ) : null}
       </section>
 
-      <section className="mt-8" id="recovery">
-        <h2 className="text-lg font-semibold">{t("recoveryWallet")}</h2>
-        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-          {t("recoveryWalletBody")}
-        </p>
-        <div className="mt-4 space-y-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4">
-          <div>
-            <p className="font-medium text-sm">{t("recoveryPhraseTitle")}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              {t("recoveryPhraseBody")}
-            </p>
-            <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">{t("recoveryPhraseAfter")}</p>
+      <div className="mt-8" id="recovery">
+        <ProfileCollapsibleCard
+          title={t("recoveryWallet")}
+          summary={t("recoveryWalletBody")}
+          openLabel={t("recoveryOpen")}
+          closeLabel={t("recoveryClose")}
+        >
+          <div className="space-y-4">
+            <div>
+              <p className="font-medium text-sm">{t("recoveryPhraseTitle")}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                {t("recoveryPhraseBody")}
+              </p>
+              <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">{t("recoveryPhraseAfter")}</p>
+            </div>
+            <div>
+              <p className="font-medium text-sm">{t("recoveryEmailTitle")}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                {t("recoveryEmailBody")}
+              </p>
+              <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">{t("recoveryEmailSoon")}</p>
+            </div>
+            <Link
+              href="/dashboard/profile"
+              className="inline-block text-sm text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              {t("profileLink")}
+            </Link>
           </div>
-          <div>
-            <p className="font-medium text-sm">{t("recoveryEmailTitle")}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              {t("recoveryEmailBody")}
-            </p>
-            <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">{t("recoveryEmailSoon")}</p>
-          </div>
-        </div>
-      </section>
+        </ProfileCollapsibleCard>
+      </div>
 
       <section className="mt-8" id="verification">
         <h2 className="text-lg font-semibold">{t("verification")}</h2>

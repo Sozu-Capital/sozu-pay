@@ -4,9 +4,11 @@ import { cn } from "@/lib/utils";
 interface DarkGradientBgProps {
   children?: React.ReactNode;
   className?: string;
+  /** Stronger texture for landing so pattern shows behind Spline. */
+  landing?: boolean;
 }
 
-export function DarkGradientBg({ children, className }: DarkGradientBgProps) {
+export function DarkGradientBg({ children, className, landing = false }: DarkGradientBgProps) {
   return (
     <div
       className={cn(
@@ -73,7 +75,7 @@ export function DarkGradientBg({ children, className }: DarkGradientBgProps) {
       </div>
 
       <div
-        className="absolute inset-0 opacity-5 bg-repeat"
+        className={cn("absolute inset-0 bg-repeat", landing ? "opacity-[0.12]" : "opacity-5")}
         style={{
           backgroundImage: `url("https://images.unsplash.com/photo-1557683316-973673baf926?w=200&q=10")`,
           backgroundSize: "149.76px",
@@ -81,7 +83,7 @@ export function DarkGradientBg({ children, className }: DarkGradientBgProps) {
       />
       {/* Subtle dot pattern overlay */}
       <div
-        className="absolute inset-0 opacity-20"
+        className={cn("absolute inset-0", landing ? "opacity-30" : "opacity-20")}
         style={{
           backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.5) 1px, transparent 0)`,
           backgroundSize: "20px 20px",
@@ -97,8 +99,8 @@ export function DarkGradientBg({ children, className }: DarkGradientBgProps) {
         }}
       />
 
-      {/* Content */}
-      <div className="relative z-10">{children}</div>
+      {/* Content (landing layers use z-[5] spline + z-20 copy above) */}
+      <div className="relative z-10 min-h-screen">{children}</div>
     </div>
   );
 }

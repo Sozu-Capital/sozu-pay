@@ -3,6 +3,7 @@ import { getSession, setSession } from "@/lib/auth/session";
 import { getUserByPrivyId } from "@/lib/db/users";
 import { getOrganizationById } from "@/lib/db/organizations";
 import { applyOrganizationSozuTag, getOrganizationSozuTag } from "@/lib/org-sozu-tag";
+import { getOrgReceiveDiagnostics } from "@/lib/org-receive-address";
 
 export async function GET() {
   const session = await getSession();
@@ -25,10 +26,16 @@ export async function GET() {
   if (!org) return NextResponse.json({ error: "Organization not found." }, { status: 404 });
 
   const username = await getOrganizationSozuTag(org);
+  const diagnostics = await getOrgReceiveDiagnostics(org);
   return NextResponse.json({
     username,
     tag: username ? `$${username}` : null,
     sozu_tag_auth_user_id: org.sozu_tag_auth_user_id ?? null,
+    receive: diagnostics.receive,
+    tag_directory_public_key: diagnostics.tagDirectoryPublicKey,
+    warnings: diagnostics.warnings,
+    classic_on_network: diagnostics.classicOnNetwork,
+    has_usdc_trustline: diagnostics.hasUsdcTrustline,
   });
 }
 

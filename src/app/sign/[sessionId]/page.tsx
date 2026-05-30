@@ -41,8 +41,7 @@ export default function CrossDeviceSignPage() {
       const res = await fetch(`/api/signing-sessions/${sessionId}`, { credentials: "include" });
       const data = await res.json().catch(() => ({}));
       if (res.status === 401) {
-        const returnTo = encodeURIComponent(`/sign/${sessionId}`);
-        router.replace(`/login?returnTo=${returnTo}`);
+        router.replace(`/?returnTo=${encodeURIComponent(`/sign/${sessionId}`)}`);
         return;
       }
       if (!res.ok) {

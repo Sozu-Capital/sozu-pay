@@ -1,8 +1,15 @@
 import type { Metadata } from "next";
+import { Manrope } from "next/font/google";
 import "./globals.css";
 import { LazyPrivyWrapper } from "@/components/LazyPrivyWrapper";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
+
+const manrope = Manrope({
+  subsets: ["latin"],
+  variable: "--font-manrope",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Panel de SozuPay",
@@ -18,8 +25,8 @@ export default async function RootLayout({
   const messages = await getMessages();
 
   return (
-    <html lang={locale}>
-      <body className="antialiased min-h-screen">
+    <html lang={locale} className={manrope.variable}>
+      <body className={`${manrope.variable} font-sans antialiased min-h-screen`}>
         <NextIntlClientProvider locale={locale} messages={messages}>
           <LazyPrivyWrapper>{children}</LazyPrivyWrapper>
         </NextIntlClientProvider>

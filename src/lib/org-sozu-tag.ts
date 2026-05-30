@@ -8,6 +8,7 @@ import {
   updateOrganizationSozuTagAuthUserId,
   type Organization,
 } from "@/lib/db/organizations";
+import { resolveOrgReceiveAddress } from "@/lib/org-receive-address";
 
 function stellarWalletUserColumn(): string {
   return process.env.SOZUPAY_STELLAR_WALLET_USER_ID_COLUMN?.trim() || "user_id";
@@ -124,12 +125,13 @@ export async function applyOrganizationSozuTag(params: {
   const org = await getOrganizationById(params.orgId);
   if (!org) return { ok: false, status: 404, error: "Organization not found." };
 
-  const destination = org.stellar_disbursement_public_key?.trim() || null;
+  const { tagReceiveAddress: destination } = resolveOrgReceiveAddress(org);
   if (!destination) {
     return {
       ok: false,
       status: 422,
-      error: "Organization has no Stellar disbursement wallet configured.",
+      error:
+        "Organization has no receive address yet. Provision treasury (Soroban) or a classic G wallet on Profile first.",
     };
   }
 

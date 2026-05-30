@@ -10,10 +10,27 @@ const AUTH_MOCK =
   (process.env.AUTH_MOCK === "true" ||
     (process.env.AUTH_MOCK !== "false" && process.env.NODE_ENV === "development"));
 
+function homeUrl(request: NextRequest, extra?: Record<string, string>): URL {
+  const url = new URL("/", request.url);
+  if (extra) {
+    for (const [k, v] of Object.entries(extra)) url.searchParams.set(k, v);
+  }
+  return url;
+}
+
 export function middleware(request: NextRequest) {
   const session = request.cookies.get("sozupay_session")?.value;
-  const isLogin = request.nextUrl.pathname.startsWith("/login");
-  const isHome = request.nextUrl.pathname === "/";
+  const pathname = request.nextUrl.pathname;
+
+  // Legacy /login → home (preserve query string: returnTo, sdpInvite, etc.)
+  if (pathname === "/login" || pathname.startsWith("/login/")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    return NextResponse.redirect(url);
+  }
+
+  const isHome = pathname === "/";
+  const isFreshHome = isHome && request.nextUrl.searchParams.get("fresh") === "1";
   const isAuthApi =
     request.nextUrl.pathname.startsWith("/api/auth/verify") ||
     request.nextUrl.pathname.startsWith("/api/auth/send-link") ||
@@ -21,33 +38,35 @@ export function middleware(request: NextRequest) {
 
   if (isAuthApi) return NextResponse.next();
 
-  // Mock auth (no Privy): allow all routes; redirect to dashboard if logged in on / or /login
+  // Mock auth (no Privy): redirect logged-in users away from home
   if (AUTH_MOCK) {
-    if ((isLogin || isHome) && session) {
+    if (isHome && session) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
     return NextResponse.next();
   }
 
-  // Privy: logged-in users shouldn’t see the home gate; /login is special (session clear on that route).
-  if (isHome && session) {
+  // Privy: logged-in users skip home unless signing out (?fresh=1)
+  if (isHome && session && !isFreshHome) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // Privy auth: protect dashboard and onboarding; do NOT redirect away from /login when session exists
-  // so that user always sees login and can choose email (we clear session + Privy on login page)
-  const isDashboard = request.nextUrl.pathname.startsWith("/dashboard");
-  const isOnboarding = request.nextUrl.pathname.startsWith("/onboarding");
-  const isAuthSuccess = request.nextUrl.pathname === "/auth/success";
-  const isSdpRegister = request.nextUrl.pathname.startsWith("/sdp/register");
+  const isDashboard = pathname.startsWith("/dashboard");
+  const isOnboarding = pathname.startsWith("/onboarding");
+  const isAuthSuccess = pathname === "/auth/success";
+  const isSdpRegister = pathname.startsWith("/sdp/register");
+
   if ((isDashboard || isOnboarding || isAuthSuccess) && !session) {
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
-  if (isSdpRegister && !session) {
-    const login = new URL("/login", request.url);
-    login.searchParams.set("sdpInvite", "1");
+    const login = homeUrl(request, {
+      returnTo: pathname + request.nextUrl.search,
+    });
     return NextResponse.redirect(login);
   }
+
+  if (isSdpRegister && !session) {
+    return NextResponse.redirect(homeUrl(request, { sdpInvite: "1" }));
+  }
+
   return NextResponse.next();
 }
 
@@ -58,6 +77,7 @@ export const config = {
     "/onboarding/:path*",
     "/auth/success",
     "/login",
+    "/login/:path*",
     "/sdp/register",
     "/api/auth/verify",
     "/api/auth/send-link",

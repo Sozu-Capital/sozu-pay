@@ -82,6 +82,7 @@ export async function GET() {
 
   return NextResponse.json({
     email: user.email,
+    org_name: org?.name ?? null,
     stellar_public_key: user.stellar_public_key,
     stellar_payout_public_key: user.stellar_payout_public_key ?? null,
     org_payout_wallet_public_key: org_payout_wallet_public_key ?? null,

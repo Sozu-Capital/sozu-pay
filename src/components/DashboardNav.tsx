@@ -11,10 +11,12 @@ function NavLink({
   href,
   label,
   indent = false,
+  onNavigate,
 }: {
   href: string;
   label: string;
   indent?: boolean;
+  onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const isActive =
@@ -23,6 +25,7 @@ function NavLink({
     <Link
       href={href}
       prefetch={true}
+      onClick={onNavigate}
       className={`block rounded-md text-sm font-medium ${
         indent ? "pl-6 pr-3 py-1.5" : "px-3 py-2"
       } ${
@@ -36,7 +39,7 @@ function NavLink({
   );
 }
 
-export function DashboardNav() {
+export function DashboardNav({ onNavigate }: { onNavigate?: () => void } = {}) {
   const { profile } = useDashboardProfile() ?? { profile: null };
   const isAdmin =
     profile?.admin_level === "admin" || profile?.admin_level === "super_admin";
@@ -45,54 +48,59 @@ export function DashboardNav() {
   const t = useTranslations("nav");
   const { signOut, signingOut } = useSignOut();
 
+  const linkProps = { onNavigate };
+
   return (
-    <nav className="mt-6 flex flex-col flex-1 min-h-0">
+    <nav className="flex flex-col flex-1 min-h-0 overflow-y-auto">
       <div className="space-y-1">
-        <NavLink href="/dashboard" label={t("overview")} />
-        <NavLink href="/dashboard/transactions" label={t("transactions")} />
+        <NavLink href="/dashboard" label={t("overview")} {...linkProps} />
+        <NavLink href="/dashboard/transactions" label={t("transactions")} {...linkProps} />
         {isStore ? (
           <>
-            <NavLink href="/dashboard/checkout" label={t("getPaid")} />
-            <NavLink href="/dashboard/recipients" label={t("paySupplier")} />
-            <NavLink href="/dashboard/cashout" label={t("cashOut")} />
-            <NavLink href="/dashboard/profile" label={t("profile")} />
-            {isAdmin && <NavLink href="/dashboard/admin" label={t("admin")} indent />}
+            <NavLink href="/dashboard/checkout" label={t("getPaid")} {...linkProps} />
+            <NavLink href="/dashboard/recipients" label={t("paySupplier")} {...linkProps} />
+            <NavLink href="/dashboard/cashout" label={t("cashOut")} {...linkProps} />
+            <NavLink href="/dashboard/profile" label={t("profile")} {...linkProps} />
+            {isAdmin && <NavLink href="/dashboard/admin" label={t("admin")} indent {...linkProps} />}
             {isAdmin && (
               <NavLink
                 href="/dashboard/admin/shadow-payments"
                 label={t("paymentsOracle")}
                 indent
+                {...linkProps}
               />
             )}
           </>
         ) : (
           <>
             {showDisbursementsNav && (
-              <NavLink href="/dashboard/disbursements" label={t("disbursements")} />
+              <NavLink href="/dashboard/disbursements" label={t("disbursements")} {...linkProps} />
             )}
-            <NavLink href="/dashboard/audit" label={t("auditLog")} indent />
-            <NavLink href="/dashboard/vault" label={t("vault")} />
-            <NavLink href="/dashboard/credit" label={t("credit")} />
+            <NavLink href="/dashboard/audit" label={t("auditLog")} indent {...linkProps} />
+            <NavLink href="/dashboard/vault" label={t("vault")} {...linkProps} />
+            <NavLink href="/dashboard/credit" label={t("credit")} {...linkProps} />
             {isAdmin && (
               <NavLink
                 href="/dashboard/credit-applications"
                 label={t("creditApplications")}
                 indent
+                {...linkProps}
               />
             )}
-            <NavLink href="/dashboard/walls" label={t("paymentWalls")} />
-            <NavLink href="/dashboard/payouts" label={t("payouts")} />
-            <NavLink href="/dashboard/recipients" label={t("recipients")} />
-            <NavLink href="/dashboard/profile" label={t("profile")} />
-            {isAdmin && <NavLink href="/dashboard/admin" label={t("admin")} indent />}
+            <NavLink href="/dashboard/walls" label={t("paymentWalls")} {...linkProps} />
+            <NavLink href="/dashboard/payouts" label={t("payouts")} {...linkProps} />
+            <NavLink href="/dashboard/recipients" label={t("recipients")} {...linkProps} />
+            <NavLink href="/dashboard/profile" label={t("profile")} {...linkProps} />
+            {isAdmin && <NavLink href="/dashboard/admin" label={t("admin")} indent {...linkProps} />}
             {isAdmin && (
               <NavLink
                 href="/dashboard/admin/shadow-payments"
                 label={t("paymentsOracle")}
                 indent
+                {...linkProps}
               />
             )}
-            <NavLink href="/dashboard/keys" label={t("keysCustody")} indent />
+            <NavLink href="/dashboard/keys" label={t("keysCustody")} indent {...linkProps} />
           </>
         )}
       </div>

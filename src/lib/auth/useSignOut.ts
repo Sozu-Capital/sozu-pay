@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 
 /**
- * Clears Privy auth, app session cookie, and navigates to /login.
+ * Clears Privy auth, app session cookie, and navigates to home (`/?fresh=1`).
  * Use this instead of POST /api/auth/logout forms so Privy is logged out before redirect.
  */
 export function useSignOut() {
@@ -25,7 +25,7 @@ export function useSignOut() {
       } catch {
         // continue to login even if clear-session fails
       }
-      window.location.href = "/login";
+      window.location.href = "/?fresh=1";
     } catch {
       setSigningOut(false);
     }

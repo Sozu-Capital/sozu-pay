@@ -4,6 +4,7 @@ import { getUserByPrivyId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { provisionOrgSmartTreasury } from "@/lib/stellar/provisionOrgSmartTreasury";
+import { provisionOrgTestnetClassicDisbursement } from "@/lib/stellar/provisionOrgTestnetDisbursement";
 import { isDisbursementSigner } from "@/lib/stellar/org-treasury";
 
 /**
@@ -55,12 +56,28 @@ export async function POST() {
 
     const signerOk = await isDisbursementSigner(result.soroban_contract_id, memberSa.contract_id);
 
+    let classic_public_key: string | undefined;
+    if (!org.stellar_disbursement_public_key?.trim()) {
+      try {
+        const classic = await provisionOrgTestnetClassicDisbursement(user.org_id);
+        if (classic?.publicKey) classic_public_key = classic.publicKey;
+      } catch (classicErr) {
+        console.warn(
+          "[provision-treasury] classic G wallet provision:",
+          classicErr instanceof Error ? classicErr.message : classicErr
+        );
+      }
+    } else {
+      classic_public_key = org.stellar_disbursement_public_key ?? undefined;
+    }
+
     return NextResponse.json({
       ok: true,
       ...result,
       signer_verified: signerOk,
+      classic_public_key,
       fund_usdc_hint:
-        "Send testnet USDC to the disbursement contract address to fund payouts.",
+        "Send testnet USDC to the Soroban disbursement contract (C…) for passkey payouts. Use the classic G address for $tag / wallet-app sends.",
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

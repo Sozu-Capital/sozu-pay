@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { cn } from "@/lib/utils";
 
 type Locale = "es" | "en";
 const LOCALE_COOKIE = "sozupay_locale";
@@ -15,7 +16,13 @@ function readLocaleCookie(): Locale {
   return value === "en" ? "en" : "es";
 }
 
-export function LanguageSwitcher({ className }: { className?: string }) {
+export function LanguageSwitcher({
+  className,
+  variant = "default",
+}: {
+  className?: string;
+  variant?: "default" | "compact";
+}) {
   const t = useTranslations("languageSwitcher");
   const [locale, setLocale] = useState<Locale>("es");
   const [saving, setSaving] = useState(false);
@@ -42,6 +49,28 @@ export function LanguageSwitcher({ className }: { className?: string }) {
     },
     []
   );
+
+  if (variant === "compact") {
+    const next: Locale = locale === "es" ? "en" : "es";
+    const label = locale === "es" ? "ES" : "EN";
+
+    return (
+      <button
+        type="button"
+        disabled={saving}
+        onClick={() => onChange(next)}
+        className={cn(
+          "rounded-full border border-white/25 bg-black/25 px-3 py-1 text-[11px] font-medium tracking-wide text-white/90 backdrop-blur-md",
+          "transition-colors hover:bg-white/15 hover:text-white",
+          "disabled:cursor-not-allowed disabled:opacity-50",
+          className
+        )}
+        aria-label={t("aria")}
+      >
+        {label}
+      </button>
+    );
+  }
 
   return (
     <div className={className}>

@@ -5,6 +5,9 @@ import Link from "next/link";
 import { usePrivy } from "@privy-io/react-auth";
 import { useTranslations } from "next-intl";
 import { OrgTreasurySetup } from "@/components/OrgTreasurySetup";
+import { ProfileAddressRow } from "@/components/profile/ProfileAddressRow";
+import { ProfileCollapsibleCard } from "@/components/profile/ProfileCollapsibleCard";
+import { resolveAccountDisplayName } from "@/lib/display-name";
 
 type ProfileData = {
   email: string;
@@ -12,6 +15,7 @@ type ProfileData = {
   stellar_payout_public_key: string | null;
   org_payout_wallet_public_key: string | null;
   org_id: string | null;
+  org_name?: string | null;
   org_stellar_disbursement_public_key?: string | null;
   org_has_stored_secret?: boolean;
   org_encryption_type?: "legacy" | "user_derived" | null;
@@ -167,11 +171,13 @@ export default function ProfilePage() {
     }
   };
 
-  const displayName =
-    privyUser?.email?.address ??
-    profile?.email?.split("@")[0] ??
-    t("userFallback");
+  const displayName = resolveAccountDisplayName(
+    privyUser,
+    profile?.email,
+    t("userFallback")
+  );
   const avatarUrl = (privyUser as { avatar?: string })?.avatar ?? null;
+  const orgDisplayName = profile?.org_name?.trim() || t("organizationFallback");
 
   const handleRequestActivation = async () => {
     setRequestingActivation(true);
@@ -453,21 +459,97 @@ export default function ProfilePage() {
         </Link>
       </div>
 
-      {/* Profile card: picture, name, email */}
+      {/* You — signed-in person */}
       <section className="mt-8 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6">
-        <div className="flex items-center gap-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+          {t("personalSectionLabel")}
+        </p>
+        <div className="mt-3 flex items-center gap-4">
           <div
             className="h-16 w-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xl font-semibold text-gray-600 dark:text-gray-400 overflow-hidden"
             style={avatarUrl ? { backgroundImage: `url(${avatarUrl})`, backgroundSize: "cover" } : undefined}
           >
             {!avatarUrl && displayName.slice(0, 2).toUpperCase()}
           </div>
-          <div>
-            <p className="font-semibold text-gray-900 dark:text-white">{displayName}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{profile.email}</p>
+          <div className="min-w-0">
+            <p className="font-semibold text-gray-900 dark:text-white truncate">{displayName}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{profile.email}</p>
+            <Link
+              href="/dashboard/settings#security"
+              className="mt-2 inline-block text-sm text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              {t("personalInfoLink")}
+            </Link>
           </div>
         </div>
+        {profile.member_smart_account_id ? (
+          <div className="mt-5 pt-5 border-t border-gray-100 dark:border-gray-700/60">
+            <ProfileAddressRow
+              label={t("passkeySmartAccountLabel")}
+              address={profile.member_smart_account_id}
+              explorerHref={`${STELLAR_EXPERT_BASE}/contract/${profile.member_smart_account_id}`}
+              copiedKey="member-sa"
+              activeCopiedKey={copied}
+              onCopy={handleCopy}
+              copyLabel={tc("copy")}
+              copiedLabel={tc("copied")}
+            />
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-amber-700 dark:text-amber-300">
+            {t("passkeyWalletMissing")}{" "}
+            <Link href="/onboarding/setup-smart-wallet" className="underline">
+              {t("setupPasskeyWallet")}
+            </Link>
+          </p>
+        )}
       </section>
+
+      {/* Organization — receive addresses */}
+      {profile.org_id ? (
+        <section className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6">
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            {t("organizationSectionLabel")}
+          </p>
+          <h2 className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{orgDisplayName}</h2>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("organizationReceiveBody")}</p>
+          <div className="mt-4 space-y-4">
+            {profile.org_stellar_disbursement_public_key ? (
+              <ProfileAddressRow
+                label={t("orgClassicReceiveLabel")}
+                address={profile.org_stellar_disbursement_public_key}
+                explorerHref={`${STELLAR_EXPERT_BASE}/account/${profile.org_stellar_disbursement_public_key}`}
+                copiedKey="org-classic"
+                activeCopiedKey={copied}
+                onCopy={handleCopy}
+                copyLabel={tc("copy")}
+                copiedLabel={tc("copied")}
+              />
+            ) : null}
+            {profile.org_soroban_contract_id ? (
+              <ProfileAddressRow
+                label={t("orgSorobanReceiveLabel")}
+                address={profile.org_soroban_contract_id}
+                explorerHref={`${STELLAR_EXPERT_BASE}/contract/${profile.org_soroban_contract_id}`}
+                copiedKey="org-soroban"
+                activeCopiedKey={copied}
+                onCopy={handleCopy}
+                copyLabel={tc("copy")}
+                copiedLabel={tc("copied")}
+              />
+            ) : null}
+            {!profile.org_stellar_disbursement_public_key && !profile.org_soroban_contract_id ? (
+              <p className="text-sm text-amber-700 dark:text-amber-300">{t("orgNoReceiveAddress")}</p>
+            ) : null}
+          </div>
+          <Link
+            href="/dashboard/settings#sozu-tag"
+            className="mt-4 inline-block text-sm text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            {t("orgTagSettingsLink")}
+          </Link>
+        </section>
+      ) : null}
 
       {/* Admin payout wallet (super-admin): only needed when org has no disbursement wallet. With org wallet, you approve in one click and the org signs. */}
       {profile.admin_level === "super_admin" && !profile.org_has_stored_secret && (
@@ -696,25 +778,15 @@ export default function ProfilePage() {
         </section>
       )}
 
-      {/* Organization disbursement wallet (super_admin with org that has a wallet) */}
+      {/* Organization admin: secrets & migration (collapsed by default) */}
       {profile.admin_level === "super_admin" && profile.org_id && profile.org_stellar_disbursement_public_key && (
-        <section className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6">
-          <h2 className="text-lg font-semibold">{t("orgDisbursementTitle")}</h2>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {t("orgDisbursementBody")}
-          </p>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <code className="flex-1 min-w-0 font-mono text-sm break-all bg-gray-100 dark:bg-gray-700/50 px-2 py-1.5 rounded">
-              {profile.org_stellar_disbursement_public_key}
-            </code>
-            <button
-              type="button"
-              onClick={() => handleCopy(profile.org_stellar_disbursement_public_key!, "org-addr")}
-              className="rounded-md border border-gray-300 dark:border-gray-600 px-2 py-1.5 text-xs shrink-0"
-            >
-              {copied === "org-addr" ? tc("copied") : tc("copy")}
-            </button>
-          </div>
+        <ProfileCollapsibleCard
+          title={t("orgAdminWalletTitle")}
+          summary={t("orgAdminWalletSummary")}
+          openLabel={t("cardOpen")}
+          closeLabel={t("cardClose")}
+        >
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t("orgDisbursementBody")}</p>
           {profile.org_encryption_type === "legacy" && (
             <div className="mt-4">
               <button
@@ -774,11 +846,18 @@ export default function ProfilePage() {
               )}
             </div>
           )}
-        </section>
+        </ProfileCollapsibleCard>
       )}
 
       {profile.admin_level === "super_admin" && profile.org_id && (
-        <OrgTreasurySetup isSuperAdmin />
+        <ProfileCollapsibleCard
+          title={t("treasuryCardTitle")}
+          summary={t("treasuryCardSummary")}
+          openLabel={t("cardOpen")}
+          closeLabel={t("cardClose")}
+        >
+          <OrgTreasurySetup isSuperAdmin />
+        </ProfileCollapsibleCard>
       )}
 
       {/* Org payout wallet from env (optional; when set, Classic payouts can use this shared org key) */}
@@ -810,96 +889,6 @@ export default function ProfilePage() {
           </a>
         </section>
       )}
-
-      {/* Passkey smart wallet (Soroban C address) */}
-      <section className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6">
-        <h2 className="text-lg font-semibold">{t("smartWalletTitle")}</h2>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          {t("smartWalletPasskeyBody")}
-        </p>
-
-        {profile.member_smart_account_id ? (
-          <div className="mt-4 space-y-3">
-            <div>
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                {t("passkeySmartAccountLabel")}
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <code className="flex-1 min-w-0 font-mono text-sm text-gray-700 dark:text-gray-300 break-all bg-gray-100 dark:bg-gray-700/50 px-2 py-1.5 rounded">
-                  {profile.member_smart_account_id}
-                </code>
-                <button
-                  type="button"
-                  onClick={() => handleCopy(profile.member_smart_account_id!, "smart-account")}
-                  className="rounded-md border border-gray-300 dark:border-gray-600 px-2 py-1.5 text-xs font-medium shrink-0"
-                >
-                  {copied === "smart-account" ? tc("copied") : tc("copy")}
-                </button>
-              </div>
-            </div>
-            <a
-              href={`${STELLAR_EXPERT_BASE}/contract/${profile.member_smart_account_id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              {t("viewOnStellarExpert")}
-            </a>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {t("passkeySignHint")}
-            </p>
-          </div>
-        ) : (
-          <div className="mt-4 space-y-3">
-            <p className="text-sm text-amber-700 dark:text-amber-300">
-              {t("passkeyWalletMissing")}
-            </p>
-            <Link
-              href="/onboarding/setup-smart-wallet"
-              className="inline-flex rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-2 text-sm font-medium hover:opacity-90"
-            >
-              {t("setupPasskeyWallet")}
-            </Link>
-          </div>
-        )}
-      </section>
-
-      {/* Recovery methods (no 2FA toggle – Privy handles it) */}
-      <section className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6">
-        <h2 className="text-lg font-semibold">{t("recoveryMethodsTitle")}</h2>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          {t("recoveryMethodsBody")}
-        </p>
-        <ul className="mt-4 space-y-3">
-          <li className="flex items-center justify-between gap-4 py-2 border-b border-gray-100 dark:border-gray-700/50">
-            <div>
-              <p className="font-medium text-sm">{t("loginPrivy")}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{t("loginPrivySub")}</p>
-            </div>
-          </li>
-          <li className="flex items-center justify-between gap-4 py-2 border-b border-gray-100 dark:border-gray-700/50">
-            <div>
-              <p className="font-medium text-sm">{t("recoveryPhrase")}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{t("recoveryPhraseSub")}</p>
-            </div>
-            <Link href="/dashboard/settings#recovery" className="text-sm text-blue-600 dark:text-blue-400 hover:underline shrink-0">
-              {t("settings")}
-            </Link>
-          </li>
-          <li className="flex items-center justify-between gap-4 py-2">
-            <div>
-              <p className="font-medium text-sm">{t("recoveryEmail")}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{t("recoveryEmailSub")}</p>
-            </div>
-            <Link href="/dashboard/settings#recovery" className="text-sm text-blue-600 dark:text-blue-400 hover:underline shrink-0">
-              {t("settings")}
-            </Link>
-          </li>
-        </ul>
-        <Link href="/dashboard/settings#recovery" className="mt-4 inline-block rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm font-medium">
-          {t("openSettingsRecovery")}
-        </Link>
-      </section>
 
       {profile.smart_wallet_ready && (
         <p className="mt-6 text-sm text-gray-500 dark:text-gray-400">

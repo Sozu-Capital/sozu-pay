@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
   const session = await getSession();
   const next = session
     ? new URL("/sdp/register", request.url)
-    : new URL("/login?sdpInvite=1", request.url);
+    : new URL("/?sdpInvite=1", request.url);
 
   return NextResponse.redirect(next);
 }

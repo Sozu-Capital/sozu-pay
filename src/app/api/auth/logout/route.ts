@@ -8,5 +8,5 @@ export async function POST(request: NextRequest) {
   if (session) clearUnlockedKey(session.id);
   await clearSession();
   const baseUrl = getAppBaseUrl(request);
-  return NextResponse.redirect(`${baseUrl}/login`);
+  return NextResponse.redirect(`${baseUrl}/?fresh=1`);
 }

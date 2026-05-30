@@ -30,14 +30,7 @@ export default function SettingsPage() {
   const [orgTagBusy, setOrgTagBusy] = useState(false);
   const [orgTagError, setOrgTagError] = useState<string | null>(null);
   const [orgTagSaved, setOrgTagSaved] = useState(false);
-  const [receiveInfo, setReceiveInfo] = useState<{
-    classicG: string | null;
-    sorobanC: string | null;
-    tagReceiveAddress: string | null;
-    tagDirectoryPublicKey: string | null;
-    warnings: string[];
-  } | null>(null);
-  const [classicRepairBusy, setClassicRepairBusy] = useState(false);
+  const [linkedTreasuryAddress, setLinkedTreasuryAddress] = useState<string | null>(null);
   const { signOut, signingOut } = useSignOut();
 
   function loadSozuTagInfo() {
@@ -45,27 +38,18 @@ export default function SettingsPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d: {
         username?: string | null;
-        receive?: {
-          classicG?: string | null;
-          sorobanC?: string | null;
-          tagReceiveAddress?: string | null;
-        };
+        receive?: { tagReceiveAddress?: string | null };
         tag_directory_public_key?: string | null;
-        warnings?: string[];
       } | null) => {
         if (!d) return;
         const username = typeof d.username === "string" ? d.username : null;
         setOrgTag(username);
         setOrgTagInput(username ? `$${username}` : "");
-        if (d.receive) {
-          setReceiveInfo({
-            classicG: d.receive.classicG ?? null,
-            sorobanC: d.receive.sorobanC ?? null,
-            tagReceiveAddress: d.receive.tagReceiveAddress ?? null,
-            tagDirectoryPublicKey: d.tag_directory_public_key ?? null,
-            warnings: Array.isArray(d.warnings) ? d.warnings : [],
-          });
-        }
+        const linked =
+          (typeof d.receive?.tagReceiveAddress === "string" && d.receive.tagReceiveAddress) ||
+          (typeof d.tag_directory_public_key === "string" && d.tag_directory_public_key) ||
+          null;
+        setLinkedTreasuryAddress(linked);
       })
       .catch(() => {});
   }
@@ -277,6 +261,9 @@ export default function SettingsPage() {
               const username = typeof data.username === "string" ? data.username : null;
               setOrgTag(username);
               setOrgTagInput(username ? `$${username}` : orgTagInput);
+              if (typeof data.tag_receive_address === "string") {
+                setLinkedTreasuryAddress(data.tag_receive_address);
+              }
               setOrgTagSaved(true);
               loadSozuTagInfo();
               setTimeout(() => setOrgTagSaved(false), 2000);
@@ -310,60 +297,15 @@ export default function SettingsPage() {
           </button>
           {orgTagSaved && <p className="text-xs text-emerald-600 dark:text-emerald-400">{t("sozuTagSaved")}</p>}
         </form>
-        {receiveInfo && (
-          <div className="mt-4 max-w-md space-y-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4 text-xs text-gray-600 dark:text-gray-400">
-            {receiveInfo.classicG && (
-              <p>
-                <span className="font-medium text-gray-700 dark:text-gray-300">{t("receiveClassicG")}</span>{" "}
-                <code className="break-all">{receiveInfo.classicG}</code>
-              </p>
-            )}
-            {receiveInfo.sorobanC && (
-              <p>
-                <span className="font-medium text-gray-700 dark:text-gray-300">{t("receiveSorobanC")}</span>{" "}
-                <code className="break-all">{receiveInfo.sorobanC}</code>
-              </p>
-            )}
-            {receiveInfo.warnings.includes("tag_without_stellar_wallets_row") && (
-              <p className="text-amber-700 dark:text-amber-400">{t("sozuTagWalletNotFoundHint")}</p>
-            )}
-            {receiveInfo.warnings.includes("soroban_only_no_classic_g") && (
-              <p className="text-amber-700 dark:text-amber-400">{t("sozuTagNeedsClassicHint")}</p>
-            )}
-            {receiveInfo.warnings.includes("classic_missing_usdc_trustline") && (
-              <p className="text-amber-700 dark:text-amber-400">{t("sozuTagNeedsTrustlineHint")}</p>
-            )}
+        {orgTag && linkedTreasuryAddress ? (
+          <div className="mt-4 max-w-md rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4">
+            <p className="text-xs text-gray-500 dark:text-gray-400">{t("sozuTagLinkedHint", { tag: `$${orgTag}` })}</p>
+            <code className="mt-2 block font-mono text-xs break-all text-gray-800 dark:text-gray-200">
+              {linkedTreasuryAddress}
+            </code>
           </div>
-        )}
-        {receiveInfo?.warnings.includes("soroban_only_no_classic_g") ||
-        receiveInfo?.warnings.includes("tag_without_stellar_wallets_row") ? (
-          <button
-            type="button"
-            disabled={classicRepairBusy}
-            onClick={async () => {
-              setClassicRepairBusy(true);
-              setOrgTagError(null);
-              try {
-                const res = await fetch("/api/profile/org/ensure-classic-wallet", {
-                  method: "POST",
-                  credentials: "include",
-                });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) {
-                  setOrgTagError((data.error as string) ?? t("sozuTagRepairFailed"));
-                  return;
-                }
-                loadSozuTagInfo();
-                setOrgTagSaved(true);
-                setTimeout(() => setOrgTagSaved(false), 2000);
-              } finally {
-                setClassicRepairBusy(false);
-              }
-            }}
-            className="mt-3 rounded-md border border-amber-500/50 px-3 py-1.5 text-sm text-amber-800 dark:text-amber-300 hover:bg-amber-500/10 disabled:opacity-60"
-          >
-            {classicRepairBusy ? t("sozuTagRepairing") : t("sozuTagRepairReceive")}
-          </button>
+        ) : orgTag && !linkedTreasuryAddress ? (
+          <p className="mt-3 max-w-md text-xs text-amber-700 dark:text-amber-400">{t("sozuTagNotLinkedYet")}</p>
         ) : null}
       </section>
 

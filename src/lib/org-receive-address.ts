@@ -28,7 +28,8 @@ export function resolveOrgReceiveAddress(org: Organization): {
 } {
   const classicG = org.stellar_disbursement_public_key?.trim() || null;
   const sorobanC = resolveOrgDisbursementContractId(org);
-  const tagReceiveAddress = classicG ?? sorobanC;
+  /** Org $tag → treasury smart account when deployed; classic G is fallback for legacy SEP sends. */
+  const tagReceiveAddress = sorobanC ?? classicG;
   const dashboardBalanceAddress = sorobanC ?? classicG;
   return { classicG, sorobanC, tagReceiveAddress, dashboardBalanceAddress };
 }

@@ -514,18 +514,6 @@ export default function ProfilePage() {
           <h2 className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{orgDisplayName}</h2>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("organizationReceiveBody")}</p>
           <div className="mt-4 space-y-4">
-            {profile.org_stellar_disbursement_public_key ? (
-              <ProfileAddressRow
-                label={t("orgClassicReceiveLabel")}
-                address={profile.org_stellar_disbursement_public_key}
-                explorerHref={`${STELLAR_EXPERT_BASE}/account/${profile.org_stellar_disbursement_public_key}`}
-                copiedKey="org-classic"
-                activeCopiedKey={copied}
-                onCopy={handleCopy}
-                copyLabel={tc("copy")}
-                copiedLabel={tc("copied")}
-              />
-            ) : null}
             {profile.org_soroban_contract_id ? (
               <ProfileAddressRow
                 label={t("orgSorobanReceiveLabel")}
@@ -537,10 +525,20 @@ export default function ProfilePage() {
                 copyLabel={tc("copy")}
                 copiedLabel={tc("copied")}
               />
-            ) : null}
-            {!profile.org_stellar_disbursement_public_key && !profile.org_soroban_contract_id ? (
+            ) : profile.org_stellar_disbursement_public_key ? (
+              <ProfileAddressRow
+                label={t("orgClassicReceiveLabel")}
+                address={profile.org_stellar_disbursement_public_key}
+                explorerHref={`${STELLAR_EXPERT_BASE}/account/${profile.org_stellar_disbursement_public_key}`}
+                copiedKey="org-classic"
+                activeCopiedKey={copied}
+                onCopy={handleCopy}
+                copyLabel={tc("copy")}
+                copiedLabel={tc("copied")}
+              />
+            ) : (
               <p className="text-sm text-amber-700 dark:text-amber-300">{t("orgNoReceiveAddress")}</p>
-            ) : null}
+            )}
           </div>
           <Link
             href="/dashboard/settings#sozu-tag"

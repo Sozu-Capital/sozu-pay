@@ -9,6 +9,7 @@ import {
   type Organization,
 } from "@/lib/db/organizations";
 import { resolveOrgReceiveAddress } from "@/lib/org-receive-address";
+import { getUserByUsername } from "@/lib/db/users";
 
 function stellarWalletUserColumn(): string {
   return process.env.SOZUPAY_STELLAR_WALLET_USER_ID_COLUMN?.trim() || "user_id";
@@ -104,6 +105,27 @@ async function upsertStellarWallet(
 
 function orgSyntheticEmail(orgId: string): string {
   return `org+${orgId.replace(/-/g, "")}@sozupay-org.internal`;
+}
+
+/** Whether an org Sozu tag can be claimed in profiles (and not taken on dashboard users). */
+export async function isOrgSozuTagAvailable(usernameRaw: string): Promise<{
+  available: boolean;
+  error?: string;
+}> {
+  const username = normalizeSozuTag(usernameRaw);
+  if (!username) {
+    return { available: false, error: "Invalid tag. Use 3–30 characters: letters, digits, underscore." };
+  }
+  const sb = getSupabase();
+  const profileOwner = await lookupUsernameOwnerId(sb, username);
+  if (profileOwner) {
+    return { available: false, error: "That tag is already taken." };
+  }
+  const dashboardUser = await getUserByUsername(username);
+  if (dashboardUser) {
+    return { available: false, error: "That tag is already taken." };
+  }
+  return { available: true };
 }
 
 export async function applyOrganizationSozuTag(params: {

@@ -40,7 +40,10 @@ function base64URLToArrayBuffer(base64url: string): ArrayBuffer {
   return base64URLToBuffer(base64url);
 }
 
-export async function checkUsernameAvailable(username: string): Promise<{
+export async function checkUsernameAvailable(
+  username: string,
+  scope: "passkey" | "org" = "passkey"
+): Promise<{
   available: boolean;
   pinSet?: boolean;
   error?: string;
@@ -48,7 +51,7 @@ export async function checkUsernameAvailable(username: string): Promise<{
   const res = await fetch("/api/auth/username/check", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username }),
+    body: JSON.stringify({ username, scope }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

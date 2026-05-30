@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
+import { checkUsernameAvailable } from "@/lib/auth/passkey-client";
 import { registerSmartAccount } from "@/lib/stellar/smartAccounts/registerWalletClient";
 
 type OrgType = "store" | "ngo";
@@ -17,11 +18,20 @@ type SetupStep =
   | "org"
   | "register"
   | "treasury"
+  | "sozuTag"
   | "done"
   | "error";
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+function normalizeOrgTagInput(raw: string): string {
+  return raw.replace(/^\$+/, "").trim().toLowerCase();
+}
+
+function isValidOrgTag(tag: string): boolean {
+  return /^[a-z0-9_]{3,30}$/.test(tag);
 }
 
 export default function CreateOrganizationPage() {
@@ -31,6 +41,10 @@ export default function CreateOrganizationPage() {
 
   const [type, setType] = useState<OrgType>("ngo");
   const [orgName, setOrgName] = useState("");
+  const [orgSozuTagInput, setOrgSozuTagInput] = useState("");
+  const [orgTagAvailable, setOrgTagAvailable] = useState<boolean | null>(null);
+  const [orgTagCheckError, setOrgTagCheckError] = useState("");
+  const [orgTagChecking, setOrgTagChecking] = useState(false);
   const [guardianThreshold, setGuardianThreshold] = useState(2);
   const [invitesText, setInvitesText] = useState("");
   const [userSozuTag, setUserSozuTag] = useState<string | null>(null);
@@ -41,6 +55,10 @@ export default function CreateOrganizationPage() {
   const [error, setError] = useState("");
   const [treasuryContractId, setTreasuryContractId] = useState<string | null>(null);
   const [memberContractId, setMemberContractId] = useState<string | null>(null);
+  const [orgSozuTag, setOrgSozuTag] = useState<string | null>(null);
+  const [orgTagReceiveAddress, setOrgTagReceiveAddress] = useState<string | null>(null);
+
+  const orgTagNormalized = useMemo(() => normalizeOrgTagInput(orgSozuTagInput), [orgSozuTagInput]);
 
   const invites: InviteRow[] = useMemo(() => {
     const emails = invitesText
@@ -76,11 +94,56 @@ export default function CreateOrganizationPage() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!orgTagNormalized) {
+      setOrgTagAvailable(null);
+      setOrgTagCheckError("");
+      return;
+    }
+    if (!isValidOrgTag(orgTagNormalized)) {
+      setOrgTagAvailable(false);
+      setOrgTagCheckError(t("orgSozuTagInvalid"));
+      return;
+    }
+
+    let cancelled = false;
+    setOrgTagChecking(true);
+    const timer = setTimeout(() => {
+      checkUsernameAvailable(orgTagNormalized, "org")
+        .then((res) => {
+          if (cancelled) return;
+          setOrgTagAvailable(res.available);
+          setOrgTagCheckError(res.available ? "" : (res.error ?? t("orgSozuTagTaken")));
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setOrgTagAvailable(null);
+          setOrgTagCheckError(t("orgSozuTagCheckFailed"));
+        })
+        .finally(() => {
+          if (!cancelled) setOrgTagChecking(false);
+        });
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [orgTagNormalized, t]);
+
   const isBusy = step !== "idle" && step !== "done" && step !== "error";
-  const canStart = ready && !!kit && !isBusy && orgName.trim().length > 0 && fullName.trim().length > 0;
+  const orgTagReady =
+    isValidOrgTag(orgTagNormalized) && orgTagAvailable === true && !orgTagChecking;
+  const canStart =
+    ready &&
+    !!kit &&
+    !isBusy &&
+    orgName.trim().length > 0 &&
+    fullName.trim().length > 0 &&
+    orgTagReady;
 
   async function handleCreate() {
-    if (!kit || !fullName.trim()) return;
+    if (!kit || !fullName.trim() || !orgTagReady) return;
     setError("");
 
     try {
@@ -131,7 +194,30 @@ export default function CreateOrganizationPage() {
         throw new Error(treasuryData.error ?? t("treasuryFailed"));
       }
 
-      setTreasuryContractId(treasuryData.soroban_contract_id ?? null);
+      const treasuryId = treasuryData.soroban_contract_id ?? null;
+      setTreasuryContractId(treasuryId);
+
+      setStep("sozuTag");
+      const tagRes = await fetch("/api/profile/org/sozu-tag", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ username: orgTagNormalized }),
+      });
+      const tagData = await tagRes.json().catch(() => ({}));
+      if (!tagRes.ok) {
+        throw new Error(tagData.error ?? t("orgSozuTagFailed"));
+      }
+
+      const savedTag =
+        typeof tagData.username === "string" ? tagData.username.replace(/^\$/, "") : orgTagNormalized;
+      setOrgSozuTag(savedTag);
+      const receive =
+        typeof tagData.tag_receive_address === "string"
+          ? tagData.tag_receive_address
+          : treasuryId;
+      setOrgTagReceiveAddress(receive);
+
       setStep("done");
     } catch (e) {
       setStep("error");
@@ -149,16 +235,23 @@ export default function CreateOrganizationPage() {
           <div className="w-full max-w-md rounded-xl border border-white/10 bg-black/40 backdrop-blur-sm p-6 shadow-xl">
             <h1 className="text-xl font-semibold text-white">{t("doneTitle")}</h1>
             <p className="mt-2 text-sm text-gray-300">{t("doneBody")}</p>
-            {memberContractId && (
-              <div className="mt-4 rounded-md border border-white/10 bg-black/30 p-3">
-                <p className="text-xs text-gray-400">{t("yourPasskeyAccount")}</p>
-                <p className="mt-1 font-mono text-xs break-all text-white">{memberContractId}</p>
+            {orgSozuTag && (
+              <div className="mt-4 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3">
+                <p className="text-xs text-emerald-200">{t("orgSozuTagReady")}</p>
+                <p className="mt-1 font-mono text-sm text-white">${orgSozuTag}</p>
+                <p className="mt-2 text-[11px] text-gray-400">{t("orgSozuTagFundHint")}</p>
               </div>
             )}
-            {treasuryContractId && (
-              <div className="mt-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3">
-                <p className="text-xs text-emerald-200">{t("fundTreasury")}</p>
-                <p className="mt-1 font-mono text-xs break-all text-white">{treasuryContractId}</p>
+            {orgTagReceiveAddress && (
+              <div className="mt-3 rounded-md border border-white/10 bg-black/30 p-3">
+                <p className="text-xs text-gray-400">{t("fundTreasury")}</p>
+                <p className="mt-1 font-mono text-xs break-all text-white">{orgTagReceiveAddress}</p>
+              </div>
+            )}
+            {memberContractId && (
+              <div className="mt-3 rounded-md border border-white/10 bg-black/30 p-3">
+                <p className="text-xs text-gray-400">{t("yourPasskeyAccount")}</p>
+                <p className="mt-1 font-mono text-xs break-all text-white">{memberContractId}</p>
               </div>
             )}
             <div className="mt-6 flex flex-col gap-2">
@@ -184,9 +277,13 @@ export default function CreateOrganizationPage() {
   }
 
   if (isBusy) {
-    const stepKey = step as "passkey" | "org" | "register" | "treasury";
+    const stepKey = step as "passkey" | "org" | "register" | "treasury" | "sozuTag";
     const label =
-      step === "passkey" || step === "org" || step === "register" || step === "treasury"
+      step === "passkey" ||
+      step === "org" ||
+      step === "register" ||
+      step === "treasury" ||
+      step === "sozuTag"
         ? t(`steps.${stepKey}`)
         : t("steps.settingUp");
     return (
@@ -229,6 +326,31 @@ export default function CreateOrganizationPage() {
                 <p className="mt-1 text-[11px] text-gray-500">{t("yourSozuTagHint")}</p>
               </div>
             ) : null}
+
+            <div>
+              <label className="text-xs font-medium text-gray-300">{t("orgSozuTagLabel")}</label>
+              <div className="mt-1 flex items-center rounded-md border border-white/15 bg-black/30 focus-within:ring-2 focus-within:ring-white/20">
+                <span className="pl-3 text-sm text-gray-500">$</span>
+                <input
+                  value={orgSozuTagInput.replace(/^\$+/, "")}
+                  onChange={(e) => setOrgSozuTagInput(e.target.value)}
+                  placeholder={t("orgSozuTagPlaceholder")}
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="w-full bg-transparent px-2 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none"
+                />
+              </div>
+              <p className="mt-1 text-[11px] text-gray-500">{t("orgSozuTagHint")}</p>
+              {orgTagChecking && orgTagNormalized ? (
+                <p className="mt-1 text-[11px] text-gray-400">{t("orgSozuTagChecking")}</p>
+              ) : null}
+              {!orgTagChecking && orgTagCheckError ? (
+                <p className="mt-1 text-[11px] text-red-400">{orgTagCheckError}</p>
+              ) : null}
+              {!orgTagChecking && orgTagAvailable && orgTagNormalized ? (
+                <p className="mt-1 text-[11px] text-emerald-400">{t("orgSozuTagAvailable")}</p>
+              ) : null}
+            </div>
 
             <div>
               <label className="text-xs font-medium text-gray-300">{t("fullNameLabel")}</label>

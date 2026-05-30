@@ -65,11 +65,17 @@ export async function POST(request: NextRequest) {
   const res = await applyOrganizationSozuTag({ orgId, usernameRaw });
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status });
 
+  const org = await getOrganizationById(orgId);
+  const diagnostics = org ? await getOrgReceiveDiagnostics(org) : null;
+
   return NextResponse.json({
     ok: true,
     username: res.username,
     tag: `$${res.username}`,
     sozu_tag_auth_user_id: res.sozuTagAuthUserId,
+    tag_receive_address: diagnostics?.receive.tagReceiveAddress ?? null,
+    tag_directory_public_key: diagnostics?.tagDirectoryPublicKey ?? null,
+    warnings: diagnostics?.warnings ?? [],
   });
 }
 

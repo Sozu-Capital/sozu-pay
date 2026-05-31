@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
@@ -13,9 +13,14 @@ import {
   verifyLogin,
   verifyRegistration,
 } from "@/lib/auth/passkey-client";
+import {
+  isPasskeySupported,
+  isPasskeyUserCancel,
+  shouldOfferPinFallback,
+} from "@/lib/auth/passkey-fallback";
+import { useHomeAuthUi } from "@/components/HomeAuthUiContext";
+import { HomeLandingCta } from "@/components/HomeLandingCta";
 import { cn } from "@/lib/utils";
-
-type Mode = "login" | "register";
 
 type HomePasskeyAuthProps = {
   returnTo?: string;
@@ -25,10 +30,18 @@ type HomePasskeyAuthProps = {
 export function HomePasskeyAuth({ returnTo, onBusyChange }: HomePasskeyAuthProps) {
   const router = useRouter();
   const t = useTranslations("login");
-  const [mode, setMode] = useState<Mode>("login");
+  const { registerOpen, pinFallback, closeRegister, showPinFallback, resetToPasskeyLogin } =
+    useHomeAuthUi();
+
+  useEffect(() => {
+    if (!isPasskeySupported()) {
+      showPinFallback();
+      setError(t("passkeyNotSupportedTryPin"));
+    }
+  }, [showPinFallback, t]);
+
   const [username, setUsername] = useState("");
   const [pin, setPin] = useState("");
-  const [usePin, setUsePin] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -38,7 +51,6 @@ export function HomePasskeyAuth({ returnTo, onBusyChange }: HomePasskeyAuthProps
   };
 
   const cleanTag = username.replace(/^\$/, "").trim().toLowerCase();
-  const showTagField = mode === "register" || (mode === "login" && usePin);
 
   function goAfterAuth(redirect: string) {
     if (typeof window !== "undefined") {
@@ -48,39 +60,53 @@ export function HomePasskeyAuth({ returnTo, onBusyChange }: HomePasskeyAuthProps
     router.replace(redirect);
   }
 
-  async function handlePasskey() {
+  async function handlePasskeyLogin() {
     setError("");
     setLoading(true);
     try {
-      if (mode === "register") {
-        if (cleanTag.length < 3) {
-          setError(t("passkeyTagTooShort"));
-          return;
-        }
-        const tagCheck = await checkUsernameAvailable(cleanTag);
-        if (!tagCheck.available) {
-          setError(
-            tagCheck.error === "Invalid format"
-              ? t("passkeyTagInvalid")
-              : t("passkeyTagTaken")
-          );
-          return;
-        }
-        const ch = await fetchRegisterChallenge(cleanTag);
-        const cred = await createPasskey(ch);
-        const { redirect } = await verifyRegistration({
-          username: cleanTag,
-          credential: cred,
-          challenge: ch.challenge,
-          returnTo,
-        });
-        goAfterAuth(redirect);
-        return;
-      }
-
       const ch = await fetchLoginChallenge(undefined);
       const cred = await getPasskey(ch);
       const { redirect } = await verifyLogin({
+        credential: cred,
+        challenge: ch.challenge,
+        returnTo,
+      });
+      goAfterAuth(redirect);
+    } catch (e) {
+      if (shouldOfferPinFallback(e)) {
+        showPinFallback();
+        setError(
+          isPasskeySupported()
+            ? t("passkeyLoginFailedTryPin")
+            : t("passkeyNotSupportedTryPin")
+        );
+      } else if (!isPasskeyUserCancel(e)) {
+        setError(e instanceof Error ? e.message : t("somethingWentWrong"));
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRegister() {
+    setError("");
+    setLoading(true);
+    try {
+      if (cleanTag.length < 3) {
+        setError(t("passkeyTagTooShort"));
+        return;
+      }
+      const tagCheck = await checkUsernameAvailable(cleanTag);
+      if (!tagCheck.available) {
+        setError(
+          tagCheck.error === "Invalid format" ? t("passkeyTagInvalid") : t("passkeyTagTaken")
+        );
+        return;
+      }
+      const ch = await fetchRegisterChallenge(cleanTag);
+      const cred = await createPasskey(ch);
+      const { redirect } = await verifyRegistration({
+        username: cleanTag,
         credential: cred,
         challenge: ch.challenge,
         returnTo,
@@ -114,28 +140,13 @@ export function HomePasskeyAuth({ returnTo, onBusyChange }: HomePasskeyAuthProps
     }
   }
 
-  return (
-    <div className="pointer-events-auto relative z-30 w-full max-w-md space-y-4">
-      <div className="flex rounded-full border border-white/20 bg-black/30 p-0.5 backdrop-blur-md">
-        {(["login", "register"] as const).map((m) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => {
-              setMode(m);
-              setError("");
-            }}
-            className={cn(
-              "flex-1 rounded-full py-2 text-xs font-medium tracking-wide transition-colors",
-              mode === m ? "bg-white/90 text-black" : "text-white/70 hover:text-white"
-            )}
-          >
-            {m === "login" ? t("passkeySignIn") : t("passkeyCreateAccount")}
-          </button>
-        ))}
-      </div>
+  const fieldClass =
+    "w-full rounded-lg border border-white/20 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-white/40 focus:outline-none";
 
-      {showTagField ? (
+  if (registerOpen) {
+    return (
+      <div className="pointer-events-auto relative z-30 w-full max-w-md space-y-4">
+        <p className="text-[11px] uppercase tracking-[0.2em] text-white/50">{t("passkeyCreateAccount")}</p>
         <label className="block space-y-1.5">
           <span className="text-[11px] uppercase tracking-[0.2em] text-white/50">
             {t("passkeyTagLabel")}
@@ -146,24 +157,52 @@ export function HomePasskeyAuth({ returnTo, onBusyChange }: HomePasskeyAuthProps
             onChange={(e) => setUsername(e.target.value)}
             placeholder={t("passkeyTagPlaceholder")}
             autoComplete="username"
-            className="w-full rounded-lg border border-white/20 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-white/40 focus:outline-none"
+            className={fieldClass}
           />
         </label>
-      ) : null}
+        {error ? <p className="text-sm text-red-400/90">{error}</p> : null}
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void handleRegister()}
+          className={cn(
+            "w-full rounded-full bg-white/90 py-3 text-sm font-medium tracking-wide text-black",
+            "transition-opacity hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+          )}
+        >
+          {busy ? t("redirecting") : t("passkeyRegisterCta")}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            closeRegister();
+            setError("");
+          }}
+          className="text-xs text-white/55 underline-offset-2 hover:text-white/80 hover:underline"
+        >
+          {t("passkeyBackToLogin")}
+        </button>
+      </div>
+    );
+  }
 
-      {mode === "login" && (
-        <label className="flex items-center gap-2 text-xs text-white/60">
+  if (pinFallback) {
+    return (
+      <div className="pointer-events-auto relative z-30 w-full max-w-md space-y-4">
+        <p className="text-sm font-light text-white/70">{t("passkeyPinFallbackLead")}</p>
+        <label className="block space-y-1.5">
+          <span className="text-[11px] uppercase tracking-[0.2em] text-white/50">
+            {t("passkeyTagLabel")}
+          </span>
           <input
-            type="checkbox"
-            checked={usePin}
-            onChange={(e) => setUsePin(e.target.checked)}
-            className="rounded border-white/30"
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder={t("passkeyTagPlaceholder")}
+            autoComplete="username"
+            className={fieldClass}
           />
-          {t("passkeyUseBackupPin")}
         </label>
-      )}
-
-      {usePin && mode === "login" && (
         <label className="block space-y-1.5">
           <span className="text-[11px] uppercase tracking-[0.2em] text-white/50">
             {t("passkeyPinLabel")}
@@ -175,30 +214,43 @@ export function HomePasskeyAuth({ returnTo, onBusyChange }: HomePasskeyAuthProps
             onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 12))}
             placeholder="••••••"
             autoComplete="current-password"
-            className="w-full rounded-lg border border-white/20 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-white/40 focus:outline-none"
+            className={fieldClass}
           />
         </label>
-      )}
+        {error ? <p className="text-sm text-red-400/90">{error}</p> : null}
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void handlePinLogin()}
+          className={cn(
+            "w-full rounded-full bg-white/90 py-3 text-sm font-medium tracking-wide text-black",
+            "transition-opacity hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+          )}
+        >
+          {busy ? t("redirecting") : t("passkeySignInWithPin")}
+        </button>
+        {isPasskeySupported() ? (
+          <button
+            type="button"
+            onClick={() => {
+              resetToPasskeyLogin();
+              setError("");
+            }}
+            className="text-xs text-white/55 underline-offset-2 hover:text-white/80 hover:underline"
+          >
+            {t("passkeyTryPasskeyAgain")}
+          </button>
+        ) : null}
+      </div>
+    );
+  }
 
+  return (
+    <div className="pointer-events-auto relative z-30 w-fit max-w-md space-y-3">
+      <HomeLandingCta disabled={busy} onClick={() => void handlePasskeyLogin()}>
+        {busy ? t("redirecting") : t("homeCta")}
+      </HomeLandingCta>
       {error ? <p className="text-sm text-red-400/90">{error}</p> : null}
-
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => (usePin && mode === "login" ? handlePinLogin() : handlePasskey())}
-        className={cn(
-          "w-full rounded-full bg-white/90 py-3 text-sm font-medium tracking-wide text-black",
-          "transition-opacity hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-        )}
-      >
-        {busy
-          ? t("redirecting")
-          : usePin && mode === "login"
-            ? t("passkeySignInWithPin")
-            : mode === "register"
-              ? t("passkeyRegisterCta")
-              : t("passkeySignInCta")}
-      </button>
     </div>
   );
 }

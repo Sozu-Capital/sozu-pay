@@ -10,7 +10,7 @@ function isPublicCreditPath(pathname: string): boolean {
 }
 
 /**
- * Credit portal: mock email session or Privy. Redirects protected routes to /credit/ingresar if no session.
+ * Credit portal: redirects protected routes to /credit/ingresar if no session.
  */
 export function CreditPortalShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

@@ -37,11 +37,11 @@ export function HomePageIntro({ cta, status }: HomePageIntroProps) {
       {cta ? (
         <div
           className={cn(
-            "relative z-30",
+            "relative z-30 w-fit max-w-full",
             fadeClass,
             contentVisible
-              ? "!pointer-events-auto [&_*]:pointer-events-auto"
-              : "pointer-events-none"
+              ? "pointer-events-auto [&_*]:pointer-events-auto"
+              : "pointer-events-none [&_*]:pointer-events-none"
           )}
         >
           {cta}

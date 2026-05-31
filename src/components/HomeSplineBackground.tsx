@@ -33,7 +33,7 @@ export function HomeSplineBackground() {
 
   return (
     <div
-      className="home-spline-root fixed inset-0 z-[5] h-[100dvh] min-h-[100dvh] w-full overflow-hidden max-md:bottom-auto max-md:min-h-0 max-md:h-[100svh] md:absolute md:inset-0 md:h-full md:min-h-full"
+      className="home-spline-root pointer-events-none fixed inset-0 z-[5] h-[100dvh] min-h-[100dvh] w-full overflow-hidden max-md:bottom-auto max-md:min-h-0 max-md:h-[100svh] md:absolute md:inset-0 md:h-full md:min-h-full"
       aria-hidden
     >
       {showLogoFallback ? <HomePageHero /> : null}
@@ -49,8 +49,8 @@ export function HomeSplineBackground() {
       <div className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-t from-black/35 via-transparent to-black/15" />
 
       {!showLogoFallback ? (
-        <div className="absolute inset-0 z-[1] overflow-hidden opacity-[0.42] max-md:top-0">
-          <div className="home-spline-embed-layer h-full w-full md:origin-center md:[transform:scale(-1.2,1.2)]">
+        <div className="pointer-events-none absolute inset-0 z-[1] overflow-hidden opacity-[0.42] max-md:top-0">
+          <div className="home-spline-embed-layer pointer-events-none h-full w-full md:origin-center md:[transform:scale(-1.2,1.2)]">
             <iframe
               src={SPLINE_EMBED_URL}
               title="Sozu background animation"

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
+import { resolveOrgReceiveAddress } from "@/lib/org-receive-address";
 import { createCheckoutSession } from "@/lib/db/checkout-sessions";
 import { rampProvider } from "@/lib/ramp/provider";
 
@@ -18,6 +19,10 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const amountUsd = typeof body.amountUsd === "string" ? body.amountUsd.trim() : "";
   const reference = typeof body.reference === "string" ? body.reference.trim() : undefined;
+  const paymentMethod =
+    body.paymentMethod === "card" || body.paymentMethod === "bank_transfer"
+      ? body.paymentMethod
+      : undefined;
 
   if (!amountUsd || isNaN(parseFloat(amountUsd)) || parseFloat(amountUsd) <= 0) {
     return NextResponse.json({ error: "amountUsd must be a positive number" }, { status: 400 });
@@ -30,7 +35,9 @@ export async function POST(request: NextRequest) {
   }
 
   const org = await getOrganizationForUser(orgId);
-  const destinationAddress = org?.stellar_disbursement_public_key ?? null;
+  const receive = org ? resolveOrgReceiveAddress(org) : null;
+  const destinationAddress =
+    receive?.classicG ?? receive?.tagReceiveAddress ?? receive?.sorobanC ?? null;
   if (!destinationAddress) {
     return NextResponse.json(
       { error: "Organization has no Stellar disbursement wallet configured" },
@@ -50,6 +57,7 @@ export async function POST(request: NextRequest) {
       destinationStellarAddress: destinationAddress,
       externalRef: id,
       redirectUrl,
+      paymentMethod,
     });
   } catch (err) {
     console.error("[checkout/create] ramp provider error:", err);

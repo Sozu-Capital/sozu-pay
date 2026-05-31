@@ -1,12 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
 import { checkUsernameAvailable } from "@/lib/auth/passkey-client";
 import { registerSmartAccount } from "@/lib/stellar/smartAccounts/registerWalletClient";
+import { resolvePublicKeyFromServer } from "@/lib/stellar/smartAccounts/registerWalletClient";
+import { suggestOrgTagFromOrgName } from "@/lib/sozu-tag-suggest";
+import { normalizeCredentialId } from "@/lib/webauthn/utils";
+import {
+  OrgCreateSetupProgress,
+  type OrgSetupStepKey,
+} from "@/components/onboarding/OrgCreateSetupProgress";
+import { OrgFundPaymentModal } from "@/components/onboarding/OrgFundPaymentModal";
 
 type TaxEntityType = "private_company" | "ngo";
 type InviteRole = "member" | "admin" | "guardian" | "treasury_manager";
@@ -37,7 +45,16 @@ function isValidOrgTag(tag: string): boolean {
 export default function CreateOrganizationPage() {
   const router = useRouter();
   const t = useTranslations("onboardingPages.createOrg");
-  const { ready, kit, linkMemberWallet, error: kitError } = useSmartAccountKitContext();
+  const {
+    ready,
+    kit,
+    connected,
+    contractId: kitContractId,
+    credentialId: kitCredentialId,
+    linkMemberWallet,
+    error: kitError,
+  } = useSmartAccountKitContext();
+  const [fundModalOpen, setFundModalOpen] = useState(false);
 
   const [orgName, setOrgName] = useState("");
   const [taxOpen, setTaxOpen] = useState(false);
@@ -49,6 +66,7 @@ export default function CreateOrganizationPage() {
   const [taxState, setTaxState] = useState("");
   const [taxCountry, setTaxCountry] = useState("");
   const [orgSozuTagInput, setOrgSozuTagInput] = useState("");
+  const orgTagEditedRef = useRef(false);
   const [orgTagAvailable, setOrgTagAvailable] = useState<boolean | null>(null);
   const [orgTagCheckError, setOrgTagCheckError] = useState("");
   const [orgTagChecking, setOrgTagChecking] = useState(false);
@@ -77,8 +95,27 @@ export default function CreateOrganizationPage() {
   }, [invitesText]);
 
   useEffect(() => {
-    setOrgName((prev) => prev || t("defaultOrgName"));
+    const defaultName = t("defaultOrgName");
+    setOrgName((prev) => {
+      const name = prev || defaultName;
+      if (!orgTagEditedRef.current) {
+        setOrgSozuTagInput(suggestOrgTagFromOrgName(name));
+      }
+      return name;
+    });
   }, [t]);
+
+  function handleOrgNameChange(value: string) {
+    setOrgName(value);
+    if (!orgTagEditedRef.current) {
+      setOrgSozuTagInput(suggestOrgTagFromOrgName(value));
+    }
+  }
+
+  function handleOrgTagChange(value: string) {
+    orgTagEditedRef.current = true;
+    setOrgSozuTagInput(value);
+  }
 
   useEffect(() => {
     fetch("/api/profile", { credentials: "include" })
@@ -149,6 +186,45 @@ export default function CreateOrganizationPage() {
     fullName.trim().length > 0 &&
     orgTagReady;
 
+  async function resolveMemberWallet(): Promise<{
+    contractId: string;
+    credentialId: string;
+    publicKey: Uint8Array;
+  }> {
+    const loginId = loginCredentialId?.trim() || null;
+    if (
+      kit &&
+      connected &&
+      kitContractId &&
+      kitCredentialId &&
+      (!loginId ||
+        normalizeCredentialId(kitCredentialId) === normalizeCredentialId(loginId))
+    ) {
+      try {
+        const publicKey = await resolvePublicKeyFromServer({
+          contractId: kitContractId,
+          credentialId: kitCredentialId,
+        });
+        return {
+          contractId: kitContractId,
+          credentialId: kitCredentialId,
+          publicKey,
+        };
+      } catch {
+        // fall through to link/deploy
+      }
+    }
+    return linkMemberWallet(loginId ?? undefined);
+  }
+
+  const setupStepLabels: Record<OrgSetupStepKey, string> = {
+    org: t("stepsShort.org"),
+    passkey: t("stepsShort.passkey"),
+    register: t("stepsShort.register"),
+    treasury: t("stepsShort.treasury"),
+    sozuTag: t("stepsShort.sozuTag"),
+  };
+
   async function handleCreate() {
     if (!kit || !fullName.trim() || !orgTagReady) return;
     setError("");
@@ -187,7 +263,7 @@ export default function CreateOrganizationPage() {
       }
 
       setStep("passkey");
-      const wallet = await linkMemberWallet(loginCredentialId ?? undefined);
+      const wallet = await resolveMemberWallet();
       const memberC = wallet.contractId;
       const credId = wallet.credentialId;
       setMemberContractId(memberC);
@@ -253,6 +329,11 @@ export default function CreateOrganizationPage() {
   if (step === "done") {
     return (
       <DarkGradientBg>
+        <OrgFundPaymentModal
+          open={fundModalOpen}
+          onClose={() => setFundModalOpen(false)}
+          orgSozuTag={orgSozuTag}
+        />
         <main className="min-h-screen flex flex-col items-center justify-center p-4 dark text-white">
           <div className="w-full max-w-md rounded-xl border border-white/10 bg-black/40 backdrop-blur-sm p-6 shadow-xl">
             <h1 className="text-xl font-semibold text-white">{t("doneTitle")}</h1>
@@ -261,26 +342,20 @@ export default function CreateOrganizationPage() {
               <div className="mt-4 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3">
                 <p className="text-xs text-emerald-200">{t("orgSozuTagReady")}</p>
                 <p className="mt-1 font-mono text-sm text-white">${orgSozuTag}</p>
-                <p className="mt-2 text-[11px] text-gray-400">{t("orgSozuTagFundHint")}</p>
-              </div>
-            )}
-            {orgTagReceiveAddress && (
-              <div className="mt-3 rounded-md border border-white/10 bg-black/30 p-3">
-                <p className="text-xs text-gray-400">{t("fundTreasury")}</p>
-                <p className="mt-1 font-mono text-xs break-all text-white">{orgTagReceiveAddress}</p>
-              </div>
-            )}
-            {memberContractId && (
-              <div className="mt-3 rounded-md border border-white/10 bg-black/30 p-3">
-                <p className="text-xs text-gray-400">{t("yourPasskeyAccount")}</p>
-                <p className="mt-1 font-mono text-xs break-all text-white">{memberContractId}</p>
               </div>
             )}
             <div className="mt-6 flex flex-col gap-2">
               <button
                 type="button"
-                onClick={() => router.replace("/onboarding/organizations")}
+                onClick={() => setFundModalOpen(true)}
                 className="w-full rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium hover:opacity-90 transition-opacity"
+              >
+                {t("fundAccountCta")}
+              </button>
+              <button
+                type="button"
+                onClick={() => router.replace("/onboarding/organizations")}
+                className="w-full rounded-md border border-white/20 bg-white/5 py-2.5 px-4 text-sm font-medium text-white hover:bg-white/10"
               >
                 {t("goOrgPicker")}
               </button>
@@ -299,27 +374,31 @@ export default function CreateOrganizationPage() {
   }
 
   if (isBusy) {
-    const stepKey = step as "passkey" | "org" | "register" | "treasury" | "sozuTag";
-    const label =
+    const stepKey =
       step === "passkey" ||
       step === "org" ||
       step === "register" ||
       step === "treasury" ||
       step === "sozuTag"
-        ? t(`steps.${stepKey}`)
-        : t("steps.settingUp");
+        ? step
+        : "org";
+    const label = t(`steps.${stepKey}`);
     return (
       <DarkGradientBg>
         <main className="min-h-screen flex flex-col items-center justify-center p-4 dark text-white">
-          <div className="w-full max-w-md rounded-xl border border-white/10 bg-black/40 backdrop-blur-sm p-8 shadow-xl text-center">
-            <div
-              className="mx-auto h-10 w-10 rounded-full border-2 border-white/20 border-t-white animate-spin"
-              aria-hidden
-            />
-            <h1 className="mt-6 text-lg font-semibold">{t("busyTitle")}</h1>
-            <p className="mt-2 text-sm text-gray-300">{label}</p>
-            <p className="mt-4 text-xs text-gray-500">{t("busyHint")}</p>
-          </div>
+          <OrgCreateSetupProgress
+            currentStep={stepKey}
+            stepLabels={setupStepLabels}
+            title={t("busyTitle")}
+            subtitle={label}
+            hint={t("busyHint")}
+            spinner={
+              <div
+                className="h-10 w-10 rounded-full border-2 border-white/20 border-t-white animate-spin"
+                aria-hidden
+              />
+            }
+          />
         </main>
       </DarkGradientBg>
     );
@@ -341,6 +420,10 @@ export default function CreateOrganizationPage() {
           )}
 
           <div className="mt-5 space-y-3">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-gray-500">
+              {t("sectionYou")}
+            </p>
+
             {userSozuTag ? (
               <div className="rounded-md border border-white/10 bg-black/25 px-3 py-2.5">
                 <p className="text-xs font-medium text-gray-400">{t("yourSozuTagLabel")}</p>
@@ -348,31 +431,6 @@ export default function CreateOrganizationPage() {
                 <p className="mt-1 text-[11px] text-gray-500">{t("yourSozuTagHint")}</p>
               </div>
             ) : null}
-
-            <div>
-              <label className="text-xs font-medium text-gray-300">{t("orgSozuTagLabel")}</label>
-              <div className="mt-1 flex items-center rounded-md border border-white/15 bg-black/30 focus-within:ring-2 focus-within:ring-white/20">
-                <span className="pl-3 text-sm text-gray-500">$</span>
-                <input
-                  value={orgSozuTagInput.replace(/^\$+/, "")}
-                  onChange={(e) => setOrgSozuTagInput(e.target.value)}
-                  placeholder={t("orgSozuTagPlaceholder")}
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="w-full bg-transparent px-2 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none"
-                />
-              </div>
-              <p className="mt-1 text-[11px] text-gray-500">{t("orgSozuTagHint")}</p>
-              {orgTagChecking && orgTagNormalized ? (
-                <p className="mt-1 text-[11px] text-gray-400">{t("orgSozuTagChecking")}</p>
-              ) : null}
-              {!orgTagChecking && orgTagCheckError ? (
-                <p className="mt-1 text-[11px] text-red-400">{orgTagCheckError}</p>
-              ) : null}
-              {!orgTagChecking && orgTagAvailable && orgTagNormalized ? (
-                <p className="mt-1 text-[11px] text-emerald-400">{t("orgSozuTagAvailable")}</p>
-              ) : null}
-            </div>
 
             <div>
               <label className="text-xs font-medium text-gray-300">{t("fullNameLabel")}</label>
@@ -385,15 +443,43 @@ export default function CreateOrganizationPage() {
               <p className="mt-1 text-[11px] text-gray-500">{t("fullNameHint")}</p>
             </div>
 
+            <p className="pt-2 text-[11px] font-medium uppercase tracking-wider text-gray-500">
+              {t("sectionOrganization")}
+            </p>
+
             <div>
               <label className="text-xs font-medium text-gray-300">{t("orgNameLabel")}</label>
               <input
                 value={orgName}
-                onChange={(e) => setOrgName(e.target.value)}
+                onChange={(e) => handleOrgNameChange(e.target.value)}
                 placeholder={t("orgNamePlaceholder")}
-                disabled={false}
                 className="mt-1 w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20"
               />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-gray-300">{t("orgSozuTagLabel")}</label>
+              <div className="mt-1 flex items-center rounded-md border border-white/15 bg-black/30 focus-within:ring-2 focus-within:ring-white/20">
+                <span className="pl-3 text-sm text-gray-500">$</span>
+                <input
+                  value={orgSozuTagInput.replace(/^\$+/, "")}
+                  onChange={(e) => handleOrgTagChange(e.target.value)}
+                  placeholder={t("orgSozuTagPlaceholder")}
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="w-full bg-transparent px-2 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none"
+                />
+              </div>
+              <p className="mt-1 text-[11px] text-gray-500">{t("orgSozuTagAutoHint")}</p>
+              {orgTagChecking && orgTagNormalized ? (
+                <p className="mt-1 text-[11px] text-gray-400">{t("orgSozuTagChecking")}</p>
+              ) : null}
+              {!orgTagChecking && orgTagCheckError ? (
+                <p className="mt-1 text-[11px] text-red-400">{orgTagCheckError}</p>
+              ) : null}
+              {!orgTagChecking && orgTagAvailable && orgTagNormalized ? (
+                <p className="mt-1 text-[11px] text-emerald-400">{t("orgSozuTagAvailable")}</p>
+              ) : null}
             </div>
 
             <div className="rounded-md border border-white/10 bg-black/25 overflow-hidden">
@@ -498,6 +584,10 @@ export default function CreateOrganizationPage() {
                 </div>
               ) : null}
             </div>
+
+            <p className="pt-1 text-[11px] font-medium uppercase tracking-wider text-gray-500">
+              {t("sectionMembers")}
+            </p>
 
             <div>
               <label className="text-xs font-medium text-gray-300">{t("guardianLabel")}</label>

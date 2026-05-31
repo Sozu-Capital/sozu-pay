@@ -2,7 +2,7 @@
 
 ## Overview
 
-1. **Visit /** – Home is the login gate. Session is kept by default; **`/?fresh=1`** (after logout) clears session (and Privy when `AUTH_PROVIDER=privy`).
+1. **Visit /** – Home is the login gate. Session is kept by default; **`/?fresh=1`** (after logout) clears the session cookie.
 2. **Log in (passkey, default)** – Sozu tag + WebAuthn passkey, or tag + backup PIN. See [passkey-auth-migration.md](./passkey-auth-migration.md).
 3. **Log in (Privy, legacy)** – Privy modal → `POST /api/auth/privy` → `sozupay_session` cookie.
 4. **Organization picker** – Client redirects to `/onboarding/organizations`. User sees:

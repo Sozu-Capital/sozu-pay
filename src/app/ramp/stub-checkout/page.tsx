@@ -12,7 +12,8 @@ export default function StubRampCheckoutPage() {
     const session = sp.get("session") ?? "";
     const amount = sp.get("amount") ?? "";
     const redirect = sp.get("redirect") ?? "";
-    return { ref, session, amount, redirect };
+    const method = sp.get("method") ?? "";
+    return { ref, session, amount, redirect, method };
   }, [sp]);
 
   const goBack = () => {
@@ -45,6 +46,14 @@ export default function StubRampCheckoutPage() {
             </dd>
             <dt className="text-gray-500 dark:text-gray-400">Amount</dt>
             <dd className="col-span-2 text-gray-800 dark:text-gray-200">{data.amount || "—"}</dd>
+            <dt className="text-gray-500 dark:text-gray-400">Method</dt>
+            <dd className="col-span-2 text-gray-800 dark:text-gray-200">
+              {data.method === "bank_transfer"
+                ? "Bank transfer"
+                : data.method === "card"
+                  ? "Debit / credit card"
+                  : "—"}
+            </dd>
           </dl>
         </div>
 

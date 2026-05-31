@@ -4,6 +4,8 @@
  * (Bridge, Circle, Meld, etc.) without touching product code.
  */
 
+export type DepositPaymentMethod = "card" | "bank_transfer";
+
 export type DepositSessionParams = {
   orgId: string;
   /** Amount in USD the customer should pay (informational; provider may let customer choose). */
@@ -14,6 +16,8 @@ export type DepositSessionParams = {
   externalRef: string;
   /** Full URL the customer is redirected to after provider flow completes. */
   redirectUrl: string;
+  /** UI-selected funding rail (passed through to provider / stub checkout). */
+  paymentMethod?: DepositPaymentMethod;
 };
 
 export type DepositSession = {

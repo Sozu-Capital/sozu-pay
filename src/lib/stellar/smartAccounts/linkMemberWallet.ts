@@ -1,8 +1,6 @@
 import type { SmartAccountKit } from "smart-account-kit";
 import { base64URLToBuffer, normalizeCredentialId } from "@/lib/webauthn/utils";
-import {
-  resolvePublicKeyFromServer,
-} from "@/lib/stellar/smartAccounts/registerWalletClient";
+import { resolvePublicKeyFromServer } from "@/lib/stellar/smartAccounts/registerWalletClient";
 
 type ConnectResult = {
   contractId: string | null;
@@ -22,6 +20,17 @@ function isNotDeployedError(message: string): boolean {
     message.includes("not deployed") ||
     message.includes("not been deployed")
   );
+}
+
+function extractContractId(entry: unknown): string | null {
+  if (!entry || typeof entry !== "object") return null;
+  if ("contract_id" in entry && typeof entry.contract_id === "string") {
+    return entry.contract_id;
+  }
+  if ("contractId" in entry && typeof entry.contractId === "string") {
+    return entry.contractId;
+  }
+  return null;
 }
 
 async function resolveLoginPasskeyPublicKey(
@@ -71,57 +80,18 @@ async function finishLink(
   };
 }
 
-/**
- * Link (or deploy) the member smart account using the same passkey as login — never creates a new passkey.
- */
-export async function linkMemberWalletWithLoginPasskey(params: {
-  kit: SmartAccountKit;
-  connect: ConnectFn;
-  loginCredentialId?: string;
-}): Promise<{ contractId: string; credentialId: string; publicKey: Uint8Array }> {
-  const { kit, connect, loginCredentialId } = params;
+async function discoverFirstContractId(
+  kit: SmartAccountKit,
+  credentialId: string
+): Promise<string | null> {
+  const contracts = await kit.discoverContractsByCredential(credentialId);
+  return extractContractId(contracts?.[0]) ?? null;
+}
 
-  if (loginCredentialId) {
-    try {
-      return await finishLink(await connect({ credentialId: loginCredentialId }));
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (!isNotDeployedError(msg)) throw e;
-    }
-  }
-
-  try {
-    return await finishLink(await connect({ prompt: true }));
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (!isNotDeployedError(msg)) throw e;
-  }
-
-  const { credentialId: authedId } = await kit.authenticatePasskey();
-  if (
-    loginCredentialId &&
-    normalizeCredentialId(authedId) !== normalizeCredentialId(loginCredentialId)
-  ) {
-    throw new Error("WRONG_PASSKEY");
-  }
-
-  const contracts = await kit.discoverContractsByCredential(authedId);
-  const first = contracts?.[0];
-  const contractId =
-    first && typeof first === "object"
-      ? ("contract_id" in first && typeof first.contract_id === "string"
-          ? first.contract_id
-          : "contractId" in first && typeof first.contractId === "string"
-            ? first.contractId
-            : null)
-      : null;
-
-  if (contractId) {
-    return await finishLink(
-      await connect({ credentialId: authedId, contractId })
-    );
-  }
-
+async function deployMemberContract(
+  kit: SmartAccountKit,
+  credentialId: string
+): Promise<void> {
   const primaryRes = await fetch("/api/auth/passkeys/primary", { credentials: "include" });
   const primary = (await primaryRes.json().catch(() => ({}))) as {
     publicKey65b?: string;
@@ -130,12 +100,61 @@ export async function linkMemberWalletWithLoginPasskey(params: {
   if (!primaryRes.ok || !primary.publicKey65b) {
     throw new Error("PASSKEY_PUBLIC_KEY_MISSING");
   }
-
   const publicKey = new Uint8Array(base64URLToBuffer(primary.publicKey65b));
-  await kit.credentials.save({
-    credentialId: authedId,
-    publicKey,
-  });
-  await kit.credentials.deploy(authedId, { autoSubmit: true });
-  return await finishLink(await connect({ credentialId: authedId }));
+  await kit.credentials.save({ credentialId, publicKey });
+  await kit.credentials.deploy(credentialId, { autoSubmit: true });
+}
+
+/**
+ * Link (or deploy) the member smart account using the login passkey — one WebAuthn prompt when possible.
+ */
+export async function linkMemberWalletWithLoginPasskey(params: {
+  kit: SmartAccountKit;
+  connect: ConnectFn;
+  loginCredentialId?: string;
+}): Promise<{ contractId: string; credentialId: string; publicKey: Uint8Array }> {
+  const { kit, connect, loginCredentialId: expectedLoginId } = params;
+  let credentialId = expectedLoginId?.trim() || null;
+
+  if (credentialId) {
+    try {
+      return await finishLink(await connect({ credentialId }));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!isNotDeployedError(msg)) throw e;
+    }
+
+    const existingId = await discoverFirstContractId(kit, credentialId);
+    if (existingId) {
+      return await finishLink(await connect({ credentialId, contractId: existingId }));
+    }
+  } else {
+    const { credentialId: authedId } = await kit.authenticatePasskey();
+    credentialId = authedId;
+    if (
+      expectedLoginId &&
+      normalizeCredentialId(credentialId) !== normalizeCredentialId(expectedLoginId)
+    ) {
+      throw new Error("WRONG_PASSKEY");
+    }
+
+    try {
+      return await finishLink(await connect({ credentialId }));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!isNotDeployedError(msg)) throw e;
+    }
+
+    const existingId = await discoverFirstContractId(kit, credentialId);
+    if (existingId) {
+      return await finishLink(await connect({ credentialId, contractId: existingId }));
+    }
+  }
+
+  if (!credentialId) {
+    throw new Error("PASSKEY_WALLET_NOT_LINKED");
+  }
+
+  await deployMemberContract(kit, credentialId);
+  return await finishLink(await connect({ credentialId }));
 }

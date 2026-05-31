@@ -1,21 +1,10 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
-const AUTH_PROVIDER =
-  process.env.NEXT_PUBLIC_AUTH_PROVIDER ??
-  process.env.AUTH_PROVIDER ??
-  (PRIVY_APP_ID ? "privy" : "passkey");
+const usePasskeyAuth = true;
 
-const usePrivyAuth = AUTH_PROVIDER === "privy" && !!PRIVY_APP_ID;
-const usePasskeyAuth = AUTH_PROVIDER === "passkey" || !usePrivyAuth;
-
-/** When Privy is configured, require session for dashboard. Otherwise use mock in dev. */
-const AUTH_MOCK =
-  !usePrivyAuth &&
-  !usePasskeyAuth &&
-  (process.env.AUTH_MOCK === "true" ||
-    (process.env.AUTH_MOCK !== "false" && process.env.NODE_ENV === "development"));
+/** Demo mode: skip login when AUTH_MOCK=true */
+const AUTH_MOCK = process.env.AUTH_MOCK === "true";
 
 function homeUrl(request: NextRequest, extra?: Record<string, string>): URL {
   const url = new URL("/", request.url);
@@ -42,7 +31,6 @@ export function middleware(request: NextRequest) {
   const isAuthApi =
     request.nextUrl.pathname.startsWith("/api/auth/verify") ||
     request.nextUrl.pathname.startsWith("/api/auth/send-link") ||
-    request.nextUrl.pathname.startsWith("/api/auth/privy") ||
     request.nextUrl.pathname.startsWith("/api/auth/register") ||
     request.nextUrl.pathname.startsWith("/api/auth/login") ||
     request.nextUrl.pathname.startsWith("/api/auth/username") ||
@@ -61,7 +49,7 @@ export function middleware(request: NextRequest) {
     if (returnTo && returnTo.startsWith("/")) {
       return NextResponse.redirect(new URL(returnTo, request.url));
     }
-    if (usePasskeyAuth || usePrivyAuth) {
+    if (usePasskeyAuth) {
       return NextResponse.redirect(new URL("/onboarding/organizations", request.url));
     }
     return NextResponse.redirect(new URL("/dashboard", request.url));

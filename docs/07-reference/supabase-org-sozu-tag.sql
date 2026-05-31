@@ -7,7 +7,7 @@
 -- Approach: create a dedicated synthetic Supabase auth user per organization and store its id on
 -- organizations.sozu_tag_auth_user_id. Then write:
 --   profiles.username = org_tag
---   stellar_wallets.public_key = organizations.stellar_disbursement_public_key
+--   stellar_wallets.public_key = org treasury smart account (C…) when deployed, else classic G.
 --
 -- This keeps org tags separate from human members' personal profiles/tags.
 

@@ -7,7 +7,7 @@ export default async function HomePage({
 }) {
   const sp = await searchParams;
   const returnTo = typeof sp.returnTo === "string" ? sp.returnTo : undefined;
-  /** After logout (`?fresh=1`), clear session + Privy on home. Default home keeps existing session. */
+  /** After logout (`?fresh=1`), clear session on home. Default home keeps existing session. */
   const clearSessionOnMount = sp.fresh === "1";
 
   return (

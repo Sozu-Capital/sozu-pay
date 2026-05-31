@@ -147,7 +147,8 @@ export async function applyOrganizationSozuTag(params: {
   const org = await getOrganizationById(params.orgId);
   if (!org) return { ok: false, status: 404, error: "Organization not found." };
 
-  const { tagReceiveAddress: destination } = resolveOrgReceiveAddress(org);
+  const receive = resolveOrgReceiveAddress(org);
+  const destination = receive.tagReceiveAddress;
   if (!destination) {
     return {
       ok: false,
@@ -156,7 +157,6 @@ export async function applyOrganizationSozuTag(params: {
         "Organization has no receive address yet. Provision treasury (Soroban) or a classic G wallet on Profile first.",
     };
   }
-
   const sb = getSupabase();
   const existingOwnerId = await lookupUsernameOwnerId(sb, username);
   const currentAuthId = org.sozu_tag_auth_user_id?.trim() || null;
@@ -217,5 +217,36 @@ export async function getOrganizationSozuTag(org: Organization): Promise<string 
   if (error) return null;
   const username = (data as { username?: string } | null)?.username;
   return typeof username === "string" && username.trim() ? username : null;
+}
+
+/** Re-write profiles + stellar_wallets when directory key diverges from tagReceiveAddress (e.g. was C, now classic G). */
+export async function resyncOrganizationSozuTagDirectory(
+  orgId: string
+): Promise<{ resynced: boolean; error?: string }> {
+  const org = await getOrganizationById(orgId);
+  if (!org?.sozu_tag_auth_user_id) return { resynced: false };
+
+  const username = await getOrganizationSozuTag(org);
+  if (!username) return { resynced: false };
+
+  const { tagReceiveAddress } = resolveOrgReceiveAddress(org);
+  if (!tagReceiveAddress) return { resynced: false };
+
+  const userCol = stellarWalletUserColumn();
+  const pkCol = stellarWalletPublicKeyColumn();
+  const { data } = await getSupabase()
+    .from("stellar_wallets")
+    .select(pkCol)
+    .eq(userCol, org.sozu_tag_auth_user_id)
+    .limit(1)
+    .maybeSingle();
+  const row = data as Record<string, string> | null;
+  const current = row?.[pkCol]?.trim().toUpperCase() || null;
+  const target = tagReceiveAddress.trim().toUpperCase();
+  if (current === target) return { resynced: false };
+
+  const res = await applyOrganizationSozuTag({ orgId, usernameRaw: username });
+  if (!res.ok) return { resynced: false, error: res.error };
+  return { resynced: true };
 }
 

@@ -9,11 +9,6 @@ const required = {
     "NEXT_PUBLIC_SUPABASE_URL",
     "SUPABASE_SERVICE_ROLE_KEY",
   ] as const,
-  // Privy – required when NEXT_PUBLIC_PRIVY_APP_ID is set (client); server needs these for token verify
-  Privy: [
-    "NEXT_PUBLIC_PRIVY_APP_ID",
-    "PRIVY_VERIFICATION_KEY",
-  ] as const,
 } as const;
 
 // When checking a key, if any alias is set we consider the key "present"
@@ -27,7 +22,7 @@ function getEnv(name: string): string | undefined {
 
 /**
  * Validate that required env vars for a given "feature" are set.
- * Use in server code paths (e.g. getSupabase, auth/privy route) so missing vars throw at first use.
+ * Use in server code paths (e.g. getSupabase) so missing vars throw at first use.
  */
 export function requireEnv(feature: keyof typeof required): void {
   const vars = required[feature];
@@ -49,9 +44,6 @@ export function requireEnv(feature: keyof typeof required): void {
  * Optional: validate all features that might be used in production.
  * Call from next.config or a server-only init module if you want build-time validation.
  */
-export function validateEnv(options: { supabase?: boolean; privy?: boolean }): void {
+export function validateEnv(options: { supabase?: boolean }): void {
   if (options.supabase) requireEnv("Supabase");
-  if (options.privy) {
-    if (getEnv("NEXT_PUBLIC_PRIVY_APP_ID")?.trim()) requireEnv("Privy");
-  }
 }

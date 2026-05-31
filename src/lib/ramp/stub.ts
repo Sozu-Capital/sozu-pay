@@ -22,7 +22,7 @@ export const stubProvider: RampProvider = {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     return {
       sessionId,
-      url: `${appUrl}/ramp/stub-checkout?ref=${params.externalRef}&session=${sessionId}&amount=${params.amountUsd}&redirect=${encodeURIComponent(params.redirectUrl)}`,
+      url: `${appUrl}/ramp/stub-checkout?ref=${params.externalRef}&session=${sessionId}&amount=${params.amountUsd}&redirect=${encodeURIComponent(params.redirectUrl)}${params.paymentMethod ? `&method=${params.paymentMethod}` : ""}`,
       expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
     };
   },

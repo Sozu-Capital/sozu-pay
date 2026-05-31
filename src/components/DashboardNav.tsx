@@ -6,7 +6,6 @@ import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 import { useTranslations } from "next-intl";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useSignOut } from "@/lib/auth/useSignOut";
-import { isPrivyAuth } from "@/lib/auth/provider";
 
 function NavLink({
   href,
@@ -101,9 +100,7 @@ export function DashboardNav({ onNavigate }: { onNavigate?: () => void } = {}) {
                 {...linkProps}
               />
             )}
-            {isPrivyAuth() ? (
-              <NavLink href="/dashboard/keys" label={t("keysCustody")} indent {...linkProps} />
-            ) : null}
+            <NavLink href="/dashboard/keys" label={t("keysCustody")} indent {...linkProps} />
           </>
         )}
       </div>

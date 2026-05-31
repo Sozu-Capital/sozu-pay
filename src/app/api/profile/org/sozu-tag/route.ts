@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession, setSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationById } from "@/lib/db/organizations";
-import { applyOrganizationSozuTag, getOrganizationSozuTag } from "@/lib/org-sozu-tag";
+import {
+  applyOrganizationSozuTag,
+  getOrganizationSozuTag,
+  resyncOrganizationSozuTagDirectory,
+} from "@/lib/org-sozu-tag";
 import { getOrgReceiveDiagnostics } from "@/lib/org-receive-address";
 
 export async function GET() {
@@ -22,8 +26,14 @@ export async function GET() {
     }
   }
 
-  const org = await getOrganizationById(orgId);
+  let org = await getOrganizationById(orgId);
   if (!org) return NextResponse.json({ error: "Organization not found." }, { status: 404 });
+
+  const resync = await resyncOrganizationSozuTagDirectory(orgId);
+  if (resync.resynced) {
+    const refreshed = await getOrganizationById(orgId);
+    if (refreshed) org = refreshed;
+  }
 
   const username = await getOrganizationSozuTag(org);
   const diagnostics = await getOrgReceiveDiagnostics(org);
@@ -36,6 +46,8 @@ export async function GET() {
     warnings: diagnostics.warnings,
     classic_on_network: diagnostics.classicOnNetwork,
     has_usdc_trustline: diagnostics.hasUsdcTrustline,
+    tag_directory_resynced: resync.resynced,
+    ...(resync.error && { tag_directory_resync_error: resync.error }),
   });
 }
 
@@ -62,6 +74,8 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
   const usernameRaw = typeof body.username === "string" ? body.username : "";
+  await resyncOrganizationSozuTagDirectory(orgId);
+
   const res = await applyOrganizationSozuTag({ orgId, usernameRaw });
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status });
 

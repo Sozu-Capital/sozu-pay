@@ -150,7 +150,7 @@ export default function SettingsPage() {
             <div>
               <dt className="text-gray-500 dark:text-gray-400">{t("displayNameLabel")}</dt>
               <dd className="font-medium text-gray-900 dark:text-white">
-                {resolveAccountDisplayName(null, user.email, tc("you"), user.username)}
+                {resolveAccountDisplayName(user.email, tc("you"), user.username)}
               </dd>
             </div>
             <div>

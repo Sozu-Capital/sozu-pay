@@ -171,7 +171,6 @@ export default function ProfilePage() {
   };
 
   const displayName = resolveAccountDisplayName(
-    null,
     profile?.email,
     t("userFallback"),
     profile?.username

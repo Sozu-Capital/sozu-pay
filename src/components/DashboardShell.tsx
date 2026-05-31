@@ -14,7 +14,7 @@ function DashboardBrandHeader({ className = "" }: { className?: string }) {
   const orgLabel = profile?.org_name?.trim() || (loading ? "…" : t("noOrganization"));
   const accountLabel = loading
     ? "…"
-    : resolveAccountDisplayName(null, profile?.email, t("accountFallback"), profile?.username);
+    : resolveAccountDisplayName(profile?.email, t("accountFallback"), profile?.username);
 
   return (
     <div className={`flex min-w-0 items-center gap-2.5 ${className}`}>

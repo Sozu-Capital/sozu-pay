@@ -1,0 +1,11 @@
+--- a/internal/serve/middleware/middleware.go
++++ b/internal/serve/middleware/middleware.go
+@@ -270,6 +270,8 @@ func CSPMiddleware() func(http.Handler) http.Handler {
+ 				{"style-src", []string{selfSrc, recaptchaSrc, "https://fonts.googleapis.com/css2", "'unsafe-inline'"}},
+ 				{"connect-src", []string{selfSrc, recaptchaSrc, ipapiSrc}},
+ 				{"font-src", []string{selfSrc, "https://fonts.gstatic.com"}},
++				{"img-src", []string{selfSrc, "blob:"}},
++				{"media-src", []string{selfSrc, "blob:"}},
+ 				{"default-src", []string{selfSrc}},
+ 
+ 				{"frame-src", []string{selfSrc, recaptchaSrc}},

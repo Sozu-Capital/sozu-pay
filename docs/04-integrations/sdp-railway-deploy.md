@@ -354,6 +354,19 @@ Redeploy SozuCredit, then re-run the preflight script.
 | Recipient wallet registration 500: `Failed to load tenant by name` | JWT `home_domain` is a flat Railway URL; SDP parses the first subdomain as tenant name (`sdp-v2-production-f6c7`, not `mujeres-admin`) | Set `SINGLE_TENANT_MODE=true` when you have one tenant on a flat hostname, **or** set tenant `base_url` to `https://<tenant-name>.your-domain` with matching DNS |
 | Tenant schema missing (rare after create) | Step 7 tenant migrations not run | `railway run --service sdp-api -- ./stellar-disbursement-platform db migrate up --tenant-id <uuid>` |
 | `Tenant not found in context` on dashboard SDP calls | Wrong `SDP_TENANT_NAME` | Must match tenant `name` from Railway setup (probe: `POST /login` with header should return "Incorrect email or password", not "Tenant not found") |
+| Console: CSP blocks `blob:` image on SDP page | SDP middleware sets `default-src 'self'` without `img-src blob:` | Harmless for DOB+OTP flows; blocks ID preview if `NATIONAL_ID` verification is enabled. Fix requires rebuilding SDP with `img-src 'self' blob:` in `internal/serve/middleware/middleware.go` (upstream Stellar SDP) |
+| SDP UI: **"The information you provided could not be found"** + `POST /sep24-interactive-deposit/verification` **400** | Email, DOB, OTP, or wallet domain mismatch | See checklist below |
+
+### SEP-24 verification 400 (`400_2`) checklist
+
+The Railway-hosted SDP page (`/wallet-registration/…` → `/sep24-interactive-deposit/verification`) returns this when data does not match the disbursement batch:
+
+1. **Email** — Enter the **exact** address from the NGO CSV / Distribuciones row (same as the Resend invite). SozuCredit shows a masked hint on `/sdp/register` when the invite link included `be=`.
+2. **Date of birth** — Must match the CSV `verification` column **exactly** (dashboard default if blank: `2000-01-01`). Format on SDP: `YYYY-MM-DD`.
+3. **OTP** — Tap “Resend OTP” first. With `EMAIL_SENDER_TYPE=DRY_RUN`, read the code from Railway logs; on **testnet** SDP also accepts OTP `000000`.
+4. **Wallet domain** — SDP wallet row must have `sep_10_client_domain = credit.sozu.capital` (Step 8). SozuCredit `SDP_TENANT_NAME` and invite `tenant=` must match the Railway tenant name.
+5. **reCAPTCHA** — Keep `DISABLE_RECAPTCHA=true` on Railway until production keys are configured.
+6. **Smart account (C)** — SEP-10 must use a classic **G** signer; SozuCredit maps factory `signer_public_key` automatically. Pure OZ **C**-only wallets cannot complete SDP until a **G** is linked.
 
 ---
 

@@ -8,14 +8,24 @@ const SPLINE_EMBED_URL =
 
 /** If the embed never fires load, show the static logo fallback. */
 const SPLINE_LOAD_TIMEOUT_MS = 14_000;
+const SPLINE_MOBILE_MQ = "(max-width: 767px)";
 
 /**
- * Full-viewport Spline (fixed on mobile; top-aligned, uniform scale preserves aspect ratio).
+ * Mobile-only Spline (fixed, top-aligned). Desktop uses DarkGradientBg like other auth pages.
  * UI above uses pointer-events-none except CTA/chrome.
  */
 export function HomeSplineBackground() {
+  const [isMobile, setIsMobile] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia(SPLINE_MOBILE_MQ);
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   const onLoad = useCallback(() => {
     setLoaded(true);
@@ -24,16 +34,18 @@ export function HomeSplineBackground() {
   const onError = useCallback(() => setFailed(true), []);
 
   useEffect(() => {
-    if (loaded) return;
+    if (!isMobile || loaded) return;
     const timer = window.setTimeout(() => setFailed(true), SPLINE_LOAD_TIMEOUT_MS);
     return () => window.clearTimeout(timer);
-  }, [loaded]);
+  }, [isMobile, loaded]);
+
+  if (!isMobile) return null;
 
   const showLogoFallback = failed && !loaded;
 
   return (
     <div
-      className="home-spline-root pointer-events-none fixed inset-0 z-[5] h-[100dvh] min-h-[100dvh] w-full overflow-hidden max-md:bottom-auto max-md:min-h-0 max-md:h-[100svh] md:absolute md:inset-0 md:h-full md:min-h-full"
+      className="home-spline-root pointer-events-none hidden h-[100svh] w-full overflow-hidden max-md:fixed max-md:inset-0 max-md:z-[5] max-md:block max-md:min-h-0"
       aria-hidden
     >
       {showLogoFallback ? <HomePageHero /> : null}
@@ -49,12 +61,12 @@ export function HomeSplineBackground() {
       <div className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-t from-black/35 via-transparent to-black/15" />
 
       {!showLogoFallback ? (
-        <div className="pointer-events-none absolute inset-0 z-[1] overflow-hidden opacity-[0.42] max-md:top-0">
-          <div className="home-spline-embed-layer pointer-events-none h-full w-full md:origin-center md:[transform:scale(-1.2,1.2)]">
+        <div className="pointer-events-none absolute inset-0 z-[1] overflow-hidden opacity-[0.42]">
+          <div className="home-spline-embed-layer pointer-events-none h-full w-full">
             <iframe
               src={SPLINE_EMBED_URL}
               title="Sozu background animation"
-              className="home-spline-iframe pointer-events-auto h-full w-full border-0 touch-manipulation max-md:min-h-0 md:min-h-full"
+              className="home-spline-iframe pointer-events-auto h-full w-full border-0 touch-manipulation"
               style={{ WebkitTouchCallout: "none" }}
               loading="eager"
               onLoad={onLoad}

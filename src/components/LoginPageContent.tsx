@@ -35,14 +35,14 @@ export function LoginPageContent({ clearSessionOnMount, returnTo }: LoginPageCon
 
   if (!cleared) {
     return (
-      <DarkGradientBg landing>
+      <DarkGradientBg mobileLanding>
         <HomeLandingShell status={<p className="text-sm text-gray-400">{t("redirecting")}</p>} />
       </DarkGradientBg>
     );
   }
 
   return (
-    <DarkGradientBg landing>
+    <DarkGradientBg mobileLanding>
       <HomeLandingShell
         introCta={
           <HomePasskeyAuth returnTo={returnTo} onBusyChange={() => {}} />

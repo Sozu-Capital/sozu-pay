@@ -6,9 +6,28 @@ interface DarkGradientBgProps {
   className?: string;
   /** Stronger texture for landing so pattern shows behind Spline. */
   landing?: boolean;
+  /** Standard auth background on desktop; stronger texture on mobile (behind Spline). */
+  mobileLanding?: boolean;
 }
 
-export function DarkGradientBg({ children, className, landing = false }: DarkGradientBgProps) {
+export function DarkGradientBg({
+  children,
+  className,
+  landing = false,
+  mobileLanding = false,
+}: DarkGradientBgProps) {
+  const patternOpacity =
+    landing || mobileLanding
+      ? mobileLanding && !landing
+        ? "opacity-5 max-md:opacity-[0.12]"
+        : "opacity-[0.12]"
+      : "opacity-5";
+  const dotsOpacity =
+    landing || mobileLanding
+      ? mobileLanding && !landing
+        ? "opacity-20 max-md:opacity-30"
+        : "opacity-30"
+      : "opacity-20";
   return (
     <div
       className={cn(
@@ -75,7 +94,7 @@ export function DarkGradientBg({ children, className, landing = false }: DarkGra
       </div>
 
       <div
-        className={cn("absolute inset-0 bg-repeat", landing ? "opacity-[0.12]" : "opacity-5")}
+        className={cn("absolute inset-0 bg-repeat", patternOpacity)}
         style={{
           backgroundImage: `url("https://images.unsplash.com/photo-1557683316-973673baf926?w=200&q=10")`,
           backgroundSize: "149.76px",
@@ -83,7 +102,7 @@ export function DarkGradientBg({ children, className, landing = false }: DarkGra
       />
       {/* Subtle dot pattern overlay */}
       <div
-        className={cn("absolute inset-0", landing ? "opacity-30" : "opacity-20")}
+        className={cn("absolute inset-0", dotsOpacity)}
         style={{
           backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.5) 1px, transparent 0)`,
           backgroundSize: "20px 20px",

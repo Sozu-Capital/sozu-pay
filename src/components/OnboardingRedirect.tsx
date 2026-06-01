@@ -9,10 +9,12 @@ import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
  */
 export function OnboardingRedirect() {
   const router = useRouter();
-  const { profile } = useDashboardProfile() ?? { profile: null };
+  const ctx = useDashboardProfile();
+  const profile = ctx?.profile ?? null;
+  const loading = ctx?.loading ?? true;
 
   useEffect(() => {
-    if (!profile) return;
+    if (loading || !profile) return;
     if (profile.needsOrgCreation) {
       router.replace("/onboarding/create-organization");
       return;
@@ -25,6 +27,7 @@ export function OnboardingRedirect() {
       router.replace("/onboarding/setup-smart-wallet");
     }
   }, [
+    loading,
     profile?.needsOrgCreation,
     profile?.needsOrganization,
     profile?.needsSmartWalletSetup,

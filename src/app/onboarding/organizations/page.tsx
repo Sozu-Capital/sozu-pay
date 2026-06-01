@@ -30,12 +30,19 @@ export default function OrganizationsPage() {
           : { organizations: [], canCreate: true }
       )
       .then((d) => {
-        setOrganizations(d.organizations ?? []);
+        const orgs: Org[] = d.organizations ?? [];
+        setOrganizations(orgs);
+        // Single-org users skip the picker — select automatically.
+        if (orgs.length === 1) {
+          handleSelectOrg(orgs[0].id);
+        }
       })
       .catch(() => {
         setOrganizations([]);
       })
       .finally(() => setLoading(false));
+  // handleSelectOrg is stable (no deps that change), so it's safe in this effect.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleSelectOrg(orgId: string) {

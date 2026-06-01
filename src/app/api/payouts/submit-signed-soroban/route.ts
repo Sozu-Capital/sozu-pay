@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
-import { getPayoutById, completePayout, failPayout } from "@/lib/payouts";
+import { getPayoutById, completePayout, failPayout, ensurePendingPayout } from "@/lib/payouts";
 import { appendAuditEvent } from "@/lib/audit";
 import { submitSignedSorobanEnvelope } from "@/lib/stellar/org-treasury";
+import { formatSorobanPayoutError } from "@/lib/stellar/soroban-payout-errors";
+import { LOCALE_COOKIE, readServerLocaleCookie } from "@/lib/i18n/locale";
 
 /**
  * POST /api/payouts/submit-signed-soroban
@@ -25,14 +28,31 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const signedEnvelopeXdr = typeof body.signedEnvelopeXdr === "string" ? body.signedEnvelopeXdr.trim() : "";
   const payoutId = typeof body.payoutId === "string" ? body.payoutId.trim() : "";
+  const amount = typeof body.amount === "string" ? body.amount.trim() : "";
+  const destination = typeof body.destination === "string" ? body.destination.trim() : "";
+  const recipientLabel =
+    typeof body.recipientLabel === "string" ? body.recipientLabel.trim() : undefined;
 
   if (!signedEnvelopeXdr || !payoutId) {
     return NextResponse.json({ error: "signedEnvelopeXdr and payoutId are required." }, { status: 400 });
   }
 
-  const payout = getPayoutById(payoutId, session.id);
+  const locale = readServerLocaleCookie((await cookies()).get(LOCALE_COOKIE)?.value);
+
+  let payout = getPayoutById(payoutId, session.id);
   if (!payout) {
-    return NextResponse.json({ error: "Payout not found." }, { status: 404 });
+    if (!amount || !destination) {
+      const msg =
+        locale === "es"
+          ? "Retiro no encontrado (sesión del servidor reiniciada). Vuelve a intentar el envío desde Retiros."
+          : "Payout not found (server session was reset). Please start the payout again from Payouts.";
+      return NextResponse.json({ error: msg }, { status: 404 });
+    }
+    payout = ensurePendingPayout(payoutId, session.id, amount, {
+      type: "to_stellar",
+      stellarAddress: destination,
+      recipientLabel,
+    });
   }
   if (payout.status !== "pending") {
     return NextResponse.json({ error: "Payout already completed or failed." }, { status: 400 });
@@ -52,7 +72,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const txHash = await submitSignedSorobanEnvelope(signedEnvelopeXdr);
+    const txHash = await submitSignedSorobanEnvelope(signedEnvelopeXdr, locale);
     completePayout(payoutId, txHash);
     appendAuditEvent(
       "payout_approved",
@@ -70,7 +90,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ payout: { ...updated!, stellarTxHash: txHash } });
   } catch (err) {
     failPayout(payoutId);
-    const msg = err instanceof Error ? err.message : "Soroban transaction failed";
+    const raw = err instanceof Error ? err.message : "Soroban transaction failed";
+    const msg = formatSorobanPayoutError(raw, locale);
     console.error("[payouts/submit-signed-soroban]", err instanceof Error ? err.stack : String(err));
     return NextResponse.json({ error: msg, payoutId }, { status: 502 });
   }

@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
-import { buildUnsignedSorobanPayout } from "@/lib/stellar/org-treasury";
+import {
+  buildUnsignedSorobanPayout,
+  resolveOrgTreasuryContractId,
+} from "@/lib/stellar/org-treasury";
+import {
+  PayoutFundsError,
+  formatPayoutFundsError,
+  formatSorobanPayoutError,
+} from "@/lib/stellar/soroban-payout-errors";
+import { LOCALE_COOKIE, readServerLocaleCookie } from "@/lib/i18n/locale";
 
 /**
  * POST /api/payouts/prepare-soroban
@@ -43,22 +53,39 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "recipientAddress and amount are required." }, { status: 400 });
   }
 
+  const locale = readServerLocaleCookie((await cookies()).get(LOCALE_COOKIE)?.value);
+
   try {
+    const treasuryContractId = resolveOrgTreasuryContractId(org);
     const prepared = await buildUnsignedSorobanPayout({
       disbursementContractId: org.soroban_contract_id,
       callerSmartAccountId: memberSa.contract_id,
       recipientAddress,
       amount,
+      treasuryContractId,
     });
     return NextResponse.json({
       envelopeXdr: prepared.envelopeXdr,
       network: prepared.network,
       disbursementContractId: org.soroban_contract_id,
       callerSmartAccountId: memberSa.contract_id,
+      treasuryContractId: treasuryContractId ?? null,
     });
   } catch (e) {
+    if (e instanceof PayoutFundsError) {
+      return NextResponse.json(
+        {
+          error: formatPayoutFundsError(e, locale),
+          code: e.code,
+          disbursementBalance: e.disbursementBalance,
+          requestedAmount: e.requestedAmount,
+          treasuryBalance: e.treasuryBalance,
+        },
+        { status: 400 }
+      );
+    }
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[api/payouts/prepare-soroban]", msg);
-    return NextResponse.json({ error: msg }, { status: 502 });
+    return NextResponse.json({ error: formatSorobanPayoutError(msg, locale) }, { status: 502 });
   }
 }

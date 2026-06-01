@@ -3,8 +3,8 @@ import { cookies } from "next/headers";
 import {
   buildSessionCookieValue,
   getSessionCookieOptions,
-  SESSION_COOKIE,
 } from "@/lib/auth/session-cookie";
+import { SESSION_COOKIE } from "@/lib/auth/session-constants";
 import { setSession, type SessionUser } from "@/lib/auth/session";
 import type { User } from "@/lib/db/users";
 

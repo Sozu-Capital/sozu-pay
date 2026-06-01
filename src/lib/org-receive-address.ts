@@ -3,7 +3,7 @@ import "server-only";
 import type { Organization } from "@/lib/db/organizations";
 import { getHorizon } from "@/lib/stellar/server";
 import { getUsdcIssuer } from "@/lib/stellar/balance";
-import { resolveOrgDisbursementContractId } from "@/lib/stellar/org-treasury";
+import { resolveOrgTreasuryContractId } from "@/lib/stellar/org-treasury";
 import { getSupabase } from "@/lib/supabase/server";
 
 function stellarWalletUserColumn(): string {
@@ -27,7 +27,7 @@ export function resolveOrgReceiveAddress(org: Organization): {
   dashboardBalanceAddress: string | null;
 } {
   const classicG = org.stellar_disbursement_public_key?.trim() || null;
-  const sorobanC = resolveOrgDisbursementContractId(org);
+  const sorobanC = resolveOrgTreasuryContractId(org);
   /** Org $tag → smart account (C) by default; classic G is legacy fallback. */
   const tagReceiveAddress = sorobanC ?? classicG;
   const dashboardBalanceAddress = sorobanC ?? classicG;

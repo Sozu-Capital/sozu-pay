@@ -16,6 +16,7 @@ import {
   rpc,
   xdr,
 } from "@stellar/stellar-sdk";
+import { coerceSimulateRetval } from "@/lib/stellar/soroban-common";
 
 function getNetworkPassphrase(): string {
   return process.env.STELLAR_NETWORK === "public"
@@ -68,12 +69,11 @@ async function getSmartAccountAddressFromView(
 
   const sim = await server.simulateTransaction(rawTx) as {
     error?: string;
-    result?: { retval?: string };
+    result?: { retval?: unknown };
   };
   if ("error" in sim && sim.error != null) return null;
-  if (!sim.result?.retval) return null;
-
-  const retval = xdr.ScVal.fromXDR(sim.result.retval, "base64");
+  const retval = coerceSimulateRetval(sim.result?.retval);
+  if (!retval) return null;
   const addr = Address.fromScVal(retval);
   const accountId = addr.toString();
   if (accountId.startsWith("C")) return accountId;

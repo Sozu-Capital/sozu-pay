@@ -8,24 +8,15 @@ const SPLINE_EMBED_URL =
 
 /** If the embed never fires load, show the static logo fallback. */
 const SPLINE_LOAD_TIMEOUT_MS = 14_000;
-const SPLINE_MOBILE_MQ = "(max-width: 767px)";
 
 /**
- * Mobile-only Spline (fixed, top-aligned). Desktop uses DarkGradientBg like other auth pages.
+ * Spline background scene.
+ * Mobile uses the special "pull up + scale" CSS to avoid letterboxing.
  * UI above uses pointer-events-none except CTA/chrome.
  */
 export function HomeSplineBackground() {
-  const [isMobile, setIsMobile] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia(SPLINE_MOBILE_MQ);
-    const sync = () => setIsMobile(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
 
   const onLoad = useCallback(() => {
     setLoaded(true);
@@ -34,18 +25,16 @@ export function HomeSplineBackground() {
   const onError = useCallback(() => setFailed(true), []);
 
   useEffect(() => {
-    if (!isMobile || loaded) return;
+    if (loaded) return;
     const timer = window.setTimeout(() => setFailed(true), SPLINE_LOAD_TIMEOUT_MS);
     return () => window.clearTimeout(timer);
-  }, [isMobile, loaded]);
-
-  if (!isMobile) return null;
+  }, [loaded]);
 
   const showLogoFallback = failed && !loaded;
 
   return (
     <div
-      className="home-spline-root pointer-events-none hidden h-[100svh] w-full overflow-hidden max-md:fixed max-md:inset-0 max-md:z-[5] max-md:block max-md:min-h-0"
+      className="home-spline-root pointer-events-none fixed inset-0 z-[5] h-[100svh] w-full overflow-hidden md:absolute md:inset-0 md:z-[5]"
       aria-hidden
     >
       {showLogoFallback ? <HomePageHero /> : null}
@@ -61,7 +50,7 @@ export function HomeSplineBackground() {
       <div className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-t from-black/35 via-transparent to-black/15" />
 
       {!showLogoFallback ? (
-        <div className="pointer-events-none absolute inset-0 z-[1] overflow-hidden opacity-[0.42]">
+        <div className="home-spline-desktop-transform pointer-events-none absolute inset-0 z-[1] overflow-hidden opacity-[0.42]">
           <div className="home-spline-embed-layer pointer-events-none h-full w-full">
             <iframe
               src={SPLINE_EMBED_URL}

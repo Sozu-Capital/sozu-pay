@@ -236,7 +236,7 @@ export async function verifyLogin(params: {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error ?? "Login failed");
-  return { redirect: data.redirect ?? "/dashboard" };
+  return { redirect: data.redirect ?? "/onboarding/organizations" };
 }
 
 export async function loginWithPin(params: {

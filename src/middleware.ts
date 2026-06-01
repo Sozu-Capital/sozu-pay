@@ -1,10 +1,30 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { SESSION_COOKIE } from "@/lib/auth/session-constants";
 
 const usePasskeyAuth = true;
 
 /** Demo mode: skip login when AUTH_MOCK=true */
 const AUTH_MOCK = process.env.AUTH_MOCK === "true";
+
+/**
+ * Best-effort decode of the session cookie payload to extract orgId.
+ * Does NOT verify the HMAC signature — that's done in the proper session
+ * handler. This is only used for redirect decisions in middleware.
+ */
+function peekOrgIdFromSessionCookie(raw: string): string | null {
+  try {
+    const lastDot = raw.lastIndexOf(".");
+    const payload = lastDot > 0 ? raw.slice(0, lastDot) : raw;
+    // base64url → base64 → JSON (works in both Node and edge runtimes)
+    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(base64);
+    const parsed = JSON.parse(json) as { orgId?: unknown };
+    return typeof parsed.orgId === "string" ? parsed.orgId : null;
+  } catch {
+    return null;
+  }
+}
 
 function homeUrl(request: NextRequest, extra?: Record<string, string>): URL {
   const url = new URL("/", request.url);
@@ -15,7 +35,7 @@ function homeUrl(request: NextRequest, extra?: Record<string, string>): URL {
 }
 
 export function middleware(request: NextRequest) {
-  const session = request.cookies.get("sozupay_session")?.value;
+  const session = request.cookies.get(SESSION_COOKIE)?.value;
   const pathname = request.nextUrl.pathname;
 
   if (pathname === "/login" || pathname.startsWith("/login/")) {
@@ -50,6 +70,12 @@ export function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL(returnTo, request.url));
     }
     if (usePasskeyAuth) {
+      // Peek at the session payload (no HMAC check needed for redirect decisions).
+      // Users with an orgId already set go straight to /dashboard.
+      const orgId = peekOrgIdFromSessionCookie(session);
+      if (orgId) {
+        return NextResponse.redirect(new URL("/dashboard", request.url));
+      }
       return NextResponse.redirect(new URL("/onboarding/organizations", request.url));
     }
     return NextResponse.redirect(new URL("/dashboard", request.url));

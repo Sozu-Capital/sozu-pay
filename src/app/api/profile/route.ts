@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { getSession, setSession } from "@/lib/auth/session";
-import { getUserBySessionId, setUserAllowed } from "@/lib/db/users";
+import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
 import { resolveOrgDisbursementContractId } from "@/lib/stellar/org-treasury";
 import { isUserDerivedEncrypted } from "@/lib/org-wallet-encryption";
-import { canManageDisbursements, repairOrgCreatorAccess } from "@/lib/auth/disbursement-auth";
+import { canManageDisbursements } from "@/lib/auth/disbursement-auth";
 
 /**
  * GET /api/profile – current user's profile from DB (for Profile page).
@@ -17,19 +17,15 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let user = await getUserBySessionId(session.id);
+  const user = await getUserBySessionId(session.id);
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
   const org_payout_wallet_public_key = getOrgDisbursementPublicKey();
 
-  let org = user.org_id ? await getOrganizationForUser(user.org_id) : null;
-
-  user = (await repairOrgCreatorAccess(user)) ?? user;
-  if (user.org_id) {
-    org = await getOrganizationForUser(user.org_id);
-  }
+  // Read org once — repairOrgCreatorAccess now runs at login, not on every profile load.
+  const org = user.org_id ? await getOrganizationForUser(user.org_id) : null;
 
   const can_manage_disbursements = canManageDisbursements(user, org);
 
@@ -51,11 +47,6 @@ export async function GET() {
   const memberSa =
     user.org_id ? await getMemberSmartAccount(user.org_id, user.id) : null;
   const needsSmartWalletSetup = !!user.org_id && memberSa == null;
-
-  if (!user.allowed && (can_manage_disbursements || memberSa)) {
-    const activated = await setUserAllowed(session.id, true);
-    if (activated) user = activated;
-  }
 
   const org_stellar_disbursement_public_key = org?.stellar_disbursement_public_key ?? null;
   const org_soroban_contract_id = orgDisbursementContractId;

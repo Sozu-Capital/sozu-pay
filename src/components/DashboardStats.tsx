@@ -1,16 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-
-interface Stats {
-  balanceUsd: string;
-  transactionCount: number;
-  apyPercent: number;
-  creditAvailableUsd: string;
-  currency: string;
-}
+import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 
 function StatCard({
   label,
@@ -59,15 +51,9 @@ function StatCard({
 
 export default function DashboardStats() {
   const t = useTranslations("dashboardStats");
-  const [data, setData] = useState<Stats | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/dashboard/stats")
-      .then((r) => (r.ok ? r.json() : null))
-      .then(setData)
-      .finally(() => setLoading(false));
-  }, []);
+  const ctx = useDashboardProfile();
+  const loading = ctx?.loading ?? true;
+  const data = ctx?.stats ?? null;
 
   if (loading) {
     return (

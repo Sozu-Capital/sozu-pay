@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
-import { getDashboardBalancePublicKey } from "@/lib/wallet-resolve";
+import { getDashboardWalletContext } from "@/lib/wallet-resolve-cached";
 import { getUsdcBalance } from "@/lib/stellar/balance";
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
 import { getUsdToLocalRate, convertUsdToLocal } from "@/lib/fx";
+import { getSession } from "@/lib/auth/session";
 
 /**
  * USDC balance for the dashboard. Uses org Soroban disbursement contract when set.
  */
 export async function GET() {
-  const publicKey = await getDashboardBalancePublicKey();
+  const { publicKey } = await getDashboardWalletContext();
   if (!publicKey) {
-    const { getSession } = await import("@/lib/auth/session");
     const session = await getSession();
     if (session) {
       return NextResponse.json({

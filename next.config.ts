@@ -5,6 +5,24 @@ import createNextIntlPlugin from "next-intl/plugin";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@stellar/stellar-sdk"],
+  webpack: (config) => {
+    config.resolve = config.resolve || {};
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      // smart-account-kit has an optional peer dependency that isn't on npm in our env.
+      // We don't use external wallet adapters in SozuPay dashboard, but Next will still
+      // try to resolve the module during bundling unless we alias it.
+      "@creit-tech/stellar-wallets-kit": path.join(
+        __dirname,
+        "src/shims/creit-stellar-wallets-kit.js"
+      ),
+      "@creit-tech/stellar-wallets-kit/modules/utils": path.join(
+        __dirname,
+        "src/shims/creit-stellar-wallets-kit-utils.js"
+      ),
+    };
+    return config;
+  },
   async redirects() {
     return [
       {

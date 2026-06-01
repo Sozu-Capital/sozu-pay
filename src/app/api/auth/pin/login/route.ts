@@ -4,6 +4,7 @@ import { jsonResponseWithSession } from "@/lib/auth/establish-session";
 import { resolvePostAuthRedirect } from "@/lib/auth/post-login-redirect";
 import { getUserByUsername } from "@/lib/db/users";
 import { normalizeUsername } from "@/lib/webauthn/utils";
+import { repairOrgCreatorAccess } from "@/lib/auth/disbursement-auth";
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,12 +32,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Could not sign in" }, { status: 401 });
     }
 
+    // Run org-creator access repair at login time so GET /api/profile stays read-only.
+    const repairedUser = await repairOrgCreatorAccess(user).catch(() => user);
+
     const redirect = await resolvePostAuthRedirect(
-      user,
+      repairedUser,
       typeof returnTo === "string" ? returnTo : undefined
     );
 
-    return jsonResponseWithSession(user, {
+    return jsonResponseWithSession(repairedUser, {
       success: true,
       userId: user.id,
       username: user.username,

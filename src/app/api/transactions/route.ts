@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDashboardBalancePublicKey } from "@/lib/wallet-resolve";
+import { getDashboardWalletContext } from "@/lib/wallet-resolve-cached";
 import { getTransactions } from "@/lib/stellar/transactions";
 import { getSession } from "@/lib/auth/session";
 
@@ -8,7 +8,7 @@ import { getSession } from "@/lib/auth/session";
  * Dashboard is organization-centric; returns empty list when org has no wallet yet.
  */
 export async function GET(request: NextRequest) {
-  const publicKey = await getDashboardBalancePublicKey();
+  const { publicKey, disbursementContractId } = await getDashboardWalletContext();
   if (!publicKey) {
     const session = await getSession();
     if (session) {
@@ -20,6 +20,10 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const limit = Math.min(Number(searchParams.get("limit")) || 20, 100);
 
-  const list = await getTransactions(publicKey, limit);
+  const additionalHolders =
+    disbursementContractId && disbursementContractId !== publicKey
+      ? [disbursementContractId]
+      : undefined;
+  const list = await getTransactions(publicKey, limit, { additionalHolders });
   return NextResponse.json({ transactions: list });
 }

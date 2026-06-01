@@ -20,6 +20,8 @@ import { decryptOrgSecret } from "@/lib/org-secret";
 import { isUserDerivedEncrypted } from "@/lib/org-wallet-encryption";
 import { buildUnsignedUsdcEnvelope } from "@/lib/stellar/sendUsdc";
 import type { Organization } from "@/lib/db/organizations";
+import { resolvePaymentRecipient } from "@/lib/payment/resolve-recipient";
+import { isValidStellarReceiveAddress } from "@/lib/payment/stellar-address";
 
 const LARGE_PAYOUT_THRESHOLD = 1000;
 
@@ -316,8 +318,21 @@ export async function POST(request: NextRequest) {
     const cookieStore = await cookies();
     const unlockCookie = cookieStore.get(UNLOCK_COOKIE_NAME)?.value;
     const { signerSecretKey, requireUnlock, requirePayoutPassword } = resolveStellarSigner(session.id, unlockCookie, org);
-    const destination = body.destination.trim();
-    const recipientLabel = body.recipientLabel;
+
+    let destination = body.destination.trim();
+    let recipientLabel =
+      typeof body.recipientLabel === "string" ? body.recipientLabel.trim() : undefined;
+
+    if (!isValidStellarReceiveAddress(destination)) {
+      const resolved = await resolvePaymentRecipient(destination);
+      if (!resolved.ok) {
+        return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+      }
+      destination = resolved.recipient.walletAddress;
+      if (!recipientLabel && resolved.recipient.tag) {
+        recipientLabel = `$${resolved.recipient.tag.replace(/^\$+/, "")}`;
+      }
+    }
 
     const record = createPayout(session.id, amount, {
       type: "to_stellar",

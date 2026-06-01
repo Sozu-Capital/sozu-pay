@@ -8,8 +8,8 @@ import {
   buildSessionCookieValue,
   getSessionCookieOptions,
   parseSessionCookie,
-  SESSION_COOKIE,
 } from "@/lib/auth/session-cookie";
+import { SESSION_COOKIE } from "@/lib/auth/session-constants";
 
 export { SESSION_COOKIE };
 

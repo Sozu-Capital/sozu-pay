@@ -9,9 +9,26 @@ import StoreHomeDashboard from "@/components/StoreHomeDashboard";
 import { useTranslations } from "next-intl";
 
 export default function DashboardHomeContent() {
-  const { profile } = useDashboardProfile() ?? { profile: null };
+  const ctx = useDashboardProfile();
+  const { profile, loading } = ctx ?? { profile: null, loading: true };
   const isStore = profile?.org_type === "store";
   const t = useTranslations("dashboard");
+
+  // Wait until profile is resolved so we mount the right layout once and avoid
+  // the NGO components briefly mounting before switching to the store layout.
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="h-8 w-48 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+        <div className="h-4 w-72 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="rounded-xl border border-gray-200 dark:border-gray-700 p-5 animate-pulse h-24" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   if (isStore) {
     return (

@@ -2,9 +2,15 @@
 
 import type { SmartAccountKit } from "smart-account-kit";
 import type { xdr } from "@stellar/stellar-sdk";
+import {
+  signAuthEntryWithResolvedKeyData,
+  smartAccountIdFromAuthEntry,
+} from "@/lib/stellar/smartAccounts/signSorobanWebAuthnAuth";
 
 /**
  * Sign Soroban auth entries on a server-prepared payout envelope using passkey.
+ * Uses manual OZ auth signing (same as SozuCredit) — not kit.signAuthEntry, which
+ * incorrectly calls get_context_rules on the disbursement contract.
  */
 export async function signSorobanEnvelopeWithPasskey(params: {
   kit: SmartAccountKit;
@@ -14,27 +20,67 @@ export async function signSorobanEnvelopeWithPasskey(params: {
 }): Promise<string> {
   const { Transaction, TransactionBuilder, Operation } = await import("@stellar/stellar-sdk");
 
+  const credentialId = params.credentialId?.trim();
+  if (!credentialId) {
+    throw new Error("Credential ID required for passkey payout signing.");
+  }
+
+  const cfgRes = await fetch("/api/smart-accounts/config", { credentials: "include" });
+  const cfg = (await cfgRes.json().catch(() => ({}))) as { webauthnVerifierAddress?: string };
+  const webauthnVerifier = cfg.webauthnVerifierAddress?.trim() ?? "";
+  if (!webauthnVerifier) {
+    throw new Error("Smart account verifier not configured.");
+  }
+
   const tx = new Transaction(params.envelopeXdr, params.networkPassphrase);
-  if (tx.operations.length !== 1) {
-    throw new Error("Expected a single Soroban operation.");
+  if (tx.operations.length === 0) {
+    throw new Error("Prepared payout has no operations.");
   }
 
-  const op = tx.operations[0];
-  if (op.type !== "invokeHostFunction") {
-    throw new Error("Expected invokeHostFunction operation.");
+  if (!tx.source.startsWith("G")) {
+    throw new Error(
+      "Invalid prepared payout: fee payer must be a classic G address, not a smart account (C…)."
+    );
   }
 
-  const invokeOp = op as {
-    type: "invokeHostFunction";
-    func: xdr.HostFunction;
-    auth?: xdr.SorobanAuthorizationEntry[];
-  };
-  const authEntries = invokeOp.auth ?? [];
-  const signedAuth = [];
-  for (const entry of authEntries) {
-    signedAuth.push(
-      await params.kit.signAuthEntry(entry, {
-        credentialId: params.credentialId ?? undefined,
+  const signedOperations = [];
+  for (const op of tx.operations) {
+    if (op.type !== "invokeHostFunction") {
+      throw new Error("Expected invokeHostFunction operations only.");
+    }
+
+    const invokeOp = op as {
+      type: "invokeHostFunction";
+      source?: string;
+      func: xdr.HostFunction;
+      auth?: xdr.SorobanAuthorizationEntry[];
+    };
+    const authEntries = invokeOp.auth ?? [];
+    if (authEntries.length === 0) {
+      throw new Error(
+        "No Soroban auth entries to sign. Ensure your passkey smart wallet is registered as an org signer."
+      );
+    }
+
+    const signedAuth = [];
+    for (const entry of authEntries) {
+      const smartAccountId = smartAccountIdFromAuthEntry(entry);
+      signedAuth.push(
+        await signAuthEntryWithResolvedKeyData({
+          entry,
+          credentialId,
+          networkPassphrase: params.networkPassphrase,
+          webauthnVerifierAddress: webauthnVerifier,
+          smartAccountContractId: smartAccountId,
+        })
+      );
+    }
+
+    signedOperations.push(
+      Operation.invokeHostFunction({
+        source: invokeOp.source,
+        func: invokeOp.func,
+        auth: signedAuth,
       })
     );
   }
@@ -43,18 +89,13 @@ export async function signSorobanEnvelopeWithPasskey(params: {
   const rebuilt = new TransactionBuilder(sourceAccount, {
     fee: tx.fee,
     networkPassphrase: params.networkPassphrase,
-  })
-    .addOperation(
-      Operation.invokeHostFunction({
-        func: invokeOp.func,
-        auth: signedAuth,
-      })
-    )
-    .setTimeout(60)
-    .build();
+  }).setTimeout(60);
 
-  const prepared = await params.kit.rpc.prepareTransaction(rebuilt);
-  return prepared.toEnvelope().toXDR("base64");
+  for (const signedOp of signedOperations) {
+    rebuilt.addOperation(signedOp);
+  }
+
+  return rebuilt.build().toEnvelope().toXDR("base64");
 }
 
 export type PasskeySorobanPayoutResult = {
@@ -76,6 +117,7 @@ export async function executePasskeySorobanPayout(params: {
   payoutId: string;
   recipientAddress: string;
   amount: string;
+  recipientLabel?: string;
 }): Promise<PasskeySorobanPayoutResult> {
   const configRes = await fetch("/api/smart-accounts/config", { credentials: "include" });
   const config = (await configRes.json().catch(() => ({}))) as {
@@ -126,6 +168,9 @@ export async function executePasskeySorobanPayout(params: {
     body: JSON.stringify({
       signedEnvelopeXdr,
       payoutId: params.payoutId,
+      amount: params.amount,
+      destination: params.recipientAddress,
+      recipientLabel: params.recipientLabel,
     }),
   });
   const submitted = (await submitRes.json().catch(() => ({}))) as {

@@ -21,6 +21,13 @@ export function readClientLocaleCookie(): SupportedLocale {
 }
 
 /** Set locale cookie immediately in the browser (before server round-trip). */
+/** Read locale from Next.js cookies() (server components / route handlers). */
+export function readServerLocaleCookie(
+  cookieValue: string | undefined | null
+): SupportedLocale {
+  return isSupportedLocale(cookieValue) ? cookieValue : DEFAULT_LOCALE;
+}
+
 export function writeClientLocaleCookie(locale: SupportedLocale): void {
   if (typeof document === "undefined") return;
   const secure = window.location.protocol === "https:";

@@ -8,6 +8,7 @@ import {
 } from "@/lib/db/auth-passkeys";
 import { getUserById, getUserByUsername } from "@/lib/db/users";
 import { base64URLToBuffer } from "@/lib/webauthn/utils";
+import { repairOrgCreatorAccess } from "@/lib/auth/disbursement-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -66,12 +67,15 @@ export async function POST(request: NextRequest) {
 
     await touchAuthPasskey(passkey.id);
 
+    // Run org-creator access repair at login time so GET /api/profile stays read-only.
+    const repairedUser = await repairOrgCreatorAccess(user).catch(() => user);
+
     const redirect = await resolvePostAuthRedirect(
-      user,
+      repairedUser,
       typeof returnTo === "string" ? returnTo : undefined
     );
 
-    return jsonResponseWithSession(user, {
+    return jsonResponseWithSession(repairedUser, {
       success: true,
       userId: user.id,
       username: user.username,

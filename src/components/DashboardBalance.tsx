@@ -1,26 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
+import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 
 export default function DashboardBalance() {
   const t = useTranslations("dashboardBalance");
-  const [data, setData] = useState<{
-    usdc: string;
-    available: string;
-    inVault: string;
-    fiatAmount: string;
-    fiatCurrency: string;
-    rateSource: string;
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/balance")
-      .then((r) => (r.ok ? r.json() : null))
-      .then(setData)
-      .finally(() => setLoading(false));
-  }, []);
+  const ctx = useDashboardProfile();
+  const loading = ctx?.loading ?? true;
+  const data = ctx?.balance ?? null;
 
   if (loading) return <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 animate-pulse h-24" />;
 

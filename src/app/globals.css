@@ -105,3 +105,41 @@ body {
     vertical-align: top;
   }
 }
+
+/* Tablet/Desktop landing: mirror + scale (same technique as original landing commit). */
+@media (min-width: 768px) {
+  .home-spline-root {
+    inset: 0;
+    height: 100vh;
+  }
+
+  /*
+   * Transform on the opacity wrapper (not the embed layer) — proven to flip + crop reliably.
+   * Negative X = opposite horizontal face; Y > X crops top/bottom borders.
+   */
+  .home-spline-desktop-transform {
+    --spline-desktop-scale-x: clamp(1.2, 1.05 + 0.00035 * (100vw - 768px), 1.55);
+    --spline-desktop-scale-y: calc(var(--spline-desktop-scale-x) * 1.12);
+    transform: scale(calc(-1 * var(--spline-desktop-scale-x)), var(--spline-desktop-scale-y));
+    transform-origin: center center;
+  }
+
+  .home-spline-embed-layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transform: none;
+  }
+
+  .home-spline-iframe {
+    display: block;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+}

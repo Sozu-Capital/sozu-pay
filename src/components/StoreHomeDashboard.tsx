@@ -1,38 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import DashboardTransactions from "@/components/DashboardTransactions";
-
-type BalanceData = {
-  usdc: string;
-  available: string;
-  localFiatAmount: string;
-  localFiatCurrency: string;
-  rateSource: string;
-};
+import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 
 export default function StoreHomeDashboard() {
   const t = useTranslations("storeDashboard");
-  const [balance, setBalance] = useState<BalanceData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const ctx = useDashboardProfile();
+  const loading = ctx?.loading ?? true;
+  const raw = ctx?.balance ?? null;
 
-  useEffect(() => {
-    fetch("/api/balance")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!d) return;
-        setBalance({
-          usdc: d.usdc ?? "0",
-          available: d.available ?? "0",
-          localFiatAmount: d.localFiatAmount ?? d.fiatAmount ?? "0.00",
-          localFiatCurrency: d.localFiatCurrency ?? d.fiatCurrency ?? "USD",
-          rateSource: d.rateSource ?? "",
-        });
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  const balance = raw ? {
+    usdc: raw.usdc,
+    available: raw.available,
+    localFiatAmount: raw.localFiatAmount ?? raw.fiatAmount ?? "0.00",
+    localFiatCurrency: raw.localFiatCurrency ?? raw.fiatCurrency ?? "USD",
+    rateSource: raw.rateSource ?? "",
+  } : null;
 
   // USDC is always 1:1 with USD — show as dollars
   const usdBalance = parseFloat(balance?.usdc ?? "0").toFixed(2);

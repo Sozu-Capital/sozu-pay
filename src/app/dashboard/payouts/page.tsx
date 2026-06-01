@@ -222,6 +222,7 @@ export default function PayoutsPage() {
                 payoutId: String(data.payoutId),
                 recipientAddress: String(data.destination),
                 amount: String(data.amount ?? body.amount),
+                recipientLabel: data.recipientLabel ?? body.recipientLabel,
               });
               setPayoutModalStatus("success");
               setPayoutModalSuccess({

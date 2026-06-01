@@ -1,0 +1,11 @@
+{
+  "name": "@creit-tech/stellar-wallets-kit",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./modules/utils": "./modules/utils.js"
+  }
+}
+

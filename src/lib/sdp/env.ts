@@ -10,7 +10,12 @@ export type SdpEnvConfig = {
 /** Bracket access so Vercel/runtime env is read when the function runs, not at build time. */
 function readEnv(name: string): string {
   const v = process.env[name];
-  return typeof v === "string" ? v.trim() : "";
+  const trimmed = typeof v === "string" ? v.trim() : "";
+  // Treat placeholder values (common in .env.local templates) as unset.
+  // This prevents confusing "Incorrect email or password" errors when the app
+  // is actually missing SDP operator credentials.
+  if (/^todo\b/i.test(trimmed) || /^todo_/i.test(trimmed)) return "";
+  return trimmed;
 }
 
 function firstNonEmpty(...keys: string[]): string {

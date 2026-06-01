@@ -1,33 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 
-interface Tx {
-  id: string;
-  date: string;
-  amount: string;
-  type: string;
-  source: string;
-  status: string;
-  stellarExpertUrl: string;
-}
-
 export default function DashboardTransactions() {
   const t = useTranslations("dashboardTransactionsWidget");
-  const { profile } = useDashboardProfile() ?? { profile: null };
+  const ctx = useDashboardProfile();
+  const { profile } = ctx ?? { profile: null };
   const isStore = profile?.org_type === "store";
-
-  const [list, setList] = useState<Tx[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/transactions?limit=10")
-      .then((r) => (r.ok ? r.json() : { transactions: [] }))
-      .then((d) => setList(d.transactions ?? []))
-      .finally(() => setLoading(false));
-  }, []);
+  const loading = ctx?.loading ?? true;
+  const list = ctx?.transactions ?? [];
 
   const formatAmount = (amount: string) =>
     isStore

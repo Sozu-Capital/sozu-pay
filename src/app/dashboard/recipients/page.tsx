@@ -240,6 +240,7 @@ export default function RecipientsPage() {
                 payoutId: String(data.payoutId),
                 recipientAddress: String(data.destination),
                 amount: String(data.amount ?? body.amount),
+                recipientLabel: data.recipientLabel ?? body.recipientLabel,
               });
               const successPayload = {
                 amount: result.payout.amount ?? String(body.amount),

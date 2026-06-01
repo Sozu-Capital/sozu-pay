@@ -11,10 +11,20 @@ import {
   rpc,
   xdr,
 } from "@stellar/stellar-sdk";
-import { getNetworkPassphrase, getSorobanRpcUrl } from "@/lib/stellar/soroban-common";
+import {
+  coerceSimulateRetval,
+  getNetworkPassphrase,
+  getSorobanRpcUrl,
+} from "@/lib/stellar/soroban-common";
 import { getSorobanUsdcTokenId } from "@/lib/stellar/org-treasury";
 
 const USDC_EXP = 7;
+
+// Short-TTL in-memory cache so rapid dashboard loads don't hammer the Soroban RPC.
+// Keep this low so external deposits show up quickly.
+const SOROBAN_BALANCE_CACHE_TTL_MS = 5_000;
+type BalanceCacheEntry = { balance: string; fetchedAt: number };
+const sorobanBalanceCache = new Map<string, BalanceCacheEntry>();
 
 function getSimFunderKeypair(): Keypair {
   const secret = process.env.STELLAR_FUNDER_SECRET?.trim();
@@ -43,8 +53,16 @@ function i128ToDecimalString(amount: bigint, decimals: number): string {
 
 /**
  * USDC balance held by a Soroban contract (disbursement pool C address).
+ * Results are cached for 25 seconds to avoid paying 2 RPC round-trips on
+ * every dashboard render.
  */
 export async function getSorobanUsdcBalance(holderContractId: string): Promise<string> {
+  const now = Date.now();
+  const cached = sorobanBalanceCache.get(holderContractId);
+  if (cached && now - cached.fetchedAt < SOROBAN_BALANCE_CACHE_TTL_MS) {
+    return cached.balance;
+  }
+
   const tokenId = getSorobanUsdcTokenId();
   const funder = getSimFunderKeypair();
   const rpcUrl = getSorobanRpcUrl();
@@ -66,11 +84,15 @@ export async function getSorobanUsdcBalance(holderContractId: string): Promise<s
 
   const sim = (await server.simulateTransaction(rawTx)) as {
     error?: string;
-    result?: { retval?: string };
+    result?: { retval?: unknown };
   };
-  if (sim.error || !sim.result?.retval) return "0";
-
-  const retval = xdr.ScVal.fromXDR(sim.result.retval, "base64");
+  const retval = coerceSimulateRetval(sim.result?.retval);
+  if (sim.error || !retval) {
+    sorobanBalanceCache.set(holderContractId, { balance: "0", fetchedAt: now });
+    return "0";
+  }
   const amount = scValI128ToBigInt(retval);
-  return i128ToDecimalString(amount, USDC_EXP);
+  const balance = i128ToDecimalString(amount, USDC_EXP);
+  sorobanBalanceCache.set(holderContractId, { balance, fetchedAt: now });
+  return balance;
 }

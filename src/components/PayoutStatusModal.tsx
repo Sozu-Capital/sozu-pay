@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 const STELLAR_EXPERT_BASE =
   process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_STELLAR_NETWORK === "public"
@@ -41,9 +42,33 @@ export default function PayoutStatusModal({
   /** Called when user clicks "Sign to confirm" in the confirm step. */
   onConfirm?: () => void;
 }) {
+  const t = useTranslations("payoutStatusModal");
+
   if (!open) return null;
 
   const isBatch = batchCount != null && batchCount > 0;
+
+  function summaryLine() {
+    if (isBatch) {
+      return t("batchRecipients", { count: batchCount ?? 0 });
+    }
+    if (!payoutSummary) return null;
+    const destSuffix = payoutSummary.destination
+      ? ` (${payoutSummary.destination.slice(0, 6)}…${payoutSummary.destination.slice(-4)})`
+      : "";
+    const labelSuffix = payoutSummary.recipientLabel ? ` ${payoutSummary.recipientLabel}` : "";
+    return t("singleSummary", {
+      amount: payoutSummary.amount,
+      recipient: labelSuffix,
+      destination: destSuffix,
+    });
+  }
+
+  function confirmPrompt() {
+    return userName
+      ? t(isBatch ? "confirmPromptBatch" : "confirmPromptSingle", { name: userName })
+      : null;
+  }
 
   return (
     <div
@@ -57,23 +82,13 @@ export default function PayoutStatusModal({
         {status === "confirm" && (
           <div className="p-6 text-center">
             <h2 id="payout-modal-title" className="text-lg font-semibold text-gray-900 dark:text-white">
-              Sign the transaction
+              {t("signTitle")}
             </h2>
-            {userName && (
-              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                {userName}, please confirm {isBatch ? "this batch payout." : "this payout."}
-              </p>
+            {confirmPrompt() && (
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{confirmPrompt()}</p>
             )}
-            {isBatch ? (
-              <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">
-                Sending to <strong>{batchCount} recipient{batchCount !== 1 ? "s" : ""}</strong>
-              </p>
-            ) : payoutSummary && (
-              <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">
-                Sending <strong>{payoutSummary.amount} USDC</strong>
-                {payoutSummary.recipientLabel ? ` to ${payoutSummary.recipientLabel}` : ""}
-                {payoutSummary.destination ? ` (${payoutSummary.destination.slice(0, 6)}…${payoutSummary.destination.slice(-4)})` : ""}
-              </p>
+            {summaryLine() && (
+              <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">{summaryLine()}</p>
             )}
             <div className="mt-6 flex flex-col gap-2">
               <button
@@ -81,14 +96,14 @@ export default function PayoutStatusModal({
                 onClick={() => onConfirm?.()}
                 className="w-full rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 py-2.5 px-4 font-medium hover:opacity-90"
               >
-                Sign to confirm disbursement
+                {t("signConfirm")}
               </button>
               <button
                 type="button"
                 onClick={onClose}
                 className="w-full rounded-lg border border-gray-300 dark:border-gray-600 py-2.5 px-4 text-sm text-gray-600 dark:text-gray-400"
               >
-                Cancel
+                {t("cancel")}
               </button>
             </div>
           </div>
@@ -99,26 +114,16 @@ export default function PayoutStatusModal({
             <div className="p-6 text-center">
               <div className="mx-auto w-12 h-12 border-4 border-gray-200 dark:border-gray-600 border-t-gray-900 dark:border-t-white rounded-full animate-spin" aria-hidden />
               <h2 id="payout-modal-title" className="mt-4 text-lg font-semibold text-gray-900 dark:text-white">
-                Sign the transaction
+                {t("signTitle")}
               </h2>
-              {userName && (
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                  {userName}, please confirm {isBatch ? "this batch payout." : "this payout."}
-                </p>
+              {confirmPrompt() && (
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{confirmPrompt()}</p>
               )}
-              {isBatch ? (
-                <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">
-                  Sending to <strong>{batchCount} recipient{batchCount !== 1 ? "s" : ""}</strong>
-                </p>
-              ) : payoutSummary && (
-                <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">
-                  Sending <strong>{payoutSummary.amount} USDC</strong>
-                  {payoutSummary.recipientLabel ? ` to ${payoutSummary.recipientLabel}` : ""}
-                  {payoutSummary.destination ? ` (${payoutSummary.destination.slice(0, 6)}…${payoutSummary.destination.slice(-4)})` : ""}
-                </p>
+              {summaryLine() && (
+                <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">{summaryLine()}</p>
               )}
               <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Submitting to the Stellar network…
+                {t("submittingNetwork")}
               </p>
             </div>
           </>
@@ -132,12 +137,15 @@ export default function PayoutStatusModal({
               </svg>
             </div>
             <h2 id="payout-modal-title" className="mt-4 text-lg font-semibold text-gray-900 dark:text-white">
-              {successData.batchCount ? "Batch payout successful" : "Payout successful"}
+              {successData.batchCount ? t("successBatchTitle") : t("successTitle")}
             </h2>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
               {successData.batchCount
-                ? `${successData.batchCount} payout${successData.batchCount !== 1 ? "s" : ""} sent`
-                : `${successData.amount} USDC sent${successData.recipientLabel ? ` to ${successData.recipientLabel}` : ""}`}
+                ? t("successBatchLine", { count: successData.batchCount })
+                : t("successSingleLine", {
+                    amount: successData.amount,
+                    recipient: successData.recipientLabel ? ` ${successData.recipientLabel}` : "",
+                  })}
             </p>
             <div className="mt-6 flex flex-col gap-2">
               <Link
@@ -145,14 +153,14 @@ export default function PayoutStatusModal({
                 onClick={onClose}
                 className="rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 py-2.5 px-4 font-medium hover:opacity-90"
               >
-                View disbursement log
+                {t("viewDisbursementLog")}
               </Link>
               <Link
                 href="/dashboard/audit"
                 onClick={onClose}
                 className="rounded-lg border border-gray-300 dark:border-gray-600 py-2.5 px-4 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
-                View audit log
+                {t("viewAuditLog")}
               </Link>
               {!successData.batchCount && successData.stellarTxHash && (
                 <a
@@ -161,7 +169,7 @@ export default function PayoutStatusModal({
                   rel="noopener noreferrer"
                   className="rounded-lg border border-gray-300 dark:border-gray-600 py-2.5 px-4 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
-                  View on Stellar Expert →
+                  {t("viewExpert")}
                 </a>
               )}
               <button
@@ -169,7 +177,7 @@ export default function PayoutStatusModal({
                 onClick={onClose}
                 className="rounded-lg border border-gray-200 dark:border-gray-600 py-2.5 px-4 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
-                Close
+                {t("close")}
               </button>
             </div>
           </div>
@@ -183,10 +191,10 @@ export default function PayoutStatusModal({
               </svg>
             </div>
             <h2 id="payout-modal-title" className="mt-4 text-lg font-semibold text-gray-900 dark:text-white">
-              Payout failed
+              {t("failedTitle")}
             </h2>
             <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-              {errorMessage ?? "Something went wrong."}
+              {errorMessage ?? t("failedGeneric")}
             </p>
             <div className="mt-6">
               <Link
@@ -194,7 +202,7 @@ export default function PayoutStatusModal({
                 onClick={onClose}
                 className="inline-block rounded-lg border border-gray-300 dark:border-gray-600 py-2.5 px-4 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700"
               >
-                View disbursement log
+                {t("viewDisbursementLog")}
               </Link>
             </div>
             <button
@@ -202,7 +210,7 @@ export default function PayoutStatusModal({
               onClick={onClose}
               className="mt-3 w-full rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 py-2.5 px-4 font-medium"
             >
-              Close
+              {t("close")}
             </button>
           </div>
         )}

@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import type { SessionUser } from "@/lib/auth/session";
 
-export const SESSION_COOKIE = "sozupay_session";
+import { SESSION_COOKIE } from "@/lib/auth/session-constants";
 const SECRET = process.env.AUTH_SECRET ?? "dev-secret-change-in-production";
 
 /** base64url(JSON) + HMAC — avoids dots inside email breaking naive split. */

@@ -226,7 +226,24 @@ export default function RecipientsPage() {
       setPendingConfirmBody(null);
       setPendingRecipient(null);
       submitPayoutBody(body)
-        .then(async ({ ok, data }) => {
+        .then(async ({ ok, data: d }) => {
+          const data = d as {
+            payout?: { amount?: string; stellarTxHash?: string; stellarAddress?: string; recipientLabel?: string };
+            error?: string;
+            requireUnlock?: boolean;
+            requirePayoutPassword?: boolean;
+            requirePasskeySign?: boolean;
+            unsignedEnvelopeXdr?: string;
+            payoutId?: string;
+            network?: string;
+            amount?: string;
+            destination?: string;
+            recipientLabel?: string;
+            required?: boolean;
+          };
+          const bodyAmount = typeof body.amount === "string" ? body.amount : "";
+          const bodyRecipientLabel =
+            typeof body.recipientLabel === "string" ? body.recipientLabel : recipient.name;
           if (data.requirePasskeySign && data.payoutId && data.destination) {
             if (!kit) {
               setPayoutModalStatus("failed");
@@ -239,11 +256,11 @@ export default function RecipientsPage() {
                 credentialId,
                 payoutId: String(data.payoutId),
                 recipientAddress: String(data.destination),
-                amount: String(data.amount ?? body.amount),
-                recipientLabel: data.recipientLabel ?? body.recipientLabel,
+                amount: String(data.amount ?? bodyAmount),
+                recipientLabel: data.recipientLabel ?? bodyRecipientLabel,
               });
               const successPayload = {
-                amount: result.payout.amount ?? String(body.amount),
+                amount: result.payout.amount ?? bodyAmount,
                 stellarTxHash: result.stellarTxHash,
                 recipientLabel: result.payout.recipientLabel ?? recipient.name,
                 destination: result.payout.stellarAddress ?? recipient.stellarAddress,
@@ -265,7 +282,7 @@ export default function RecipientsPage() {
               payoutId: String(data.payoutId),
               unsignedEnvelopeXdr: String(data.unsignedEnvelopeXdr),
               network: String(data.network ?? "testnet"),
-              amount: String(data.amount ?? body.amount),
+              amount: String(data.amount ?? bodyAmount),
               destination: String(data.destination ?? recipient.stellarAddress),
               recipientLabel: String(data.recipientLabel ?? recipient.name),
             });
@@ -290,7 +307,7 @@ export default function RecipientsPage() {
           }
           const p = data?.payout as { amount?: string; stellarTxHash?: string; recipientLabel?: string; stellarAddress?: string } | undefined;
           const successPayload = {
-            amount: p?.amount ?? (body.amount as string),
+            amount: p?.amount ?? bodyAmount,
             stellarTxHash: p?.stellarTxHash,
             recipientLabel: p?.recipientLabel ?? recipient.name,
             destination: p?.stellarAddress ?? recipient.stellarAddress,

@@ -56,8 +56,9 @@ export function EditDisbursementRecipients({ disbursementId, receivers, onSaved 
 
   function addRow() {
     if (!form.name.trim() || !form.email.trim()) return;
-    const verification = form.verification.trim()
-      ? normalizeVerificationForSdp(form.verification)
+    const rawVerification = form.verification?.trim() ?? "";
+    const verification = rawVerification
+      ? normalizeVerificationForSdp(rawVerification)
       : "";
     setRows((prev) => [...prev, { ...form, verification }]);
     setForm(EMPTY);

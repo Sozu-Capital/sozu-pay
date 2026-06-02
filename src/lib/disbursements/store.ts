@@ -11,6 +11,8 @@ export type DisbursementAuditAction =
   | "recipient_added"
   | "recipient_removed"
   | "recipients_updated"
+  | "recipient_name_updated"
+  | "recipient_dob_updated"
   | "deleted"
   | "payment_success"
   | "payment_failed"

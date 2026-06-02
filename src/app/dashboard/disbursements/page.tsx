@@ -8,9 +8,10 @@ import {
   type DisbursementAuthorizeResult,
 } from "@/components/DisbursementAuthorizeModal";
 import { DisbursementAuditButton } from "@/components/disbursements/DisbursementAuditButton";
+import { BeneficiaryFieldCell } from "@/components/disbursements/BeneficiaryFieldCell";
 import { EditDisbursementRecipients } from "@/components/disbursements/EditDisbursementRecipients";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
-import { recipientsToCSV } from "@/lib/disbursements/csv";
+import { recipientsToCSV, parseDisbursementCsvText } from "@/lib/disbursements/csv";
 import { normalizeVerificationForSdp } from "@/lib/disbursements/normalizeVerification";
 import type { BeneficiaryLifecycleState } from "@/lib/sdp/receiverDisplay";
 
@@ -43,6 +44,7 @@ interface SdpPayment {
   lifecycle_state: BeneficiaryLifecycleState;
   stellar_transaction_id: string | null;
   beneficiary_name: string;
+  legal_name: string;
   date_of_birth: string | null;
   sozu_tag: string | null;
   contact: string | null;
@@ -109,6 +111,7 @@ const LIFECYCLE_STATUS_COLORS: Record<BeneficiaryLifecycleState, string> = {
 };
 
 const DELETABLE_DISBURSEMENT_STATUSES = new Set(["DRAFT", "READY"]);
+const EDITABLE_RECIPIENT_STATUSES = new Set(["DRAFT", "READY"]);
 
 const EMPTY_FORM: DraftRecipient = {
   name: "",
@@ -131,10 +134,6 @@ function formatSozuTag(tag: string | null): string {
   return tag.startsWith("$") ? tag : `$${tag}`;
 }
 
-function formatDateOfBirth(dob: string | null): string {
-  if (!dob) return "—";
-  return dob;
-}
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -181,6 +180,7 @@ export default function DisbursementsPage() {
   } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [savingBeneficiaryEmail, setSavingBeneficiaryEmail] = useState<string | null>(null);
 
   // Actions
   const [startingId, setStartingId] = useState<string | null>(null);
@@ -265,6 +265,34 @@ export default function DisbursementsPage() {
     void refreshDetail(selectedId);
   }, [selectedId, refreshDetail]);
 
+  // Parse CSV into editable draft rows when a file is selected
+  useEffect(() => {
+    if (inputMode !== "csv" || !csvFile) {
+      if (inputMode === "csv") setDraftRecipients([]);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const rows = parseDisbursementCsvText(String(reader.result ?? ""));
+        setDraftRecipients(
+          rows.map((r) => ({
+            name: r.name,
+            email: r.email,
+            phone: r.phone ?? "",
+            amount: r.amount,
+            verification: r.verification ?? "",
+          }))
+        );
+        setCreateError(null);
+      } catch {
+        setDraftRecipients([]);
+        setCreateError(t("errorInvalidCsv"));
+      }
+    };
+    reader.readAsText(csvFile);
+  }, [csvFile, inputMode, t]);
+
   // ── Add recipient to draft ────────────────────────────────────────────────
 
   function handleAddRecipient() {
@@ -287,6 +315,39 @@ export default function DisbursementsPage() {
 
   function removeRecipient(index: number) {
     setDraftRecipients((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function updateDraftRecipient(index: number, patch: Partial<DraftRecipient>) {
+    setDraftRecipients((prev) =>
+      prev.map((r, i) => (i === index ? { ...r, ...patch } : r))
+    );
+  }
+
+  async function saveBeneficiaryField(
+    disbursementId: string,
+    email: string,
+    patch: { legalName?: string; dateOfBirth?: string }
+  ) {
+    setSavingBeneficiaryEmail(email);
+    setDetailError(null);
+    try {
+      const res = await fetch(`/api/sdp/disbursements/${disbursementId}/beneficiary`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, ...patch }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setDetailError(data.error ?? `Error ${res.status}`);
+        return;
+      }
+      await refreshDetail(disbursementId);
+    } catch (e) {
+      setDetailError(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setSavingBeneficiaryEmail(null);
+    }
   }
 
   function setField(field: keyof DraftRecipient, value: string) {
@@ -315,29 +376,44 @@ export default function DisbursementsPage() {
 
     let fileToUpload: File;
 
+    const buildCsvFile = () => {
+      const missingEmail = draftRecipients.some((r) => !r.email.trim());
+      if (missingEmail) {
+        setCreateError(t("errorMissingEmail"));
+        return null;
+      }
+      const missingAmount = draftRecipients.some(
+        (r) => !r.amount.trim() && !defaultAmount.trim()
+      );
+      if (missingAmount) {
+        setCreateError(t("errorMissingAmount"));
+        return null;
+      }
+      const missingName = draftRecipients.some((r) => !r.name.trim());
+      if (missingName) {
+        setCreateError(t("errorMissingLegalName"));
+        return null;
+      }
+      const csvString = recipientsToCSV(draftRecipients, defaultAmount);
+      return new File([csvString], "disbursement.csv", { type: "text/csv" });
+    };
+
     if (inputMode === "manual") {
       if (draftRecipients.length === 0) {
         setCreateError(t("errorNoRecipients"));
         return;
       }
-      const missingEmail = draftRecipients.some((r) => !r.email.trim());
-      if (missingEmail) {
-        setCreateError(t("errorMissingEmail"));
-        return;
-      }
-      const missingAmount = draftRecipients.some((r) => !r.amount.trim() && !defaultAmount.trim());
-      if (missingAmount) {
-        setCreateError(t("errorMissingAmount"));
-        return;
-      }
-      const csvString = recipientsToCSV(draftRecipients, defaultAmount);
-      fileToUpload = new File([csvString], "disbursement.csv", { type: "text/csv" });
+      const built = buildCsvFile();
+      if (!built) return;
+      fileToUpload = built;
     } else {
-      if (!csvFile) {
-        setCreateError(t("errorNoFile"));
+      if (!csvFile || draftRecipients.length === 0) {
+        setCreateError(t("errorNoRecipients"));
         return;
       }
-      fileToUpload = csvFile;
+      const built = buildCsvFile();
+      if (!built) return;
+      fileToUpload = built;
     }
 
     setCreating(true);
@@ -780,84 +856,6 @@ export default function DisbursementsPage() {
                     {t("addRecipient")}
                   </button>
                 </div>
-
-                {/* Draft list */}
-                <div>
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {t("draftTitle", { count: draftRecipients.length })}
-                  </p>
-
-                  {draftRecipients.length === 0 ? (
-                    <p className="text-xs text-gray-400 dark:text-gray-500 italic">
-                      {t("noDraftYet")}
-                    </p>
-                  ) : (
-                    <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead className="bg-gray-50 dark:bg-gray-800">
-                          <tr>
-                            <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-                              {t("colName")}
-                            </th>
-                            <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-                              {t("colEmail")}
-                            </th>
-                            <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 hidden sm:table-cell">
-                              {t("colPhone")}
-                            </th>
-                            <th className="text-right px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-                              {t("colAmountDraft")}
-                            </th>
-                            <th className="px-3 py-2" />
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {draftRecipients.map((r, i) => (
-                            <tr
-                              key={i}
-                              className="border-t border-gray-100 dark:border-gray-800"
-                            >
-                              <td className="px-3 py-2 text-gray-800 dark:text-gray-200 font-medium truncate max-w-[140px]">
-                                {r.name}
-                              </td>
-                              <td className="px-3 py-2 text-gray-600 dark:text-gray-400 truncate max-w-[160px]">
-                                {r.email}
-                              </td>
-                              <td className="px-3 py-2 text-gray-500 dark:text-gray-500 hidden sm:table-cell">
-                                {r.phone || "—"}
-                              </td>
-                              <td className="px-3 py-2 text-right font-medium text-gray-900 dark:text-white">
-                                {r.amount || defaultAmount || "—"}
-                              </td>
-                              <td className="px-3 py-2 text-right">
-                                <button
-                                  type="button"
-                                  onClick={() => removeRecipient(i)}
-                                  className="text-gray-400 hover:text-red-500 transition-colors"
-                                  aria-label={t("removeRecipient")}
-                                >
-                                  <svg
-                                    className="w-4 h-4"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M6 18L18 6M6 6l12 12"
-                                    />
-                                  </svg>
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
               </div>
             )}
 
@@ -906,6 +904,110 @@ export default function DisbursementsPage() {
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     {csvFile.name} ({Math.round(csvFile.size / 1024)} KB)
                   </p>
+                )}
+                {draftRecipients.length > 0 && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {t("csvEditHint")}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* ── Draft recipient list (manual + CSV preview) ─────────────── */}
+            {(inputMode === "manual" || draftRecipients.length > 0) && (
+              <div>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {t("draftTitle", { count: draftRecipients.length })}
+                </p>
+
+                {draftRecipients.length === 0 ? (
+                  <p className="text-xs text-gray-400 dark:text-gray-500 italic">
+                    {t("noDraftYet")}
+                  </p>
+                ) : (
+                  <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 dark:bg-gray-800">
+                        <tr>
+                          <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                            {t("colName")}
+                          </th>
+                          <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                            {t("colEmail")}
+                          </th>
+                          <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 hidden sm:table-cell">
+                            {t("colDob")}
+                          </th>
+                          <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 hidden md:table-cell">
+                            {t("colPhone")}
+                          </th>
+                          <th className="text-right px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                            {t("colAmountDraft")}
+                          </th>
+                          <th className="px-3 py-2" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {draftRecipients.map((r, i) => (
+                          <tr
+                            key={`${r.email}-${i}`}
+                            className="border-t border-gray-100 dark:border-gray-800"
+                          >
+                            <td className="px-3 py-2 text-gray-800 dark:text-gray-200 font-medium max-w-[180px]">
+                              <BeneficiaryFieldCell
+                                value={r.name}
+                                placeholder={t("namePlaceholder")}
+                                onSave={(name) => updateDraftRecipient(i, { name })}
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-gray-600 dark:text-gray-400 truncate max-w-[160px]">
+                              {r.email}
+                            </td>
+                            <td className="px-3 py-2 text-gray-600 dark:text-gray-400 hidden sm:table-cell max-w-[140px]">
+                              <BeneficiaryFieldCell
+                                value={r.verification}
+                                placeholder={t("verificationPlaceholder")}
+                                onSave={(verification) =>
+                                  updateDraftRecipient(i, {
+                                    verification: normalizeVerificationForSdp(verification),
+                                  })
+                                }
+                                className="font-normal text-gray-600 dark:text-gray-400"
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-gray-500 dark:text-gray-500 hidden md:table-cell">
+                              {r.phone || "—"}
+                            </td>
+                            <td className="px-3 py-2 text-right font-medium text-gray-900 dark:text-white">
+                              {r.amount || defaultAmount || "—"}
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <button
+                                type="button"
+                                onClick={() => removeRecipient(i)}
+                                className="text-gray-400 hover:text-red-500 transition-colors"
+                                aria-label={t("removeRecipient")}
+                              >
+                                <svg
+                                  className="w-4 h-4"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M6 18L18 6M6 6l12 12"
+                                  />
+                                </svg>
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             )}
@@ -1152,6 +1254,9 @@ export default function DisbursementsPage() {
                 )}
                 {!detailLoading && detail?.disbursement.id === d.id && (
                   <div className="overflow-x-auto">
+                    {(() => {
+                      const canEditRecipients = EDITABLE_RECIPIENT_STATUSES.has(d.status);
+                      return (
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-200 dark:border-gray-700">
@@ -1181,23 +1286,45 @@ export default function DisbursementsPage() {
                             key={p.id}
                             className="border-b border-gray-100 dark:border-gray-800 last:border-0"
                           >
-                            <td className="py-2 pr-4 text-gray-900 dark:text-white font-medium">
-                              <div className="truncate max-w-[160px] sm:max-w-[200px]" title={p.beneficiary_name}>
-                                {p.beneficiary_name}
-                              </div>
+                            <td className="py-2 pr-4 text-gray-900 dark:text-white font-medium max-w-[200px]">
+                              <BeneficiaryFieldCell
+                                value={p.legal_name}
+                                placeholder={t("namePlaceholder")}
+                                disabled={!canEditRecipients}
+                                saving={savingBeneficiaryEmail === p.receiver.email}
+                                onSave={(legalName) => {
+                                  const email = p.receiver.email?.trim();
+                                  if (!email) return;
+                                  return saveBeneficiaryField(d.id, email, { legalName });
+                                }}
+                              />
                               {p.contact && p.contact !== p.beneficiary_name ? (
                                 <div
-                                  className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[160px] sm:max-w-[200px]"
+                                  className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[160px] sm:max-w-[200px] mt-0.5"
                                   title={p.contact}
                                 >
                                   {p.contact}
                                 </div>
                               ) : null}
                             </td>
-                            <td className="py-2 pr-4 text-gray-600 dark:text-gray-400 hidden sm:table-cell whitespace-nowrap">
-                              {formatDateOfBirth(p.date_of_birth)}
+                            <td className="py-2 pr-4 text-gray-600 dark:text-gray-400 hidden sm:table-cell whitespace-nowrap max-w-[140px]">
+                              <BeneficiaryFieldCell
+                                value={p.date_of_birth ?? ""}
+                                placeholder={t("verificationPlaceholder")}
+                                disabled={!canEditRecipients}
+                                saving={savingBeneficiaryEmail === p.receiver.email}
+                                onSave={(dateOfBirth) => {
+                                  const email = p.receiver.email?.trim();
+                                  if (!email) return;
+                                  return saveBeneficiaryField(d.id, email, { dateOfBirth });
+                                }}
+                                className="font-normal text-gray-600 dark:text-gray-400"
+                              />
                             </td>
-                            <td className="py-2 pr-4 text-gray-700 dark:text-gray-300 hidden md:table-cell font-mono text-xs">
+                            <td
+                              className="py-2 pr-4 text-gray-700 dark:text-gray-300 hidden md:table-cell font-mono text-xs"
+                              title={t("sozuTagReadOnlyHint")}
+                            >
                               {formatSozuTag(p.sozu_tag)}
                             </td>
                             <td className="py-2 pr-4 text-right text-gray-900 dark:text-white font-medium whitespace-nowrap">
@@ -1251,6 +1378,8 @@ export default function DisbursementsPage() {
                         )}
                       </tbody>
                     </table>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

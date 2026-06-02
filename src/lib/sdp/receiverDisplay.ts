@@ -83,6 +83,8 @@ export interface BeneficiaryRow {
   lifecycle_state: BeneficiaryLifecycleState;
   stellar_transaction_id: string | null;
   beneficiary_name: string;
+  /** Editable full legal name (empty when CSV id is an opaque code like RCP001). */
+  legal_name: string;
   date_of_birth: string | null;
   sozu_tag: string | null;
   contact: string | null;
@@ -107,7 +109,8 @@ export function mapReceiverToBeneficiaryRow(
     null;
 
   const fromExternalId = externalIdAsBeneficiaryName(receiver.external_id ?? "");
-  const beneficiaryName = hints?.fullName || fromExternalId || "—";
+  const legalName = hints?.fullName || fromExternalId || "";
+  const beneficiaryName = legalName || "—";
 
   return {
     id: payment?.id ?? receiver.id,
@@ -116,6 +119,7 @@ export function mapReceiverToBeneficiaryRow(
     lifecycle_state: deriveBeneficiaryLifecycleState(receiver),
     stellar_transaction_id: payment?.stellar_transaction_id ?? null,
     beneficiary_name: beneficiaryName,
+    legal_name: legalName,
     date_of_birth: receiverVerificationDob(receiver) || null,
     sozu_tag: sozuTag,
     contact: receiver.email ?? receiver.phone_number ?? null,

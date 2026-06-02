@@ -20,6 +20,7 @@ import {
   getAllDisbursementMeta,
 } from "@/lib/disbursements/store";
 import { getUserBySessionId } from "@/lib/db/users";
+import { normalizeDisbursementCsvText } from "@/lib/disbursements/normalizeVerification";
 
 function notConfigured() {
   return NextResponse.json({ error: sdpNotConfiguredMessage() }, { status: 503 });
@@ -119,9 +120,10 @@ export async function POST(request: Request) {
       registrationContactType: "EMAIL",
     });
 
-    const csvBuffer = Buffer.from(await file.arrayBuffer());
+    const rawCsv = Buffer.from(await file.arrayBuffer()).toString("utf-8");
+    const normalizedCsv = normalizeDisbursementCsvText(rawCsv);
     const fileName = file instanceof File ? file.name : "disbursement.csv";
-    await uploadInstructions(disbursement.id, csvBuffer, fileName);
+    await uploadInstructions(disbursement.id, Buffer.from(normalizedCsv, "utf-8"), fileName);
 
     const user = await getUserBySessionId(session.id);
     const label = user ? actorLabelFromUser(user) : session.id;

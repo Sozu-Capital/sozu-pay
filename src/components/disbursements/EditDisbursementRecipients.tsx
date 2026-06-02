@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import type { RecipientRow } from "@/lib/disbursements/csv";
+import { normalizeVerificationForSdp } from "@/lib/disbursements/normalizeVerification";
 
 type Props = {
   disbursementId: string;
@@ -33,10 +34,11 @@ function receiversToRows(
       email: r.email!.trim(),
       phone: r.phone_number?.trim() ?? "",
       amount: r.payment?.amount?.trim() ?? "",
-      verification:
+      verification: normalizeVerificationForSdp(
         r.payment?.verification_field_value?.trim() ??
-        r.payment?.verification?.trim() ??
-        "",
+          r.payment?.verification?.trim() ??
+          ""
+      ),
     }));
 }
 
@@ -54,7 +56,10 @@ export function EditDisbursementRecipients({ disbursementId, receivers, onSaved 
 
   function addRow() {
     if (!form.name.trim() || !form.email.trim()) return;
-    setRows((prev) => [...prev, { ...form }]);
+    const verification = form.verification.trim()
+      ? normalizeVerificationForSdp(form.verification)
+      : "";
+    setRows((prev) => [...prev, { ...form, verification }]);
     setForm(EMPTY);
   }
 
@@ -140,10 +145,18 @@ export function EditDisbursementRecipients({ disbursementId, receivers, onSaved 
           className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-1.5 text-sm"
         />
         <input
-          type="date"
+          type="text"
+          inputMode="numeric"
+          placeholder="1997-08-05"
           value={form.verification}
           onChange={(e) => setForm((f) => ({ ...f, verification: e.target.value }))}
-          className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-1.5 text-sm"
+          onBlur={(e) => {
+            const n = normalizeVerificationForSdp(e.target.value);
+            if (n && n !== e.target.value.trim()) {
+              setForm((f) => ({ ...f, verification: n }));
+            }
+          }}
+          className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-1.5 text-sm font-mono"
         />
       </div>
       <button

@@ -1,3 +1,5 @@
+import { normalizeVerificationForSdp } from "@/lib/disbursements/normalizeVerification";
+
 export interface RecipientRow {
   name: string;
   email: string;
@@ -15,7 +17,7 @@ export function recipientsToCSV(recipients: RecipientRow[], defaultAmount = ""):
       .replace(/[^a-z0-9_]/g, "");
     const email = r.email.trim();
     const amount = (r.amount || defaultAmount || "0").trim();
-    const verification = (r.verification ?? "").trim() || "2000-01-01";
+    const verification = normalizeVerificationForSdp((r.verification ?? "").trim());
     return `${email},${id},${amount},${verification}`;
   });
   return "email,id,amount,verification\n" + rows.join("\n");
@@ -36,9 +38,10 @@ export function receiversToRecipientRows(
       email: r.email!.trim(),
       phone: r.phone_number?.trim() ?? "",
       amount: r.payment?.amount?.trim() ?? "",
-      verification:
+      verification: normalizeVerificationForSdp(
         r.payment?.verification_field_value?.trim() ??
-        r.payment?.verification?.trim() ??
-        "",
+          r.payment?.verification?.trim() ??
+          ""
+      ),
     }));
 }

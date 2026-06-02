@@ -1,5 +1,6 @@
 import type { SdpReceiver } from "@/lib/sdp/adminClient";
 import type { BeneficiaryHint } from "@/lib/sdp/resolve-beneficiary-hints";
+import { normalizeDateOfBirthForSdp } from "@/lib/disbursements/normalizeVerification";
 
 export type BeneficiaryLifecycleState = "draft" | "live" | "sent";
 
@@ -35,7 +36,8 @@ export function receiverVerificationDob(receiver: {
 }): string {
   const p = receiver.payment;
   if (!p) return "";
-  return (p.verification_field_value ?? p.verification ?? "").trim();
+  const raw = (p.verification_field_value ?? p.verification ?? "").trim();
+  return normalizeDateOfBirthForSdp(raw) ?? raw;
 }
 
 function inviteWasSent(receiver: SdpReceiver): boolean {

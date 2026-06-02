@@ -12,6 +12,7 @@ import {
   ensureDisbursementMeta,
 } from "@/lib/disbursements/store";
 import { recipientsToCSV, type RecipientRow } from "@/lib/disbursements/csv";
+import { normalizeVerificationForSdp } from "@/lib/disbursements/normalizeVerification";
 import { getUserBySessionId } from "@/lib/db/users";
 
 const EDITABLE = new Set(["DRAFT", "READY"]);
@@ -32,7 +33,7 @@ function parseRecipients(body: unknown): RecipientRow[] | null {
       email,
       phone: String(row.phone ?? "").trim(),
       amount: String(row.amount ?? "").trim(),
-      verification: String(row.verification ?? "").trim(),
+      verification: normalizeVerificationForSdp(String(row.verification ?? "")),
     });
   }
   return rows.length > 0 ? rows : null;

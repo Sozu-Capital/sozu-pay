@@ -11,6 +11,7 @@ import { DisbursementAuditButton } from "@/components/disbursements/Disbursement
 import { EditDisbursementRecipients } from "@/components/disbursements/EditDisbursementRecipients";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 import { recipientsToCSV } from "@/lib/disbursements/csv";
+import { normalizeVerificationForSdp } from "@/lib/disbursements/normalizeVerification";
 import type { BeneficiaryLifecycleState } from "@/lib/sdp/receiverDisplay";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -269,7 +270,10 @@ export default function DisbursementsPage() {
   function handleAddRecipient() {
     const { name, email } = recipientForm;
     if (!name.trim() || !email.trim()) return;
-    setDraftRecipients((prev) => [...prev, { ...recipientForm }]);
+    const verification = recipientForm.verification.trim()
+      ? normalizeVerificationForSdp(recipientForm.verification)
+      : "";
+    setDraftRecipients((prev) => [...prev, { ...recipientForm, verification }]);
     setRecipientForm(EMPTY_FORM);
     nameInputRef.current?.focus();
   }
@@ -749,11 +753,17 @@ export default function DisbursementsPage() {
                         {t("verificationLabel")}
                       </label>
                       <input
-                        type="date"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder={t("verificationPlaceholder")}
                         value={recipientForm.verification}
                         onChange={(e) => setField("verification", e.target.value)}
+                        onBlur={(e) => {
+                          const n = normalizeVerificationForSdp(e.target.value);
+                          if (n && n !== e.target.value.trim()) setField("verification", n);
+                        }}
                         onKeyDown={handleRecipientKeyDown}
-                        className="w-48 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-48 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                       />
                       <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
                         {t("verificationHint")}

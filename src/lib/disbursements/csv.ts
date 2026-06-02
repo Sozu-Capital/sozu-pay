@@ -26,7 +26,7 @@ export function recipientsToCSV(recipients: RecipientRow[], defaultAmount = ""):
     const id = slugifyLegalName(r.name);
     const email = r.email.trim();
     const amount = (r.amount || defaultAmount || "0").trim();
-    const verification = normalizeVerificationForSdp((r.verification ?? "").trim());
+    const verification = normalizeVerificationForSdp((r.verification ?? "").trim()) ?? "";
     return `${email},${id},${amount},${verification}`;
   });
   return "email,id,amount,verification\n" + rows.join("\n");
@@ -84,9 +84,10 @@ export function parseDisbursementCsvText(text: string): RecipientRow[] {
       email,
       phone: "",
       amount: amountIdx >= 0 ? (cols[amountIdx]?.trim() ?? "") : "",
-      verification: normalizeVerificationForSdp(
-        verificationIdx >= 0 ? (cols[verificationIdx]?.trim() ?? "") : ""
-      ),
+      verification:
+        normalizeVerificationForSdp(
+          verificationIdx >= 0 ? (cols[verificationIdx]?.trim() ?? "") : ""
+        ) ?? "",
     });
   }
   return rows;
@@ -107,10 +108,11 @@ export function receiversToRecipientRows(
       email: r.email!.trim(),
       phone: r.phone_number?.trim() ?? "",
       amount: r.payment?.amount?.trim() ?? "",
-      verification: normalizeVerificationForSdp(
-        r.payment?.verification_field_value?.trim() ??
-          r.payment?.verification?.trim() ??
-          ""
-      ),
+      verification:
+        normalizeVerificationForSdp(
+          r.payment?.verification_field_value?.trim() ??
+            r.payment?.verification?.trim() ??
+            ""
+        ) ?? "",
     }));
 }

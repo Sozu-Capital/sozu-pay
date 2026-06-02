@@ -298,10 +298,20 @@ export default function DisbursementsPage() {
   function handleAddRecipient() {
     const { name, email } = recipientForm;
     if (!name.trim() || !email.trim()) return;
-    const verification = recipientForm.verification.trim()
-      ? normalizeVerificationForSdp(recipientForm.verification)
-      : "";
-    setDraftRecipients((prev) => [...prev, { ...recipientForm, verification }]);
+    const normalized = normalizeVerificationForSdp(recipientForm.verification);
+    if (!normalized) {
+      setCreateError(
+        recipientForm.verification.trim()
+          ? t("errorInvalidVerification")
+          : t("errorMissingVerification")
+      );
+      return;
+    }
+    setCreateError(null);
+    setDraftRecipients((prev) => [
+      ...prev,
+      { ...recipientForm, verification: normalized },
+    ]);
     setRecipientForm(EMPTY_FORM);
     nameInputRef.current?.focus();
   }
@@ -394,7 +404,21 @@ export default function DisbursementsPage() {
         setCreateError(t("errorMissingLegalName"));
         return null;
       }
-      const csvString = recipientsToCSV(draftRecipients, defaultAmount);
+      const missingVerification = draftRecipients.some((r) => {
+        const v = normalizeVerificationForSdp(r.verification ?? "");
+        return !v;
+      });
+      if (missingVerification) {
+        setCreateError(t("errorMissingVerification"));
+        return null;
+      }
+      const csvString = recipientsToCSV(
+        draftRecipients.map((r) => ({
+          ...r,
+          verification: normalizeVerificationForSdp(r.verification ?? "") ?? "",
+        })),
+        defaultAmount
+      );
       return new File([csvString], "disbursement.csv", { type: "text/csv" });
     };
 
@@ -850,7 +874,11 @@ export default function DisbursementsPage() {
                   <button
                     type="button"
                     onClick={handleAddRecipient}
-                    disabled={!recipientForm.name.trim() || !recipientForm.email.trim()}
+                    disabled={
+                      !recipientForm.name.trim() ||
+                      !recipientForm.email.trim() ||
+                      !normalizeVerificationForSdp(recipientForm.verification)
+                    }
                     className="mt-1 px-4 py-2 rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-sm font-medium hover:bg-gray-700 dark:hover:bg-gray-300 disabled:opacity-40 transition-colors"
                   >
                     {t("addRecipient")}
@@ -967,11 +995,15 @@ export default function DisbursementsPage() {
                               <BeneficiaryFieldCell
                                 value={r.verification}
                                 placeholder={t("verificationPlaceholder")}
-                                onSave={(verification) =>
-                                  updateDraftRecipient(i, {
-                                    verification: normalizeVerificationForSdp(verification),
-                                  })
-                                }
+                                onSave={(verification) => {
+                                  const normalized = normalizeVerificationForSdp(verification);
+                                  if (!normalized) {
+                                    setCreateError(t("errorInvalidVerification"));
+                                    return;
+                                  }
+                                  setCreateError(null);
+                                  updateDraftRecipient(i, { verification: normalized });
+                                }}
                                 className="font-normal text-gray-600 dark:text-gray-400"
                               />
                             </td>

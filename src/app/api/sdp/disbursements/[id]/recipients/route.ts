@@ -33,7 +33,7 @@ function parseRecipients(body: unknown): RecipientRow[] | null {
       email,
       phone: String(row.phone ?? "").trim(),
       amount: String(row.amount ?? "").trim(),
-      verification: normalizeVerificationForSdp(String(row.verification ?? "")),
+      verification: normalizeVerificationForSdp(String(row.verification ?? "")) ?? "",
     });
   }
   return rows.length > 0 ? rows : null;

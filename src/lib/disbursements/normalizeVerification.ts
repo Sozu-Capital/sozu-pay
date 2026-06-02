@@ -21,11 +21,16 @@ export function normalizeDateOfBirthForSdp(input: string): string | null {
 
 const DEFAULT_VERIFICATION = "2000-01-01";
 
-/** Normalize a single verification cell before upload to SDP. */
-export function normalizeVerificationForSdp(input: string): string {
+/** Normalize a single verification cell before upload to SDP. Empty → null (caller must reject). */
+export function normalizeVerificationForSdp(input: string): string | null {
   const trimmed = input.trim();
-  if (!trimmed) return DEFAULT_VERIFICATION;
-  return normalizeDateOfBirthForSdp(trimmed) ?? trimmed;
+  if (!trimmed) return null;
+  return normalizeDateOfBirthForSdp(trimmed) ?? null;
+}
+
+/** @deprecated Used only when reading legacy rows; do not write this default on new uploads. */
+export function defaultVerificationWhenBlank(): string {
+  return DEFAULT_VERIFICATION;
 }
 
 /**
@@ -49,8 +54,28 @@ export function normalizeDisbursementCsvText(csvText: string): string {
       out.push(line);
       continue;
     }
-    cols[verificationIdx] = normalizeVerificationForSdp(cols[verificationIdx] ?? "");
+    cols[verificationIdx] = normalizeVerificationForSdp(cols[verificationIdx] ?? "") ?? "";
     out.push(cols.join(","));
   }
   return out.join("\n");
+}
+
+/** Row numbers (1-based, excluding header) with missing or invalid verification. */
+export function findInvalidVerificationRows(csvText: string): number[] {
+  const lines = csvText.replace(/^\uFEFF/, "").split(/\r?\n/");
+  if (lines.length < 2) return [];
+
+  const header = lines[0]!.split(",").map((h) => h.trim().toLowerCase());
+  const verificationIdx = header.indexOf("verification");
+  if (verificationIdx < 0) return [1];
+
+  const bad: number[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i]!;
+    if (!line.trim()) continue;
+    const cols = line.split(",");
+    const raw = cols[verificationIdx]?.trim() ?? "";
+    if (!normalizeVerificationForSdp(raw)) bad.push(i);
+  }
+  return bad;
 }

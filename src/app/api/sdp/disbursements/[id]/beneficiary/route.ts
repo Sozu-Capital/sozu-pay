@@ -104,7 +104,13 @@ export async function PATCH(
 
     if (body.dateOfBirth !== undefined) {
       const nextDob = normalizeVerificationForSdp(body.dateOfBirth.trim());
-      if (body.dateOfBirth.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(nextDob)) {
+      if (!nextDob) {
+        return NextResponse.json(
+          { error: "Date of birth must be YYYY-MM-DD (e.g. 1997-08-05)" },
+          { status: 400 }
+        );
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDob)) {
         return NextResponse.json(
           { error: "Date of birth must be YYYY-MM-DD (e.g. 1997-08-05)" },
           { status: 400 }

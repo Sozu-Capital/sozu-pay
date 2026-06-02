@@ -20,7 +20,7 @@ import {
   getAllDisbursementMeta,
 } from "@/lib/disbursements/store";
 import { getUserBySessionId } from "@/lib/db/users";
-import { normalizeDisbursementCsvText } from "@/lib/disbursements/normalizeVerification";
+import { normalizeDisbursementCsvText, findInvalidVerificationRows } from "@/lib/disbursements/normalizeVerification";
 
 function notConfigured() {
   return NextResponse.json({ error: sdpNotConfiguredMessage() }, { status: 503 });
@@ -122,6 +122,17 @@ export async function POST(request: Request) {
 
     const rawCsv = Buffer.from(await file.arrayBuffer()).toString("utf-8");
     const normalizedCsv = normalizeDisbursementCsvText(rawCsv);
+    const invalidRows = findInvalidVerificationRows(normalizedCsv);
+    if (invalidRows.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Each CSV row needs a verification date (YYYY-MM-DD) in the verification column. " +
+            `Missing or invalid on row(s): ${invalidRows.join(", ")}.`,
+        },
+        { status: 400 }
+      );
+    }
     const fileName = file instanceof File ? file.name : "disbursement.csv";
     await uploadInstructions(disbursement.id, Buffer.from(normalizedCsv, "utf-8"), fileName);
 

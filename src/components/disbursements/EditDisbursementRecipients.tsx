@@ -34,11 +34,12 @@ function receiversToRows(
       email: r.email!.trim(),
       phone: r.phone_number?.trim() ?? "",
       amount: r.payment?.amount?.trim() ?? "",
-      verification: normalizeVerificationForSdp(
-        r.payment?.verification_field_value?.trim() ??
-          r.payment?.verification?.trim() ??
-          ""
-      ),
+      verification:
+        normalizeVerificationForSdp(
+          r.payment?.verification_field_value?.trim() ??
+            r.payment?.verification?.trim() ??
+            ""
+        ) ?? "",
     }));
 }
 
@@ -58,7 +59,7 @@ export function EditDisbursementRecipients({ disbursementId, receivers, onSaved 
     if (!form.name.trim() || !form.email.trim()) return;
     const rawVerification = form.verification?.trim() ?? "";
     const verification = rawVerification
-      ? normalizeVerificationForSdp(rawVerification)
+      ? (normalizeVerificationForSdp(rawVerification) ?? "")
       : "";
     setRows((prev) => [...prev, { ...form, verification }]);
     setForm(EMPTY);

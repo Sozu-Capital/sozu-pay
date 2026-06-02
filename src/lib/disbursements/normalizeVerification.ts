@@ -62,7 +62,7 @@ export function normalizeDisbursementCsvText(csvText: string): string {
 
 /** Row numbers (1-based, excluding header) with missing or invalid verification. */
 export function findInvalidVerificationRows(csvText: string): number[] {
-  const lines = csvText.replace(/^\uFEFF/, "").split(/\r?\n/");
+  const lines = csvText.replace(/^\uFEFF/, "").split(/\r?\n/);
   if (lines.length < 2) return [];
 
   const header = lines[0]!.split(",").map((h) => h.trim().toLowerCase());

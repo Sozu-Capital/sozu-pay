@@ -12,6 +12,7 @@ import { sendSdpInviteEmail } from "@/lib/email/sdp-invite";
 import { getSdpEnv } from "@/lib/sdp/env";
 import { signSdpInviteUrl } from "@/lib/sdp/signInviteUrl";
 import {
+  externalIdAsBeneficiaryName,
   externalIdToDisplayName,
   receiverVerificationDob,
 } from "@/lib/sdp/receiverDisplay";
@@ -165,11 +166,18 @@ export async function POST(
           error = "SDP_SEP10_SIGNING_KEY not configured";
         }
 
+        const recipientName =
+          externalIdAsBeneficiaryName(receiver.external_id ?? "") ??
+          (externalIdToDisplayName(receiver.external_id ?? "") || undefined);
+
         const emailResult = await sendSdpInviteEmail({
           toEmail: receiver.email,
+          recipientName,
           organizationName,
+          campaignName: disbursement.wallet.name,
           registrationUrl,
           disbursementName: disbursement.name,
+          amountUsdc: receiver.payment?.amount,
         });
         inviteSent = emailResult.sent;
         if (!emailResult.sent && emailResult.error) {

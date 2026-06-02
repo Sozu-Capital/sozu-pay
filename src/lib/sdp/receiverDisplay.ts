@@ -40,7 +40,7 @@ export function receiverVerificationDob(receiver: {
   return normalizeDateOfBirthForSdp(raw) ?? raw;
 }
 
-function inviteWasSent(receiver: SdpReceiver): boolean {
+export function receiverInviteWasSent(receiver: SdpReceiver): boolean {
   const wallet = receiver.receiver_wallet;
   if (!wallet) return false;
   return !!(
@@ -65,7 +65,7 @@ export function deriveBeneficiaryLifecycleState(
 
   if (
     paymentStatus !== "DRAFT" ||
-    inviteWasSent(receiver) ||
+    receiverInviteWasSent(receiver) ||
     walletStatus === "REGISTERED" ||
     walletStatus === "CREATED" ||
     walletStatus === "PENDING"

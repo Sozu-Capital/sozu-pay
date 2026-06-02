@@ -7,23 +7,24 @@ import {
   smartAccountIdFromAuthEntry,
 } from "@/lib/stellar/smartAccounts/signSorobanWebAuthnAuth";
 
+function isMissingSignerError(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return /no signer found|not registered on that smart account/i.test(msg);
+}
+
 /**
  * Sign Soroban auth entries on a server-prepared payout envelope using passkey.
- * Uses manual OZ auth signing (same as SozuCredit) — not kit.signAuthEntry, which
- * incorrectly calls get_context_rules on the disbursement contract.
+ * Supports multiple smart accounts in one tx (e.g. treasury sweep + member payout).
  */
 export async function signSorobanEnvelopeWithPasskey(params: {
   kit: SmartAccountKit;
   envelopeXdr: string;
   networkPassphrase: string;
   credentialId?: string | null;
+  /** Member/disbursement signer contract — used as the first passkey attempt. */
+  primaryContractId?: string | null;
 }): Promise<string> {
   const { Transaction, TransactionBuilder, Operation } = await import("@stellar/stellar-sdk");
-
-  const credentialId = params.credentialId?.trim();
-  if (!credentialId) {
-    throw new Error("Credential ID required for passkey payout signing.");
-  }
 
   const cfgRes = await fetch("/api/smart-accounts/config", { credentials: "include" });
   const cfg = (await cfgRes.json().catch(() => ({}))) as { webauthnVerifierAddress?: string };
@@ -41,6 +42,67 @@ export async function signSorobanEnvelopeWithPasskey(params: {
     throw new Error(
       "Invalid prepared payout: fee payer must be a classic G address, not a smart account (C…)."
     );
+  }
+
+  const credentialByContract = new Map<string, string>();
+  const primaryContract = params.primaryContractId?.trim().toUpperCase();
+  const seedCredential = params.credentialId?.trim();
+  if (primaryContract && seedCredential) {
+    credentialByContract.set(primaryContract, seedCredential);
+  }
+
+  async function resolveCredentialForContract(contractId: string, forcePrompt: boolean): Promise<string> {
+    const key = contractId.trim().toUpperCase();
+    if (!forcePrompt && credentialByContract.has(key)) {
+      return credentialByContract.get(key)!;
+    }
+
+    const connected = await params.kit.connectWallet({
+      prompt: true,
+      credentialId: forcePrompt ? undefined : seedCredential ?? undefined,
+    });
+    const cred = connected?.credentialId?.trim();
+    if (!cred) {
+      throw new Error("Passkey authorization was cancelled or unavailable.");
+    }
+    credentialByContract.set(key, cred);
+    return cred;
+  }
+
+  async function signEntry(entry: xdr.SorobanAuthorizationEntry): Promise<xdr.SorobanAuthorizationEntry> {
+    const smartAccountId = smartAccountIdFromAuthEntry(entry);
+    let credentialId = await resolveCredentialForContract(smartAccountId, false);
+
+    try {
+      return await signAuthEntryWithResolvedKeyData({
+        entry,
+        credentialId,
+        networkPassphrase: params.networkPassphrase,
+        webauthnVerifierAddress: webauthnVerifier,
+        smartAccountContractId: smartAccountId,
+      });
+    } catch (e) {
+      if (!isMissingSignerError(e)) throw e;
+      credentialByContract.delete(smartAccountId.trim().toUpperCase());
+      credentialId = await resolveCredentialForContract(smartAccountId, true);
+      try {
+        return await signAuthEntryWithResolvedKeyData({
+          entry,
+          credentialId,
+          networkPassphrase: params.networkPassphrase,
+          webauthnVerifierAddress: webauthnVerifier,
+          smartAccountContractId: smartAccountId,
+        });
+      } catch (retryErr) {
+        if (isMissingSignerError(retryErr)) {
+          throw new Error(
+            `This passkey is not registered on smart account ${smartAccountId.slice(0, 8)}…. ` +
+              "If this tx sweeps from org treasury, approve again with the passkey you used when creating the org treasury wallet."
+          );
+        }
+        throw retryErr;
+      }
+    }
   }
 
   const signedOperations = [];
@@ -64,16 +126,7 @@ export async function signSorobanEnvelopeWithPasskey(params: {
 
     const signedAuth = [];
     for (const entry of authEntries) {
-      const smartAccountId = smartAccountIdFromAuthEntry(entry);
-      signedAuth.push(
-        await signAuthEntryWithResolvedKeyData({
-          entry,
-          credentialId,
-          networkPassphrase: params.networkPassphrase,
-          webauthnVerifierAddress: webauthnVerifier,
-          smartAccountContractId: smartAccountId,
-        })
-      );
+      signedAuth.push(await signEntry(entry));
     }
 
     signedOperations.push(
@@ -159,6 +212,7 @@ export async function executePasskeySorobanPayout(params: {
     envelopeXdr: prepared.envelopeXdr,
     networkPassphrase: config.networkPassphrase,
     credentialId: params.credentialId ?? connected.credentialId,
+    primaryContractId: connected.contractId,
   });
 
   const submitRes = await fetch("/api/payouts/submit-signed-soroban", {

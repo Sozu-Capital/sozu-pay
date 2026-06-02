@@ -65,6 +65,7 @@ export async function executePasskeyDistributionTransfer(params: {
       envelopeXdr: prepared.envelopeXdr,
       networkPassphrase: config.networkPassphrase,
       credentialId: connected.credentialId,
+      primaryContractId: connected.contractId,
     });
   }
 

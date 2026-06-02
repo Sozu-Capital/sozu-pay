@@ -6,6 +6,10 @@ import { getDisbursement, listReceivers } from "@/lib/sdp/adminClient";
 import { createDisbursementSigningSession } from "@/lib/signing-sessions/store";
 import { logPasskeyEvent } from "@/lib/passkey/log";
 import { preflightDisbursementStart } from "@/lib/sdp/validateDisbursementStart";
+import {
+  getDisbursementMetaAsync,
+  invitesSentAtFromAudit,
+} from "@/lib/disbursements/store";
 
 /**
  * POST /api/sdp/disbursements/[id]/authorize/prepare
@@ -29,12 +33,20 @@ export async function POST(
       return NextResponse.json({ error: "Organization not found.", code: "NO_ORG" }, { status: 400 });
     }
 
-    const [disbursement, receivers] = await Promise.all([
+    const [disbursement, receivers, meta] = await Promise.all([
       getDisbursement(disbursementId),
       listReceivers(disbursementId),
+      getDisbursementMetaAsync(disbursementId),
     ]);
 
-    const preflight = await preflightDisbursementStart({ org, disbursement, receivers });
+    const invitesSentAt = meta?.invitesSentAt ?? invitesSentAtFromAudit(disbursementId);
+
+    const preflight = await preflightDisbursementStart({
+      org,
+      disbursement,
+      receivers,
+      invitesSentAt,
+    });
     if (!preflight.ok) {
       return NextResponse.json(
         { error: preflight.error, code: preflight.code, details: preflight.details },

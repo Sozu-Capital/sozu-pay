@@ -1015,7 +1015,7 @@
     "backToDisbursements": "Back to distributions",
     "distributionTreasury": {
       "title": "SDP distribution wallet",
-      "subtitle": "Move USDC between your org treasury (Soroban) and SDP's distribution account before starting batch payouts. Passkey required.",
+      "subtitle": "Move USDC between your org treasury (Soroban) and SDP's distribution account before starting batch payouts. Passkey required — you may be prompted twice if funds sweep from org treasury.",
       "orgTreasury": "Org treasury (Soroban)",
       "sdpDistribution": "SDP distribution (Stellar)",
       "amountLabel": "Amount (USDC)",

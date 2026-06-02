@@ -1091,7 +1091,7 @@
     "backToDisbursements": "Volver a distribuciones",
     "distributionTreasury": {
       "title": "Billetera de distribución SDP",
-      "subtitle": "Mové USDC entre la tesorería de tu org (Soroban) y la cuenta de distribución de SDP antes de iniciar pagos. Requiere passkey.",
+      "subtitle": "Mové USDC entre la tesorería de tu org (Soroban) y la cuenta de distribución de SDP antes de iniciar pagos. Requiere passkey — puede pedirte firmar dos veces si los fondos salen de la tesorería org.",
       "orgTreasury": "Tesorería org (Soroban)",
       "sdpDistribution": "Distribución SDP (Stellar)",
       "amountLabel": "Monto (USDC)",

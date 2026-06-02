@@ -5,7 +5,6 @@ import { getOrganizationForUser } from "@/lib/db/organizations";
 import {
   buildUnsignedTreasuryToDistributionTransfer,
   fetchDistributionBalances,
-  transferDistributionToTreasury,
 } from "@/lib/stellar/distribution-transfer";
 import {
   isDistributionConfigured,
@@ -121,9 +120,9 @@ export async function POST(request: NextRequest) {
       amount: prepared.amount,
       envelopeXdr: prepared.envelopeXdr,
       network: prepared.network,
-      sourceContractId: prepared.sourceContractId,
+      disbursementContractId: prepared.disbursementContractId,
       distributionPublicKey: prepared.distributionPublicKey,
-      treasuryContractId: resolveOrgTreasuryContractId(org),
+      treasuryContractId: prepared.treasuryContractId,
       requiresPasskey: true,
     });
   } catch (e) {

@@ -9,7 +9,7 @@ import { getUsdcBalance } from "@/lib/stellar/balance";
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
 import { readDistributionPublicKey } from "@/lib/sdp/distributionAccount";
 import type { SdpDisbursement, SdpReceiver } from "@/lib/sdp/adminClient";
-import { deriveBeneficiaryLifecycleState } from "@/lib/sdp/receiverDisplay";
+import { receiverInviteWasSent } from "@/lib/sdp/receiverDisplay";
 
 export type DisbursementPreflightFailure = {
   ok: false;
@@ -30,11 +30,21 @@ function requiredBatchAmount(disbursement: SdpDisbursement): number {
   return Math.max(0, total - disbursed);
 }
 
-/** Block start/hotlink when every recipient is still pre-invite (lifecycle draft). */
-export function validateBeneficiariesReady(
-  receivers: SdpReceiver[]
-): DisbursementPreflightResult {
-  if (receivers.length === 0) {
+/**
+ * Start/Hotlink requires invite emails sent first.
+ * SDP keeps receiver wallets in DRAFT until the batch is STARTED — registration in SozuCredit
+ * happens after start, so we must NOT block on wallet lifecycle "draft".
+ */
+export function validateInvitesSentForStart(params: {
+  invitesSentAt?: string | null;
+  receivers: SdpReceiver[];
+}): DisbursementPreflightResult {
+  if (params.invitesSentAt) return { ok: true };
+
+  const anyInviteOnSdp = params.receivers.some((r) => receiverInviteWasSent(r));
+  if (anyInviteOnSdp) return { ok: true };
+
+  if (params.receivers.length === 0) {
     return {
       ok: false,
       code: "NO_RECEIVERS",
@@ -43,23 +53,15 @@ export function validateBeneficiariesReady(
     };
   }
 
-  const draftCount = receivers.filter(
-    (r) => deriveBeneficiaryLifecycleState(r) === "draft"
-  ).length;
-
-  if (draftCount === receivers.length) {
-    return {
-      ok: false,
-      code: "BENEFICIARIES_NOT_READY",
-      error:
-        receivers.length === 1
-          ? "The recipient is still in draft — send the invite email first so they can register in SozuCredit. Starting payouts is blocked until at least one invite has been sent."
-          : "All recipients are still in draft — send invite emails first. Starting payouts is blocked until at least one recipient has received a registration link.",
-      details: { recipientCount: receivers.length, draftCount },
-    };
-  }
-
-  return { ok: true };
+  return {
+    ok: false,
+    code: "INVITES_REQUIRED",
+    error:
+      params.receivers.length === 1
+        ? "Send the invite email first. Starting the batch or Hotlink is blocked until the recipient has received a registration link."
+        : "Send invite emails first. Starting the batch or Hotlink is blocked until at least one recipient has received a registration link.",
+    details: { recipientCount: params.receivers.length },
+  };
 }
 
 /** Check org Soroban treasury and SDP distribution account before passkey. */
@@ -105,7 +107,7 @@ export async function validateDisbursementFunds(params: {
         error:
           `Your org smart account holds ${orgCombined.toFixed(2)} USDC, but SDP's distribution account ` +
           `(${distributionPk}) only has ${distributionBal.toFixed(2)} USDC. SDP requires at least ${required.toFixed(2)} USDC ` +
-          `in the distribution wallet before this batch can start. Fund the SDP distribution account, then retry.`,
+          `in the distribution wallet before this batch can start. Use "Fund distribution" on this page, then retry Hotlink or Start payments.`,
         details: {
           required,
           orgBalance: orgCombined,
@@ -146,9 +148,13 @@ export async function preflightDisbursementStart(params: {
   org: Organization;
   disbursement: SdpDisbursement;
   receivers: SdpReceiver[];
+  invitesSentAt?: string | null;
 }): Promise<DisbursementPreflightResult> {
-  const beneficiaries = validateBeneficiariesReady(params.receivers);
-  if (!beneficiaries.ok) return beneficiaries;
+  const invites = validateInvitesSentForStart({
+    invitesSentAt: params.invitesSentAt,
+    receivers: params.receivers,
+  });
+  if (!invites.ok) return invites;
   return validateDisbursementFunds({
     org: params.org,
     disbursement: params.disbursement,
@@ -167,7 +173,7 @@ export function formatSdpStartError(raw: string): { code: string; error: string 
       code: "SDP_DISTRIBUTION_UNDERFUNDED",
       error:
         `SDP distribution account (${dist}) does not have enough USDC for this batch (needs at least ${required} USDC). ` +
-        `Fund the SDP distribution wallet on Stellar, then open a new passkey authorization and retry.`,
+        `Use "Fund distribution" on the Disbursements page, then open a new passkey authorization and retry.`,
     };
   }
   if (/409/.test(text)) {

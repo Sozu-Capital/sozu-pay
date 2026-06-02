@@ -1,26 +1,17 @@
 import "server-only";
 
-import {
-  Address,
-  Asset,
-  Contract,
-  Keypair,
-  Operation,
-  TransactionBuilder,
-  rpc,
-  xdr,
-} from "@stellar/stellar-sdk";
+import { Asset, Keypair, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
 import type { Organization } from "@/lib/db/organizations";
 import { getHorizon } from "@/lib/stellar/server";
 import { getUsdcBalance, getUsdcIssuer } from "@/lib/stellar/balance";
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
 import {
-  getSorobanUsdcTokenId,
+  buildUnsignedSorobanPayout,
   resolveOrgDisbursementContractId,
   resolveOrgTreasuryContractId,
   submitSignedSorobanEnvelope,
 } from "@/lib/stellar/org-treasury";
-import { amountToI128, getNetworkPassphrase, getSorobanRpcUrl } from "@/lib/stellar/soroban-common";
+import { getNetworkPassphrase } from "@/lib/stellar/soroban-common";
 import {
   readDistributionPublicKey,
   readDistributionSecret,
@@ -29,26 +20,6 @@ import { PayoutFundsError } from "@/lib/stellar/soroban-payout-errors";
 
 function isPublicNetwork(): boolean {
   return process.env.STELLAR_NETWORK === "public";
-}
-
-function getFunderKeypair(): Keypair {
-  const secret = process.env.STELLAR_FUNDER_SECRET?.trim();
-  if (!secret) throw new Error("STELLAR_FUNDER_SECRET is not configured.");
-  return Keypair.fromSecret(secret);
-}
-
-function i128ScValFromAmount(amount: string): xdr.ScVal {
-  const raw = amountToI128(amount);
-  const negative = raw < BigInt(0);
-  const abs = negative ? -raw : raw;
-  const lo = abs & BigInt("0xffffffffffffffff");
-  const hi = abs >> BigInt(64);
-  return xdr.ScVal.scvI128(
-    new xdr.Int128Parts({
-      lo: lo as unknown as xdr.Uint64,
-      hi: hi as unknown as xdr.Int64,
-    })
-  );
 }
 
 export type DistributionBalances = {
@@ -101,50 +72,9 @@ export async function fetchDistributionBalances(org: Organization): Promise<Dist
   };
 }
 
-async function resolveTransferSource(params: {
-  org: Organization;
-  amountNum: number;
-}): Promise<{ sourceContractId: string; sweepFromTreasury: string | null }> {
-  const treasuryId = resolveOrgTreasuryContractId(params.org);
-  const disbursementId = resolveOrgDisbursementContractId(params.org);
-
-  if (!treasuryId && !disbursementId) {
-    throw new Error("Organization has no Soroban treasury or disbursement contract.");
-  }
-
-  const treasuryBal = treasuryId ? parseFloat(await getSorobanUsdcBalance(treasuryId)) || 0 : 0;
-  const disbursementBal =
-    disbursementId && disbursementId !== treasuryId
-      ? parseFloat(await getSorobanUsdcBalance(disbursementId)) || 0
-      : treasuryBal;
-
-  const primary = disbursementId ?? treasuryId!;
-  const secondary = treasuryId && disbursementId && treasuryId !== disbursementId ? treasuryId : null;
-
-  if (disbursementBal + 1e-9 >= params.amountNum) {
-    return { sourceContractId: primary, sweepFromTreasury: null };
-  }
-
-  if (secondary && treasuryBal + disbursementBal + 1e-9 >= params.amountNum) {
-    const sweep = (params.amountNum - disbursementBal).toFixed(7).replace(/\.?0+$/, "");
-    return { sourceContractId: primary, sweepFromTreasury: sweep };
-  }
-
-  if (treasuryId && treasuryBal + 1e-9 >= params.amountNum && !disbursementId) {
-    return { sourceContractId: treasuryId, sweepFromTreasury: null };
-  }
-
-  throw new PayoutFundsError({
-    message: `Org Soroban wallets hold ${(treasuryBal + (disbursementId && disbursementId !== treasuryId ? disbursementBal : 0)).toFixed(2)} USDC but transfer requires ${params.amountNum} USDC.`,
-    disbursementBalance: disbursementBal.toFixed(7),
-    requestedAmount: String(params.amountNum),
-    treasuryBalance: treasuryBal.toFixed(7),
-  });
-}
-
 /**
- * Build unsigned Soroban tx: org treasury/disbursement C → SDP distribution G.
- * Admin passkey signs Soroban auth entries on the client.
+ * Fund SDP distribution via disbursement_wallet.payout (member passkey signs).
+ * Sweeps treasury → disbursement in the same tx when needed (may require a second passkey prompt for treasury C).
  */
 export async function buildUnsignedTreasuryToDistributionTransfer(params: {
   org: Organization;
@@ -155,7 +85,8 @@ export async function buildUnsignedTreasuryToDistributionTransfer(params: {
   envelopeXdr: string;
   network: string;
   feePayerPublicKey: string;
-  sourceContractId: string;
+  disbursementContractId: string;
+  treasuryContractId: string | null;
   distributionPublicKey: string;
   amount: string;
 }> {
@@ -164,62 +95,25 @@ export async function buildUnsignedTreasuryToDistributionTransfer(params: {
     throw new Error("SDP distribution public key is not configured or invalid.");
   }
 
-  const caller = params.callerSmartAccountId.trim().toUpperCase();
-  if (!caller.startsWith("C")) {
-    throw new Error("Caller must be a Soroban smart account (C…).");
+  const disbursementContractId = resolveOrgDisbursementContractId(params.org);
+  if (!disbursementContractId) {
+    throw new Error("Organization has no Soroban disbursement contract.");
   }
 
-  const amountNum = parseFloat(params.amount);
-  if (!Number.isFinite(amountNum) || amountNum <= 0) {
-    throw new Error(`Invalid amount: ${params.amount}`);
-  }
-
-  const { sourceContractId, sweepFromTreasury } = await resolveTransferSource({
-    org: params.org,
-    amountNum,
+  const prepared = await buildUnsignedSorobanPayout({
+    disbursementContractId,
+    callerSmartAccountId: params.callerSmartAccountId,
+    recipientAddress: distribution,
+    amount: params.amount,
+    treasuryContractId: resolveOrgTreasuryContractId(params.org),
   });
 
-  const treasuryId = resolveOrgTreasuryContractId(params.org);
-  const funder = getFunderKeypair();
-  const rpcUrl = getSorobanRpcUrl();
-  const server = new rpc.Server(rpcUrl, { allowHttp: rpcUrl.startsWith("http://") });
-  const networkPassphrase = getNetworkPassphrase();
-  const tokenId = getSorobanUsdcTokenId();
-  const token = new Contract(tokenId);
-
-  const account = await server.getAccount(funder.publicKey());
-  const builder = new TransactionBuilder(account, {
-    fee: "100000",
-    networkPassphrase,
-  }).setTimeout(60);
-
-  if (sweepFromTreasury && treasuryId) {
-    builder.addOperation(
-      token.call(
-        "transfer",
-        Address.fromString(treasuryId).toScVal(),
-        Address.fromString(sourceContractId).toScVal(),
-        i128ScValFromAmount(sweepFromTreasury)
-      )
-    );
-  }
-
-  builder.addOperation(
-    token.call(
-      "transfer",
-      Address.fromString(sourceContractId).toScVal(),
-      Address.fromString(distribution).toScVal(),
-      i128ScValFromAmount(params.amount)
-    )
-  );
-
-  const prepared = await server.prepareTransaction(builder.build());
-
   return {
-    envelopeXdr: prepared.toEnvelope().toXDR("base64"),
-    network: isPublicNetwork() ? "public" : "testnet",
-    feePayerPublicKey: funder.publicKey(),
-    sourceContractId,
+    envelopeXdr: prepared.envelopeXdr,
+    network: prepared.network,
+    feePayerPublicKey: prepared.feePayerPublicKey,
+    disbursementContractId,
+    treasuryContractId: resolveOrgTreasuryContractId(params.org),
     distributionPublicKey: distribution,
     amount: params.amount,
   };

@@ -15,6 +15,8 @@ import {
   externalIdToDisplayName,
   receiverVerificationDob,
 } from "@/lib/sdp/receiverDisplay";
+import { actorLabelFromUser, markInvitesSent } from "@/lib/disbursements/store";
+import { getUserBySessionId } from "@/lib/db/users";
 
 const WALLET_BASE_URL =
   process.env.SOZUCREDIT_URL ?? "https://credit.sozu.capital";
@@ -196,6 +198,14 @@ export async function POST(
     const sentCount = results.filter((r) => r.inviteSent).length;
     const skippedCount = results.filter((r) => r.skipped).length;
     const failedCount = results.filter((r) => !r.skipped && !r.inviteSent).length;
+
+    const user = await getUserBySessionId(session.id);
+    const label = user ? actorLabelFromUser(user) : session.id;
+    markInvitesSent(id, { userId: session.id, label }, {
+      sent: sentCount,
+      skipped: skippedCount,
+      failed: failedCount,
+    });
 
     return NextResponse.json({
       ok: true,

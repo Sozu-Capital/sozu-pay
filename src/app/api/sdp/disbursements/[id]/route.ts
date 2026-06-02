@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
+import {
+  archiveDeletedDisbursement,
+  actorLabelFromUser,
+} from "@/lib/disbursements/store";
+import { getUserBySessionId } from "@/lib/db/users";
 import { deleteDisbursement, getDisbursement, listReceivers } from "@/lib/sdp/adminClient";
 import { mapReceiverToBeneficiaryRow } from "@/lib/sdp/receiverDisplay";
 import { resolveBeneficiaryHintsByEmails } from "@/lib/sdp/resolve-beneficiary-hints";
 import { resolveAddressesToSozuTags } from "@/lib/payment/resolve-address-to-tag";
+import {
+  getDisbursementMeta,
+  syncPaymentAuditEvents,
+} from "@/lib/disbursements/store";
 
 /**
  * GET /api/sdp/disbursements/[id] — status, payments (via receivers), tx hashes.
@@ -48,7 +57,22 @@ export async function GET(
       mapReceiverToBeneficiaryRow(r, tagByAddress, hintsByEmail)
     );
 
-    return NextResponse.json({ disbursement, payments, receivers });
+    syncPaymentAuditEvents(
+      id,
+      payments.map((p) => ({
+        id: p.id,
+        beneficiary_name: p.beneficiary_name,
+        payment_status: p.payment_status,
+        stellar_transaction_id: p.stellar_transaction_id,
+      }))
+    );
+
+    return NextResponse.json({
+      disbursement,
+      payments,
+      receivers,
+      meta: getDisbursementMeta(id) ?? null,
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[api/sdp/disbursements/[id] GET]", msg);
@@ -70,7 +94,14 @@ export async function DELETE(
   const { id } = await params;
 
   try {
+    const existing = await getDisbursement(id);
+    const user = await getUserBySessionId(session.id);
+    const label = user ? actorLabelFromUser(user) : session.id;
     const deleted = await deleteDisbursement(id);
+    archiveDeletedDisbursement({
+      disbursement: existing,
+      actor: { userId: session.id, label },
+    });
     return NextResponse.json({ ok: true, disbursement: deleted });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

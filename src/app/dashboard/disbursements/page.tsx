@@ -1,12 +1,16 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import {
   DisbursementAuthorizeModal,
   type DisbursementAuthorizeResult,
 } from "@/components/DisbursementAuthorizeModal";
+import { DisbursementAuditButton } from "@/components/disbursements/DisbursementAuditButton";
+import { EditDisbursementRecipients } from "@/components/disbursements/EditDisbursementRecipients";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
+import { recipientsToCSV } from "@/lib/disbursements/csv";
 import type { BeneficiaryLifecycleState } from "@/lib/sdp/receiverDisplay";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -53,6 +57,25 @@ interface DraftRecipient {
   verification: string;
 }
 
+interface DisbursementMeta {
+  disbursementId: string;
+  invitesSentAt?: string;
+  hotlinkAt?: string;
+  paymentsStartedAt?: string;
+  createdByLabel?: string;
+}
+
+interface SdpReceiverRow {
+  email?: string;
+  phone_number?: string;
+  external_id?: string;
+  payment?: {
+    amount?: string;
+    verification_field_value?: string;
+    verification?: string;
+  } | null;
+}
+
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const STELLAR_EXPERT =
@@ -96,17 +119,6 @@ const EMPTY_FORM: DraftRecipient = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function recipientsToCSV(recipients: DraftRecipient[], defaultAmount: string): string {
-  const rows = recipients.map((r) => {
-    const id = r.name.trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
-    const email = r.email.trim();
-    const amount = (r.amount || defaultAmount || "0").trim();
-    const verification = r.verification.trim() || "2000-01-01";
-    return `${email},${id},${amount},${verification}`;
-  });
-  return "email,id,amount,verification\n" + rows.join("\n");
-}
-
 function isSdpConfigError(message: string, status?: number): boolean {
   if (status === 401) return false;
   if (/^unauthorized$/i.test(message.trim())) return false;
@@ -135,6 +147,7 @@ export default function DisbursementsPage() {
 
   // List view
   const [disbursements, setDisbursements] = useState<SdpDisbursement[]>([]);
+  const [metaById, setMetaById] = useState<Record<string, DisbursementMeta>>({});
   const [wallets, setWallets] = useState<SdpWallet[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -163,6 +176,7 @@ export default function DisbursementsPage() {
   const [detail, setDetail] = useState<{
     disbursement: SdpDisbursement;
     payments: SdpPayment[];
+    receivers?: SdpReceiverRow[];
   } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -173,6 +187,8 @@ export default function DisbursementsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [authorizeDisbursementId, setAuthorizeDisbursementId] = useState<string | null>(null);
+  const [authorizeAction, setAuthorizeAction] = useState<"start" | "commit" | null>(null);
+  const [committingId, setCommittingId] = useState<string | null>(null);
 
   // ── Fetch list ────────────────────────────────────────────────────────────
 
@@ -199,6 +215,7 @@ export default function DisbursementsPage() {
       }
       const data = await res.json();
       setDisbursements(data.disbursements ?? []);
+      setMetaById(data.meta ?? {});
       setWallets(data.wallets ?? []);
       if ((data.wallets ?? []).length > 0 && !selectedWalletId) {
         setSelectedWalletId(data.wallets[0].id);
@@ -216,23 +233,36 @@ export default function DisbursementsPage() {
 
   // ── Fetch detail ──────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    if (!selectedId) return;
+  const refreshDetail = useCallback(async (id: string) => {
     setDetailLoading(true);
     setDetailError(null);
-    fetch(`/api/sdp/disbursements/${selectedId}`)
-      .then(async (res) => {
-        if (!res.ok) {
-          const j = await res.json().catch(() => ({}));
-          setDetailError(j.error ?? `Error ${res.status}`);
-          return;
-        }
-        const data = await res.json();
-        setDetail({ disbursement: data.disbursement, payments: data.payments ?? [] });
-      })
-      .catch((e) => setDetailError(e instanceof Error ? e.message : "Network error"))
-      .finally(() => setDetailLoading(false));
-  }, [selectedId]);
+    try {
+      const res = await fetch(`/api/sdp/disbursements/${id}`);
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setDetailError(j.error ?? `Error ${res.status}`);
+        return;
+      }
+      const data = await res.json();
+      setDetail({
+        disbursement: data.disbursement,
+        payments: data.payments ?? [],
+        receivers: data.receivers ?? [],
+      });
+      if (data.meta) {
+        setMetaById((prev) => ({ ...prev, [id]: data.meta }));
+      }
+    } catch (e) {
+      setDetailError(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setDetailLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    void refreshDetail(selectedId);
+  }, [selectedId, refreshDetail]);
 
   // ── Add recipient to draft ────────────────────────────────────────────────
 
@@ -335,6 +365,14 @@ export default function DisbursementsPage() {
 
   function handleStart(id: string) {
     setActionMsg(null);
+    setAuthorizeAction("start");
+    setAuthorizeDisbursementId(id);
+  }
+
+  function handleCommit(id: string, name: string) {
+    if (!window.confirm(t("hotlinkConfirm", { name }))) return;
+    setActionMsg(null);
+    setAuthorizeAction("commit");
     setAuthorizeDisbursementId(id);
   }
 
@@ -354,17 +392,49 @@ export default function DisbursementsPage() {
       const data = await res.json();
       if (!res.ok) {
         setActionMsg(`Error: ${data.error ?? res.status}`);
+        setAuthorizeDisbursementId(null);
+        setAuthorizeAction(null);
         return;
       }
       setAuthorizeDisbursementId(null);
+      setAuthorizeAction(null);
       setActionMsg(t("disbursementStarted"));
       await fetchList();
-      if (selectedId === id) setSelectedId(null);
-      setTimeout(() => setSelectedId(id), 100);
+      if (selectedId === id) await refreshDetail(id);
     } catch (e) {
       setActionMsg(e instanceof Error ? e.message : "Network error");
     } finally {
       setStartingId(null);
+    }
+  }
+
+  async function completeCommit(id: string, auth: DisbursementAuthorizeResult) {
+    setCommittingId(id);
+    try {
+      const res = await fetch(`/api/sdp/disbursements/${id}/commit`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: auth.sessionId,
+          credentialId: auth.credentialId,
+          contractId: auth.contractId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setActionMsg(`Error: ${data.error ?? res.status}`);
+        return;
+      }
+      setAuthorizeDisbursementId(null);
+      setAuthorizeAction(null);
+      setActionMsg(t("hotlinkSuccess"));
+      await fetchList();
+      if (selectedId === id) await refreshDetail(id);
+    } catch (e) {
+      setActionMsg(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setCommittingId(null);
     }
   }
 
@@ -387,6 +457,15 @@ export default function DisbursementsPage() {
       setActionMsg(
         t("invitesSent", { sent: data.sent, skipped: data.skipped, failed: data.failed })
       );
+      setMetaById((prev) => ({
+        ...prev,
+        [id]: {
+          ...prev[id],
+          disbursementId: id,
+          invitesSentAt: new Date().toISOString(),
+        },
+      }));
+      if (selectedId === id) await refreshDetail(id);
     } catch (e) {
       setActionMsg(e instanceof Error ? e.message : "Network error");
     } finally {
@@ -445,9 +524,18 @@ export default function DisbursementsPage() {
               setShowCreate((v) => !v);
               setCreateError(null);
             }}
-            className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
           >
-            {showCreate ? t("cancel") : t("newBatch")}
+            {showCreate ? (
+              t("cancel")
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                {t("newBatch")}
+              </>
+            )}
           </button>
         )}
       </div>
@@ -875,7 +963,12 @@ export default function DisbursementsPage() {
           <p className="text-sm text-gray-500 dark:text-gray-400">{t("empty")}</p>
         )}
 
-        {disbursements.map((d) => (
+        {disbursements.map((d) => {
+          const meta = metaById[d.id];
+          const invitesSent = Boolean(meta?.invitesSentAt);
+          const canEdit = DELETABLE_DISBURSEMENT_STATUSES.has(d.status);
+
+          return (
           <div
             key={d.id}
             className={`rounded-xl border cursor-pointer transition-colors ${
@@ -885,29 +978,59 @@ export default function DisbursementsPage() {
             }`}
             onClick={() => setSelectedId(selectedId === d.id ? null : d.id)}
           >
-            <div className="flex items-center justify-between px-5 py-4">
-              <div className="space-y-0.5 min-w-0">
-                <p className="font-medium text-gray-900 dark:text-white truncate">{d.name}</p>
+            <div className="flex items-center justify-between px-5 py-4 gap-3">
+              <div className="space-y-0.5 min-w-0 flex-1">
+                <div className="flex items-center gap-1 min-w-0">
+                  <p className="font-medium text-gray-900 dark:text-white truncate">{d.name}</p>
+                  <DisbursementAuditButton disbursementId={d.id} disbursementName={d.name} />
+                </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   {d.total_payments} {t("payments")} · {d.asset.code} · {d.wallet.name}
+                  {meta?.hotlinkAt ? ` · ${t("hotlinkActive")}` : null}
                 </p>
               </div>
-              <div className="flex items-center gap-3 shrink-0 ml-4">
-                {isDisbursementAdmin &&
-                  DELETABLE_DISBURSEMENT_STATUSES.has(d.status) && (
-                    <button
-                      type="button"
-                      title={t("deleteBatch")}
-                      disabled={deletingId === d.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleDelete(d.id, d.name);
-                      }}
-                      className="px-2 py-1 rounded text-xs font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
-                    >
-                      {deletingId === d.id ? t("deleting") : t("deleteBatch")}
-                    </button>
-                  )}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  title={t("refresh")}
+                  disabled={detailLoading && selectedId === d.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void fetchList();
+                    if (selectedId === d.id) void refreshDetail(d.id);
+                  }}
+                  className="p-1.5 rounded-full border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                </button>
+                {isDisbursementAdmin && canEdit && (
+                  <button
+                    type="button"
+                    title={t("deleteBatch")}
+                    disabled={deletingId === d.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleDelete(d.id, d.name);
+                    }}
+                    className="p-1.5 rounded-full border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  </button>
+                )}
                 <span
                   className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                     STATUS_COLORS[d.status] ?? STATUS_COLORS.DRAFT
@@ -915,7 +1038,7 @@ export default function DisbursementsPage() {
                 >
                   {d.status}
                 </span>
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                <span className="text-sm font-semibold text-gray-900 dark:text-white hidden sm:inline">
                   {d.total_amount} {d.asset.code}
                 </span>
                 <svg
@@ -943,44 +1066,49 @@ export default function DisbursementsPage() {
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Actions */}
-                <div className="flex flex-wrap gap-2">
-                  {(d.status === "READY" || d.status === "DRAFT") && (
-                    <button
-                      onClick={() => handleStart(d.id)}
-                      disabled={startingId === d.id}
-                      className="px-3 py-1.5 rounded bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-60"
-                    >
-                      {startingId === d.id ? t("starting") : t("startPayments")}
-                    </button>
-                  )}
+                <div className="flex flex-wrap items-center gap-2">
                   <button
-                    onClick={() => handleSendInvites(d.id)}
+                    type="button"
+                    onClick={() => void handleSendInvites(d.id)}
                     disabled={sendingId === d.id}
                     className="px-3 py-1.5 rounded bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-60"
                   >
                     {sendingId === d.id ? t("sending") : t("sendInvites")}
                   </button>
-                  <button
-                    onClick={() => {
-                      setSelectedId(null);
-                      setTimeout(() => setSelectedId(d.id), 100);
-                    }}
-                    className="px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-                  >
-                    {t("refresh")}
-                  </button>
-                  {isDisbursementAdmin &&
-                    DELETABLE_DISBURSEMENT_STATUSES.has(d.status) && (
+                  {(d.status === "READY" || d.status === "DRAFT") && (
+                    <button
+                      type="button"
+                      onClick={() => handleStart(d.id)}
+                      disabled={startingId === d.id || !invitesSent}
+                      title={!invitesSent ? t("startPaymentsDisabledHint") : undefined}
+                      className="px-3 py-1.5 rounded bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {startingId === d.id ? t("starting") : t("startPayments")}
+                    </button>
+                  )}
+                  {(d.status === "READY" || d.status === "DRAFT" || d.status === "STARTED") &&
+                    !meta?.hotlinkAt && (
                       <button
                         type="button"
-                        onClick={() => void handleDelete(d.id, d.name)}
-                        disabled={deletingId === d.id}
-                        className="px-3 py-1.5 rounded border border-red-300 dark:border-red-800 text-sm text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-60"
+                        onClick={() => handleCommit(d.id, d.name)}
+                        disabled={committingId === d.id || !invitesSent}
+                        title={!invitesSent ? t("hotlinkDisabledHint") : undefined}
+                        className="px-3 py-1.5 rounded bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        {deletingId === d.id ? t("deleting") : t("deleteBatch")}
+                        {committingId === d.id ? t("hotlinkCommitting") : t("hotlink")}
                       </button>
                     )}
+                  {canEdit && detail?.disbursement.id === d.id && detail.receivers && (
+                    <EditDisbursementRecipients
+                      disbursementId={d.id}
+                      receivers={detail.receivers}
+                      onSaved={() => void refreshDetail(d.id)}
+                    />
+                  )}
                 </div>
+                {!invitesSent && (d.status === "READY" || d.status === "DRAFT") && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400">{t("invitesRequiredHint")}</p>
+                )}
 
                 {/* Stats */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1118,15 +1246,32 @@ export default function DisbursementsPage() {
               </div>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
 
-      {authorizeDisbursementId && (
+      <div className="pt-4 border-t border-gray-200 dark:border-gray-800 flex justify-center">
+        <Link
+          href="/dashboard/disbursements/history"
+          className="text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 underline-offset-2 hover:underline"
+        >
+          {t("viewHistory")}
+        </Link>
+      </div>
+
+      {authorizeDisbursementId && authorizeAction && (
         <DisbursementAuthorizeModal
           open
           disbursementId={authorizeDisbursementId}
-          onClose={() => setAuthorizeDisbursementId(null)}
-          onAuthorized={(auth) => completeStart(authorizeDisbursementId, auth)}
+          onClose={() => {
+            setAuthorizeDisbursementId(null);
+            setAuthorizeAction(null);
+          }}
+          onAuthorized={(auth) =>
+            authorizeAction === "commit"
+              ? completeCommit(authorizeDisbursementId, auth)
+              : completeStart(authorizeDisbursementId, auth)
+          }
         />
       )}
     </div>

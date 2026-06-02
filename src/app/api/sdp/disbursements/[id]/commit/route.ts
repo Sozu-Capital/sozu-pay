@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { requireDisbursementAuthorized } from "@/lib/auth/disbursement-auth";
-import { startDisbursement } from "@/lib/sdp/adminClient";
+import { getDisbursement, startDisbursement } from "@/lib/sdp/adminClient";
 import {
   consumeSigningSession,
   getSigningSession,
@@ -9,16 +9,17 @@ import {
 } from "@/lib/signing-sessions/store";
 import { verifyPasskeyAuthorization } from "@/lib/signing-sessions/verify-passkey";
 import { appendAuditEvent } from "@/lib/audit";
-import { actorLabelFromUser, markPaymentsStarted } from "@/lib/disbursements/store";
+import {
+  actorLabelFromUser,
+  getDisbursementMeta,
+  markHotlinkCommitted,
+  markPaymentsStarted,
+} from "@/lib/disbursements/store";
 import { logPasskeyEvent } from "@/lib/passkey/log";
 
 /**
- * POST /api/sdp/disbursements/[id]/start
- * Starts SDP payments after passkey authorization.
- *
- * Body:
- *   sessionId (required)
- *   credentialId + contractId (required for same-device flow; optional if session already verified via QR)
+ * POST /api/sdp/disbursements/[id]/commit
+ * Hotlink: passkey-authorized start — funds available for recipients to claim without further NGO approval.
  */
 export async function POST(
   request: NextRequest,
@@ -31,6 +32,14 @@ export async function POST(
   if (!auth.ok) return auth.response;
 
   const { id: disbursementId } = await params;
+  const meta = getDisbursementMeta(disbursementId);
+  if (!meta?.invitesSentAt) {
+    return NextResponse.json(
+      { error: "Send invite emails before enabling Hotlink.", code: "INVITES_REQUIRED" },
+      { status: 400 }
+    );
+  }
+
   const body = await request.json().catch(() => ({}));
   const sessionId = typeof body.sessionId === "string" ? body.sessionId.trim() : "";
   const credentialId = typeof body.credentialId === "string" ? body.credentialId.trim() : "";
@@ -44,38 +53,20 @@ export async function POST(
   }
 
   const signingSession = getSigningSession(sessionId);
-  if (!signingSession) {
-    logPasskeyEvent("warn", {
-      action: "start_disbursement",
-      userId: auth.user.id,
-      disbursementId,
-      sessionId,
-      reason: "session_not_found",
-    });
+  if (!signingSession || signingSession.disbursementId !== disbursementId) {
     return NextResponse.json({ error: "Signing session not found.", code: "SESSION_NOT_FOUND" }, { status: 404 });
-  }
-  if (signingSession.disbursementId !== disbursementId) {
-    return NextResponse.json(
-      { error: "Signing session does not match this disbursement.", code: "DISBURSEMENT_MISMATCH" },
-      { status: 400 }
-    );
   }
   if (signingSession.privyUserId !== session.id) {
     return NextResponse.json({ error: "Forbidden.", code: "SESSION_USER_MISMATCH" }, { status: 403 });
   }
 
-  // Same-device: verify passkey now and mark session verified.
   if (signingSession.status === "pending") {
     if (!credentialId || !contractId) {
       return NextResponse.json(
-        {
-          error: "Passkey authorization incomplete. Approve with your passkey or scan the QR on a compatible device.",
-          code: "PASSKEY_REQUIRED",
-        },
+        { error: "Passkey authorization incomplete.", code: "PASSKEY_REQUIRED" },
         { status: 403 }
       );
     }
-
     const verified = await verifyPasskeyAuthorization({
       user: auth.user,
       credentialId,
@@ -84,68 +75,44 @@ export async function POST(
       sessionId,
     });
     if (!verified.ok) {
-      logPasskeyEvent("error", {
-        action: "start_disbursement",
-        userId: auth.user.id,
-        disbursementId,
-        sessionId,
-        reason: verified.code,
-        userAgent: request.headers.get("user-agent") ?? undefined,
-      });
       return NextResponse.json({ error: verified.error, code: verified.code }, { status: 403 });
     }
-
-    const marked = markSigningSessionVerified(sessionId, { credentialId, contractId });
-    if (!marked.ok) {
-      return NextResponse.json({ error: marked.error, code: marked.code }, { status: 400 });
-    }
+    markSigningSessionVerified(sessionId, { credentialId, contractId });
   }
 
   const consumed = consumeSigningSession(sessionId, session.id);
   if (!consumed.ok) {
-    logPasskeyEvent("error", {
-      action: "start_disbursement",
-      userId: auth.user.id,
-      disbursementId,
-      sessionId,
-      reason: consumed.code,
-    });
     return NextResponse.json({ error: consumed.error, code: consumed.code }, { status: 400 });
   }
 
-  try {
-    await startDisbursement(disbursementId);
+  const actor = { userId: session.id, label: actorLabelFromUser(auth.user) };
 
-    const actorLabel = actorLabelFromUser(auth.user);
-    markPaymentsStarted(disbursementId, { userId: session.id, label: actorLabel }, signingSession.disbursementName);
+  try {
+    const disbursement = await getDisbursement(disbursementId);
+    if (disbursement.status === "DRAFT" || disbursement.status === "READY") {
+      await startDisbursement(disbursementId);
+      markPaymentsStarted(disbursementId, actor, disbursement.name);
+    }
+    markHotlinkCommitted(disbursementId, actor);
 
     appendAuditEvent(
-      "disbursement_started",
-      `Batch disbursement "${signingSession.disbursementName}" started (passkey authorized by ${actorLabel})`,
+      "disbursement_hotlink",
+      `Hotlink enabled for "${disbursement.name}" (${actor.label})`,
       session.id,
-      {
-        signerWallet: consumed.session.contractId,
-        amount: signingSession.disbursementSummary.totalAmount,
-        destination: disbursementId,
-        recipientLabel: signingSession.disbursementName,
-      }
+      { destination: disbursementId, recipientLabel: disbursement.name }
     );
 
     logPasskeyEvent("info", {
-      action: "start_disbursement_ok",
+      action: "commit_hotlink_ok",
       userId: auth.user.id,
       disbursementId,
       sessionId,
-      details: {
-        contractId: consumed.session.contractId,
-        credentialId: consumed.session.credentialId,
-      },
     });
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, hotlink: true });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error("[api/sdp/disbursements/[id]/start]", msg);
+    console.error("[api/sdp/disbursements/[id]/commit]", msg);
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 }

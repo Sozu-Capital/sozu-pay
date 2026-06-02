@@ -12,6 +12,14 @@ import {
   ensureSozuCreditWallet,
 } from "@/lib/sdp/adminClient";
 import { isSdpConfigured, sdpNotConfiguredMessage } from "@/lib/sdp/env";
+import {
+  actorLabelFromUser,
+  appendDisbursementAudit,
+  archiveCompletedIfNeeded,
+  ensureDisbursementMeta,
+  getAllDisbursementMeta,
+} from "@/lib/disbursements/store";
+import { getUserBySessionId } from "@/lib/db/users";
 
 function notConfigured() {
   return NextResponse.json({ error: sdpNotConfiguredMessage() }, { status: 503 });
@@ -40,7 +48,15 @@ export async function GET() {
     );
 
     const wallets = await listWallets();
-    return NextResponse.json({ disbursements, wallets, assets });
+    for (const d of disbursements) {
+      archiveCompletedIfNeeded({ disbursement: d });
+    }
+    return NextResponse.json({
+      disbursements,
+      wallets,
+      assets,
+      meta: getAllDisbursementMeta(),
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[api/sdp/disbursements GET]", msg);
@@ -106,6 +122,20 @@ export async function POST(request: Request) {
     const csvBuffer = Buffer.from(await file.arrayBuffer());
     const fileName = file instanceof File ? file.name : "disbursement.csv";
     await uploadInstructions(disbursement.id, csvBuffer, fileName);
+
+    const user = await getUserBySessionId(session.id);
+    const label = user ? actorLabelFromUser(user) : session.id;
+    ensureDisbursementMeta(disbursement.id, {
+      createdByUserId: session.id,
+      createdByLabel: label,
+    });
+    appendDisbursementAudit(disbursement.id, {
+      action: "created",
+      actorUserId: session.id,
+      actorLabel: label,
+      message: `Batch "${name}" created with ${disbursement.total_payments} recipient(s)`,
+      metadata: { totalPayments: String(disbursement.total_payments) },
+    });
 
     return NextResponse.json({ disbursement }, { status: 201 });
   } catch (e) {

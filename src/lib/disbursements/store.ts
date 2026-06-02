@@ -1,6 +1,9 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { join } from "path";
+
 /**
  * Per-disbursement metadata, audit trail, and history archive.
- * In-memory per process (same pattern as lib/audit.ts). Move to DB for production.
+ * Persisted to `.data/disbursement-store.json` so uploaded DOBs survive dev restarts.
  */
 
 export type DisbursementAuditAction =
@@ -64,10 +67,87 @@ export interface DisbursementHistoryRecord {
   archived_by_label?: string;
 }
 
+const DATA_DIR = join(process.cwd(), ".data");
+const STORE_FILE = join(DATA_DIR, "disbursement-store.json");
+
+type PersistedStore = {
+  meta: Record<string, DisbursementMeta>;
+  audits: Record<string, DisbursementAuditEntry[]>;
+};
+
 const metaById = new Map<string, DisbursementMeta>();
 const auditById = new Map<string, DisbursementAuditEntry[]>();
 const history: DisbursementHistoryRecord[] = [];
 const loggedPaymentKeys = new Set<string>();
+
+function loadPersistedStore(): void {
+  try {
+    if (!existsSync(STORE_FILE)) return;
+    const raw = readFileSync(STORE_FILE, "utf8");
+    const parsed = JSON.parse(raw) as PersistedStore;
+    for (const [id, meta] of Object.entries(parsed.meta ?? {})) {
+      metaById.set(id, meta);
+    }
+    for (const [id, rows] of Object.entries(parsed.audits ?? {})) {
+      auditById.set(id, rows);
+    }
+  } catch (e) {
+    console.warn("[disbursements/store] failed to load persisted store:", e);
+  }
+}
+
+function persistStore(): void {
+  try {
+    if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
+    const payload: PersistedStore = {
+      meta: Object.fromEntries(metaById),
+      audits: Object.fromEntries(auditById),
+    };
+    writeFileSync(STORE_FILE, JSON.stringify(payload, null, 2), "utf8");
+  } catch (e) {
+    console.warn("[disbursements/store] failed to persist store:", e);
+  }
+}
+
+loadPersistedStore();
+
+/** Recover uploaded DOB map from audit when meta was lost (legacy in-memory only). */
+export function uploadedVerificationsFromAudit(
+  disbursementId: string
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const entry of audits(disbursementId)) {
+    const email = entry.metadata?.email?.trim().toLowerCase();
+    if (entry.action === "recipient_dob_updated" && email) {
+      const dob = entry.metadata?.newValue?.trim();
+      if (dob && /^\d{4}-\d{2}-\d{2}$/.test(dob)) out[email] = dob;
+    }
+    if (entry.action === "created" && entry.metadata?.uploadedVerifications) {
+      try {
+        const parsed = JSON.parse(entry.metadata.uploadedVerifications) as Record<
+          string,
+          string
+        >;
+        for (const [e, dob] of Object.entries(parsed)) {
+          const key = e.trim().toLowerCase();
+          const iso = dob.trim();
+          if (key && /^\d{4}-\d{2}-\d{2}$/.test(iso)) out[key] = iso;
+        }
+      } catch {
+        // ignore malformed audit payload
+      }
+    }
+  }
+  return out;
+}
+
+export function mergedUploadedVerifications(
+  disbursementId: string
+): Record<string, string> {
+  const meta = getDisbursementMeta(disbursementId)?.uploadedVerificationByEmail ?? {};
+  const fromAudit = uploadedVerificationsFromAudit(disbursementId);
+  return { ...fromAudit, ...meta };
+}
 
 function audits(id: string): DisbursementAuditEntry[] {
   if (!auditById.has(id)) auditById.set(id, []);
@@ -96,6 +176,31 @@ export function recordUploadedVerifications(
     if (key && iso) next[key] = iso;
   }
   meta.uploadedVerificationByEmail = next;
+  persistStore();
+  void import("@/lib/db/disbursement-verifications")
+    .then(({ upsertDisbursementVerifications }) =>
+      upsertDisbursementVerifications(disbursementId, next)
+    )
+    .catch((e) => {
+      console.warn("[disbursements/store] Supabase DOB persist failed:", e);
+    });
+}
+
+/** Merge file/audit meta with Supabase (production). */
+export async function mergedUploadedVerificationsAsync(
+  disbursementId: string
+): Promise<Record<string, string>> {
+  const local = mergedUploadedVerifications(disbursementId);
+  try {
+    const { fetchDisbursementVerifications } = await import(
+      "@/lib/db/disbursement-verifications"
+    );
+    const fromDb = await fetchDisbursementVerifications(disbursementId);
+    return { ...fromDb, ...local };
+  } catch (e) {
+    console.warn("[disbursements/store] Supabase DOB load failed:", e);
+    return local;
+  }
 }
 
 export function getUploadedVerificationForEmail(
@@ -103,7 +208,7 @@ export function getUploadedVerificationForEmail(
   email: string
 ): string | undefined {
   const key = email.trim().toLowerCase();
-  return getDisbursementMeta(disbursementId)?.uploadedVerificationByEmail?.[key];
+  return mergedUploadedVerifications(disbursementId)[key];
 }
 
 export function ensureDisbursementMeta(
@@ -119,6 +224,7 @@ export function ensureDisbursementMeta(
     createdByLabel: init?.createdByLabel,
   };
   metaById.set(id, meta);
+  persistStore();
   return meta;
 }
 
@@ -132,6 +238,7 @@ export function appendDisbursementAudit(
     ...entry,
   };
   audits(disbursementId).push(row);
+  persistStore();
   return row;
 }
 
@@ -238,6 +345,7 @@ export function archiveDeletedDisbursement(params: {
   });
   metaById.delete(disbursement.id);
   auditById.delete(disbursement.id);
+  persistStore();
 }
 
 export function archiveCompletedIfNeeded(params: {

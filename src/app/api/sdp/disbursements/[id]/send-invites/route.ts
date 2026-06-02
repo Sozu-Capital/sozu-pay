@@ -18,8 +18,8 @@ import {
 } from "@/lib/sdp/receiverDisplay";
 import {
   actorLabelFromUser,
-  getUploadedVerificationForEmail,
   markInvitesSent,
+  mergedUploadedVerificationsAsync,
 } from "@/lib/disbursements/store";
 import { getUserBySessionId } from "@/lib/db/users";
 
@@ -103,6 +103,10 @@ export async function POST(
       listAssets(),
     ]);
 
+    const uploadedByEmail = await mergedUploadedVerificationsAsync(id);
+    const registrationBlocked =
+      disbursement.status === "DRAFT" || disbursement.status === "READY";
+
     // Ensure credit.sozu.capital is registered in SDP before sending invites —
     // recipients need it for SEP-10 client_domain validation to succeed.
     await ensureSozuCreditWallet(assets.map((a) => ({ code: a.code, issuer: a.issuer })));
@@ -151,7 +155,7 @@ export async function POST(
             // Append tenant as unsigned param AFTER the signature so existing
             // verifiers can ignore it while new SozuCredit versions read it.
             const tenantName = process.env.SDP_TENANT_NAME?.trim();
-            const uploadedDob = getUploadedVerificationForEmail(id, receiver.email);
+            const uploadedDob = uploadedByEmail[receiver.email.trim().toLowerCase()];
             const inviteDob = uploadedDob || receiverVerificationDob(receiver);
             registrationUrl = appendUnsignedInviteParams(signedUrl, {
               tenant: tenantName,
@@ -226,6 +230,10 @@ export async function POST(
       sent: sentCount,
       skipped: skippedCount,
       failed: failedCount,
+      registrationBlocked,
+      registrationNote: registrationBlocked
+        ? "Recipients cannot finish SozuCredit registration until this batch is STARTED (Enable Hotlink or Start payments with passkey). SDP keeps receiver wallets in DRAFT until then."
+        : undefined,
       results,
     });
   } catch (e) {

@@ -22,6 +22,10 @@ export async function GET(request: Request) {
   }
 
   const email = new URL(request.url).searchParams.get("email")?.trim().toLowerCase();
+  const sep24TransactionId =
+    new URL(request.url).searchParams.get("tx")?.trim() ||
+    new URL(request.url).searchParams.get("sep24TransactionId")?.trim() ||
+    "";
   if (!email) {
     return NextResponse.json({ error: "email query param is required" }, { status: 400 });
   }
@@ -37,12 +41,15 @@ export async function GET(request: Request) {
       verificationDob: string;
       walletStatus?: string;
       paymentStatus?: string;
+      sep24TransactionId?: string | null;
+      matchesCurrentTx?: boolean;
     }> = [];
 
     for (const d of disbursements) {
       const receivers = await listReceivers(d.id);
       for (const r of receivers) {
         if (r.email?.trim().toLowerCase() !== email) continue;
+        const sep24Tx = r.receiver_wallet?.sep24_transaction_id ?? null;
         hits.push({
           disbursementId: d.id,
           disbursementName: d.name,
@@ -52,6 +59,8 @@ export async function GET(request: Request) {
           verificationDob: receiverVerificationDob(r),
           walletStatus: r.receiver_wallet?.status,
           paymentStatus: r.payment?.status,
+          sep24TransactionId: sep24Tx,
+          matchesCurrentTx: Boolean(sep24TransactionId && sep24Tx === sep24TransactionId),
         });
       }
     }
@@ -60,12 +69,18 @@ export async function GET(request: Request) {
     const duplicateEmail = hits.length > 1;
     const conflictingDobs = uniqueDobs.length > 1;
 
+    const transactionHit = sep24TransactionId
+      ? hits.find((h) => h.matchesCurrentTx) ?? null
+      : null;
+
     return NextResponse.json({
       email,
+      sep24TransactionId: sep24TransactionId || null,
       count: hits.length,
       duplicateEmail,
       conflictingDobs,
       uniqueDobs,
+      transactionHit,
       hits,
       sdpVerifyNote:
         hits.length > 1

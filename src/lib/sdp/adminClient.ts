@@ -51,6 +51,7 @@ export interface SdpReceiverWallet {
   id: string;
   status: string;
   stellar_address?: string;
+  sep24_transaction_id?: string | null;
   invited_at?: string | null;
   last_message_sent_at?: string | null;
   invitation_sent_at?: string | null;

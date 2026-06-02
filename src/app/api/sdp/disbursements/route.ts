@@ -148,12 +148,16 @@ export async function POST(request: Request) {
       disbursement.id,
       verificationByEmailFromCsv(normalizedCsv)
     );
+    const uploadedByEmail = verificationByEmailFromCsv(normalizedCsv);
     appendDisbursementAudit(disbursement.id, {
       action: "created",
       actorUserId: session.id,
       actorLabel: label,
       message: `Batch "${name}" created with ${disbursement.total_payments} recipient(s)`,
-      metadata: { totalPayments: String(disbursement.total_payments) },
+      metadata: {
+        totalPayments: String(disbursement.total_payments),
+        uploadedVerifications: JSON.stringify(uploadedByEmail),
+      },
     });
 
     return NextResponse.json({ disbursement }, { status: 201 });

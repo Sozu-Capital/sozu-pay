@@ -7,6 +7,7 @@ import {
   type DisbursementAuthorizeResult,
 } from "@/components/DisbursementAuthorizeModal";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
+import type { BeneficiaryLifecycleState } from "@/lib/sdp/receiverDisplay";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -33,8 +34,13 @@ interface SdpWallet {
 interface SdpPayment {
   id: string;
   amount: string;
-  status: string;
+  payment_status: string;
+  lifecycle_state: BeneficiaryLifecycleState;
   stellar_transaction_id: string | null;
+  beneficiary_name: string;
+  date_of_birth: string | null;
+  sozu_tag: string | null;
+  contact: string | null;
   receiver: { id: string; email?: string; phone_number?: string };
   created_at: string;
 }
@@ -72,6 +78,12 @@ const PAYMENT_STATUS_COLORS: Record<string, string> = {
   FAILED: "text-red-600",
 };
 
+const LIFECYCLE_STATUS_COLORS: Record<BeneficiaryLifecycleState, string> = {
+  draft: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300",
+  live: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+  sent: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
+};
+
 const DELETABLE_DISBURSEMENT_STATUSES = new Set(["DRAFT", "READY"]);
 
 const EMPTY_FORM: DraftRecipient = {
@@ -99,6 +111,16 @@ function isSdpConfigError(message: string, status?: number): boolean {
   if (status === 401) return false;
   if (/^unauthorized$/i.test(message.trim())) return false;
   return /SDP_|not configured|missing at runtime/i.test(message);
+}
+
+function formatSozuTag(tag: string | null): string {
+  if (!tag) return "—";
+  return tag.startsWith("$") ? tag : `$${tag}`;
+}
+
+function formatDateOfBirth(dob: string | null): string {
+  if (!dob) return "—";
+  return dob;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -996,15 +1018,21 @@ export default function DisbursementsPage() {
                       <thead>
                         <tr className="border-b border-gray-200 dark:border-gray-700">
                           <th className="text-left py-2 pr-4 font-medium text-gray-500 dark:text-gray-400">
-                            {t("colRecipient")}
+                            {t("colName")}
+                          </th>
+                          <th className="text-left py-2 pr-4 font-medium text-gray-500 dark:text-gray-400 hidden sm:table-cell">
+                            {t("colDob")}
+                          </th>
+                          <th className="text-left py-2 pr-4 font-medium text-gray-500 dark:text-gray-400 hidden md:table-cell">
+                            {t("colSozuTag")}
                           </th>
                           <th className="text-right py-2 pr-4 font-medium text-gray-500 dark:text-gray-400">
                             {t("colAmount")}
                           </th>
                           <th className="text-left py-2 pr-4 font-medium text-gray-500 dark:text-gray-400">
-                            {t("colStatus")}
+                            {t("colLifecycleState")}
                           </th>
-                          <th className="text-left py-2 font-medium text-gray-500 dark:text-gray-400">
+                          <th className="text-left py-2 font-medium text-gray-500 dark:text-gray-400 hidden lg:table-cell">
                             {t("colTxHash")}
                           </th>
                         </tr>
@@ -1015,24 +1043,48 @@ export default function DisbursementsPage() {
                             key={p.id}
                             className="border-b border-gray-100 dark:border-gray-800 last:border-0"
                           >
-                            <td className="py-2 pr-4 text-gray-700 dark:text-gray-300 truncate max-w-[200px]">
-                              {p.receiver.email ??
-                                p.receiver.phone_number ??
-                                p.receiver.id.slice(0, 8)}
+                            <td className="py-2 pr-4 text-gray-900 dark:text-white font-medium">
+                              <div className="truncate max-w-[160px] sm:max-w-[200px]" title={p.beneficiary_name}>
+                                {p.beneficiary_name}
+                              </div>
+                              {p.contact && p.contact !== p.beneficiary_name ? (
+                                <div
+                                  className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[160px] sm:max-w-[200px]"
+                                  title={p.contact}
+                                >
+                                  {p.contact}
+                                </div>
+                              ) : null}
                             </td>
-                            <td className="py-2 pr-4 text-right text-gray-900 dark:text-white font-medium">
+                            <td className="py-2 pr-4 text-gray-600 dark:text-gray-400 hidden sm:table-cell whitespace-nowrap">
+                              {formatDateOfBirth(p.date_of_birth)}
+                            </td>
+                            <td className="py-2 pr-4 text-gray-700 dark:text-gray-300 hidden md:table-cell font-mono text-xs">
+                              {formatSozuTag(p.sozu_tag)}
+                            </td>
+                            <td className="py-2 pr-4 text-right text-gray-900 dark:text-white font-medium whitespace-nowrap">
                               {p.amount} {d.asset.code}
                             </td>
                             <td className="py-2 pr-4">
                               <span
-                                className={`text-xs font-medium ${
-                                  PAYMENT_STATUS_COLORS[p.status] ?? "text-gray-500"
+                                className={`inline-flex text-xs font-medium px-2 py-0.5 rounded-full ${
+                                  LIFECYCLE_STATUS_COLORS[p.lifecycle_state] ??
+                                  LIFECYCLE_STATUS_COLORS.draft
                                 }`}
                               >
-                                {p.status}
+                                {t(`lifecycle.${p.lifecycle_state}`)}
                               </span>
+                              {p.payment_status === "FAILED" ? (
+                                <span
+                                  className={`ml-1.5 text-xs font-medium ${
+                                    PAYMENT_STATUS_COLORS.FAILED
+                                  }`}
+                                >
+                                  ({t("paymentFailed")})
+                                </span>
+                              ) : null}
                             </td>
-                            <td className="py-2">
+                            <td className="py-2 hidden lg:table-cell">
                               {p.stellar_transaction_id ? (
                                 <a
                                   href={`${STELLAR_EXPERT}/tx/${p.stellar_transaction_id}`}
@@ -1052,7 +1104,7 @@ export default function DisbursementsPage() {
                         {detail.payments.length === 0 && (
                           <tr>
                             <td
-                              colSpan={4}
+                              colSpan={6}
                               className="py-4 text-center text-sm text-gray-400"
                             >
                               {t("noPayments")}

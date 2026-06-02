@@ -11,6 +11,10 @@ import {
 import { sendSdpInviteEmail } from "@/lib/email/sdp-invite";
 import { getSdpEnv } from "@/lib/sdp/env";
 import { signSdpInviteUrl } from "@/lib/sdp/signInviteUrl";
+import {
+  externalIdToDisplayName,
+  receiverVerificationDob,
+} from "@/lib/sdp/receiverDisplay";
 
 const WALLET_BASE_URL =
   process.env.SOZUCREDIT_URL ?? "https://credit.sozu.capital";
@@ -26,22 +30,6 @@ function appendUnsignedInviteParams(
     if (value?.trim()) u.searchParams.set(key, value.trim());
   }
   return u.toString();
-}
-
-/** Slug from batch CSV `id` column → display name for identity matching. */
-function externalIdToDisplayName(externalId: string): string {
-  return externalId
-    .trim()
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function receiverVerificationDob(receiver: {
-  payment?: { verification_field_value?: string; verification?: string } | null;
-}): string {
-  const p = receiver.payment;
-  if (!p) return "";
-  return (p.verification_field_value ?? p.verification ?? "").trim();
 }
 
 /**

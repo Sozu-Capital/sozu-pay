@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
 import { deleteDisbursement, getDisbursement, listReceivers } from "@/lib/sdp/adminClient";
+import { mapReceiverToBeneficiaryRow } from "@/lib/sdp/receiverDisplay";
+import { resolveBeneficiaryHintsByEmails } from "@/lib/sdp/resolve-beneficiary-hints";
+import { resolveAddressesToSozuTags } from "@/lib/payment/resolve-address-to-tag";
 
 /**
  * GET /api/sdp/disbursements/[id] — status, payments (via receivers), tx hashes.
@@ -29,22 +32,21 @@ export async function GET(
       listReceivers(id),
     ]);
 
-    // Extract the embedded payment from each receiver row and shape it
-    // to match the SdpPayment interface the dashboard page expects.
-    const payments = receivers
-      .filter((r) => r.payment != null)
-      .map((r) => ({
-        id: r.payment!.id,
-        amount: r.payment!.amount,
-        status: r.payment!.status,
-        stellar_transaction_id: r.payment!.stellar_transaction_id ?? null,
-        receiver: {
-          id: r.id,
-          email: r.email,
-          phone_number: r.phone_number,
-        },
-        created_at: r.payment!.created_at ?? "",
-      }));
+    const stellarAddresses = receivers
+      .map((r) => r.receiver_wallet?.stellar_address?.trim())
+      .filter((addr): addr is string => !!addr);
+    const receiverEmails = receivers
+      .map((r) => r.email?.trim())
+      .filter((email): email is string => !!email);
+
+    const [tagByAddress, hintsByEmail] = await Promise.all([
+      resolveAddressesToSozuTags(stellarAddresses),
+      resolveBeneficiaryHintsByEmails(receiverEmails),
+    ]);
+
+    const payments = receivers.map((r) =>
+      mapReceiverToBeneficiaryRow(r, tagByAddress, hintsByEmail)
+    );
 
     return NextResponse.json({ disbursement, payments, receivers });
   } catch (e) {

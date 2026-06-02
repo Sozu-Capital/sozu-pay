@@ -1012,7 +1012,27 @@
     "historyCompleted": "Completed",
     "historyCreated": "Created",
     "historyArchived": "Archived",
-    "backToDisbursements": "Back to distributions"
+    "backToDisbursements": "Back to distributions",
+    "distributionTreasury": {
+      "title": "SDP distribution wallet",
+      "subtitle": "Move USDC between your org treasury (Soroban) and SDP's distribution account before starting batch payouts. Passkey required.",
+      "orgTreasury": "Org treasury (Soroban)",
+      "sdpDistribution": "SDP distribution (Stellar)",
+      "amountLabel": "Amount (USDC)",
+      "fundDistribution": "Fund distribution →",
+      "sweepToTreasury": "← Sweep to treasury",
+      "transferring": "Signing…",
+      "viewHistory": "View transfer history",
+      "loading": "Loading balances…",
+      "loadFailed": "Could not load distribution balances.",
+      "notConfigured": "SDP distribution public key is not set (SDP_DISTRIBUTION_PUBLIC_KEY). Contact your administrator.",
+      "invalidAmount": "Enter a valid USDC amount.",
+      "kitNotReady": "Smart wallet is still loading. Try again in a moment.",
+      "transferFailed": "Transfer failed.",
+      "successToDistribution": "Sent {amount} USDC to SDP distribution (tx {hash}…).",
+      "successToTreasury": "Swept {amount} USDC back to org treasury (tx {hash}…).",
+      "sweepBackDisabledHint": "Sweep-back requires SDP_DISTRIBUTION_SEED on the server (matches the distribution public key)."
+    }
   }
 }
 

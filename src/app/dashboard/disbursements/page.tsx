@@ -10,6 +10,7 @@ import {
 import { DisbursementAuditButton } from "@/components/disbursements/DisbursementAuditButton";
 import { BeneficiaryFieldCell } from "@/components/disbursements/BeneficiaryFieldCell";
 import { EditDisbursementRecipients } from "@/components/disbursements/EditDisbursementRecipients";
+import { DistributionTreasuryPanel } from "@/components/disbursements/DistributionTreasuryPanel";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 import { recipientsToCSV, parseDisbursementCsvText } from "@/lib/disbursements/csv";
 import { normalizeVerificationForSdp } from "@/lib/disbursements/normalizeVerification";
@@ -496,7 +497,7 @@ export default function DisbursementsPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setActionMsg(`Error: ${data.error ?? res.status}`);
+        setActionMsg(data.error ? `Error: ${data.error}` : `Error: ${res.status}`);
         setAuthorizeDisbursementId(null);
         setAuthorizeAction(null);
         return;
@@ -528,7 +529,9 @@ export default function DisbursementsPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setActionMsg(`Error: ${data.error ?? res.status}`);
+        setActionMsg(data.error ? `Error: ${data.error}` : `Error: ${res.status}`);
+        setAuthorizeDisbursementId(null);
+        setAuthorizeAction(null);
         return;
       }
       setAuthorizeDisbursementId(null);
@@ -650,6 +653,8 @@ export default function DisbursementsPage() {
           </button>
         </div>
       )}
+
+      {isDisbursementAdmin ? <DistributionTreasuryPanel onTransferred={() => void fetchList()} /> : null}
 
       {/* ── Create form ───────────────────────────────────────────────────── */}
       {showCreate && (

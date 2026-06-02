@@ -11,6 +11,7 @@ import { verifyPasskeyAuthorization } from "@/lib/signing-sessions/verify-passke
 import { appendAuditEvent } from "@/lib/audit";
 import { actorLabelFromUser, markPaymentsStarted } from "@/lib/disbursements/store";
 import { logPasskeyEvent } from "@/lib/passkey/log";
+import { formatSdpStartError } from "@/lib/sdp/validateDisbursementStart";
 
 /**
  * POST /api/sdp/disbursements/[id]/start
@@ -64,7 +65,6 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden.", code: "SESSION_USER_MISMATCH" }, { status: 403 });
   }
 
-  // Same-device: verify passkey now and mark session verified.
   if (signingSession.status === "pending") {
     if (!credentialId || !contractId) {
       return NextResponse.json(
@@ -99,6 +99,26 @@ export async function POST(
     if (!marked.ok) {
       return NextResponse.json({ error: marked.error, code: marked.code }, { status: 400 });
     }
+  } else if (signingSession.status !== "verified") {
+    return NextResponse.json(
+      {
+        error:
+          signingSession.status === "consumed"
+            ? "Signing session already used. Open Start payments again to authorize with a fresh passkey session."
+            : "Passkey authorization not completed.",
+        code: signingSession.status === "consumed" ? "SESSION_CONSUMED" : "SESSION_NOT_VERIFIED",
+      },
+      { status: 400 }
+    );
+  }
+
+  try {
+    await startDisbursement(disbursementId);
+  } catch (e) {
+    const raw = e instanceof Error ? e.message : String(e);
+    const formatted = formatSdpStartError(raw);
+    console.error("[api/sdp/disbursements/[id]/start]", raw);
+    return NextResponse.json({ error: formatted.error, code: formatted.code }, { status: 400 });
   }
 
   const consumed = await consumeSigningSession(sessionId, session.id);
@@ -114,8 +134,6 @@ export async function POST(
   }
 
   try {
-    await startDisbursement(disbursementId);
-
     const actorLabel = actorLabelFromUser(auth.user);
     markPaymentsStarted(disbursementId, { userId: session.id, label: actorLabel }, signingSession.disbursementName);
 
@@ -145,7 +163,7 @@ export async function POST(
     return NextResponse.json({ ok: true });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error("[api/sdp/disbursements/[id]/start]", msg);
+    console.error("[api/sdp/disbursements/[id]/start] post-start bookkeeping", msg);
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 }

@@ -122,8 +122,10 @@ export function DisbursementAuthorizeModal({
         if (!prepRes.ok) {
           if (prepData.code === "SMART_WALLET_REQUIRED" && prepData.setupUrl) {
             setError(t("authorizeSmartWalletRequired"));
+          } else if (prepData.error) {
+            setError(prepData.error);
           } else {
-            setError(prepData.error ?? t("authorizePrepareFailed"));
+            setError(t("authorizePrepareFailed"));
           }
           setPhase("error");
           return;

@@ -38,7 +38,11 @@ export default function AuditPage() {
       .then((p: { admin_level?: string }) => setIsSuperAdmin((p.admin_level ?? "") === "super_admin"));
   }, []);
 
-  const isPayoutType = (type: string) => type === "payout_approved" || type === "payout";
+  const isPayoutType = (type: string) =>
+    type === "payout_approved" ||
+    type === "payout" ||
+    type === "treasury_to_distribution" ||
+    type === "distribution_to_treasury";
 
   return (
     <div>

@@ -12,10 +12,12 @@ import { appendAuditEvent } from "@/lib/audit";
 import {
   actorLabelFromUser,
   getDisbursementMetaAsync,
+  invitesSentAtFromAudit,
   markHotlinkCommitted,
   markPaymentsStarted,
 } from "@/lib/disbursements/store";
 import { logPasskeyEvent } from "@/lib/passkey/log";
+import { formatSdpStartError } from "@/lib/sdp/validateDisbursementStart";
 
 /**
  * POST /api/sdp/disbursements/[id]/commit
@@ -33,7 +35,8 @@ export async function POST(
 
   const { id: disbursementId } = await params;
   const meta = await getDisbursementMetaAsync(disbursementId);
-  if (!meta?.invitesSentAt) {
+  const invitesSentAt = meta?.invitesSentAt ?? invitesSentAtFromAudit(disbursementId);
+  if (!invitesSentAt) {
     return NextResponse.json(
       { error: "Send invite emails before enabling Hotlink.", code: "INVITES_REQUIRED" },
       { status: 400 }
@@ -78,11 +81,17 @@ export async function POST(
       return NextResponse.json({ error: verified.error, code: verified.code }, { status: 403 });
     }
     await markSigningSessionVerified(sessionId, { credentialId, contractId });
-  }
-
-  const consumed = await consumeSigningSession(sessionId, session.id);
-  if (!consumed.ok) {
-    return NextResponse.json({ error: consumed.error, code: consumed.code }, { status: 400 });
+  } else if (signingSession.status !== "verified") {
+    return NextResponse.json(
+      {
+        error:
+          signingSession.status === "consumed"
+            ? "Signing session already used. Open Hotlink again to authorize with a fresh passkey session."
+            : "Passkey authorization not completed.",
+        code: signingSession.status === "consumed" ? "SESSION_CONSUMED" : "SESSION_NOT_VERIFIED",
+      },
+      { status: 400 }
+    );
   }
 
   const actor = { userId: session.id, label: actorLabelFromUser(auth.user) };
@@ -90,9 +99,22 @@ export async function POST(
   try {
     const disbursement = await getDisbursement(disbursementId);
     if (disbursement.status === "DRAFT" || disbursement.status === "READY") {
-      await startDisbursement(disbursementId);
+      try {
+        await startDisbursement(disbursementId);
+      } catch (e) {
+        const raw = e instanceof Error ? e.message : String(e);
+        const formatted = formatSdpStartError(raw);
+        console.error("[api/sdp/disbursements/[id]/commit] startDisbursement", raw);
+        return NextResponse.json({ error: formatted.error, code: formatted.code }, { status: 400 });
+      }
       markPaymentsStarted(disbursementId, actor, disbursement.name);
     }
+
+    const consumed = await consumeSigningSession(sessionId, session.id);
+    if (!consumed.ok) {
+      return NextResponse.json({ error: consumed.error, code: consumed.code }, { status: 400 });
+    }
+
     markHotlinkCommitted(disbursementId, actor);
 
     appendAuditEvent(

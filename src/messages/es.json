@@ -1088,7 +1088,27 @@
     "historyCompleted": "Completado",
     "historyCreated": "Creado",
     "historyArchived": "Archivado",
-    "backToDisbursements": "Volver a distribuciones"
+    "backToDisbursements": "Volver a distribuciones",
+    "distributionTreasury": {
+      "title": "Billetera de distribución SDP",
+      "subtitle": "Mové USDC entre la tesorería de tu org (Soroban) y la cuenta de distribución de SDP antes de iniciar pagos. Requiere passkey.",
+      "orgTreasury": "Tesorería org (Soroban)",
+      "sdpDistribution": "Distribución SDP (Stellar)",
+      "amountLabel": "Monto (USDC)",
+      "fundDistribution": "Fondear distribución →",
+      "sweepToTreasury": "← Volver a tesorería",
+      "transferring": "Firmando…",
+      "viewHistory": "Ver historial de transferencias",
+      "loading": "Cargando saldos…",
+      "loadFailed": "No se pudieron cargar los saldos de distribución.",
+      "notConfigured": "No está configurada la clave pública de distribución SDP (SDP_DISTRIBUTION_PUBLIC_KEY). Contactá al administrador.",
+      "invalidAmount": "Ingresá un monto USDC válido.",
+      "kitNotReady": "La billetera inteligente aún se está cargando. Intentá de nuevo.",
+      "transferFailed": "La transferencia falló.",
+      "successToDistribution": "Enviaste {amount} USDC a distribución SDP (tx {hash}…).",
+      "successToTreasury": "Retiraste {amount} USDC de distribución SDP a la tesorería org (tx {hash}…).",
+      "sweepBackDisabledHint": "El retorno a tesorería requiere SDP_DISTRIBUTION_SEED en el servidor (debe coincidir con la clave pública de distribución)."
+    }
   }
 }
 

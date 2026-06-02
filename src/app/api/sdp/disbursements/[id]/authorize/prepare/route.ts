@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { requireDisbursementAuthorized } from "@/lib/auth/disbursement-auth";
-import { getDisbursement } from "@/lib/sdp/adminClient";
+import { getOrganizationForUser } from "@/lib/db/organizations";
+import { getDisbursement, listReceivers } from "@/lib/sdp/adminClient";
 import { createDisbursementSigningSession } from "@/lib/signing-sessions/store";
 import { logPasskeyEvent } from "@/lib/passkey/log";
+import { preflightDisbursementStart } from "@/lib/sdp/validateDisbursementStart";
 
 /**
  * POST /api/sdp/disbursements/[id]/authorize/prepare
- * Creates a short-lived signing session before starting payments.
+ * Preflight beneficiaries + balance, then create a short-lived signing session.
  */
 export async function POST(
   request: Request,
@@ -22,7 +24,24 @@ export async function POST(
   const { id: disbursementId } = await params;
 
   try {
-    const disbursement = await getDisbursement(disbursementId);
+    const org = await getOrganizationForUser(auth.user.org_id!);
+    if (!org) {
+      return NextResponse.json({ error: "Organization not found.", code: "NO_ORG" }, { status: 400 });
+    }
+
+    const [disbursement, receivers] = await Promise.all([
+      getDisbursement(disbursementId),
+      listReceivers(disbursementId),
+    ]);
+
+    const preflight = await preflightDisbursementStart({ org, disbursement, receivers });
+    if (!preflight.ok) {
+      return NextResponse.json(
+        { error: preflight.error, code: preflight.code, details: preflight.details },
+        { status: 400 }
+      );
+    }
+
     const signingSession = await createDisbursementSigningSession({
       disbursementId,
       userId: auth.user.id,

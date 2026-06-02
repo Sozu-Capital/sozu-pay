@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
+import { isSupabaseConfigured } from "@/lib/supabase/server";
 
 /**
  * Per-disbursement metadata, audit trail, and history archive.
@@ -154,6 +155,118 @@ function audits(id: string): DisbursementAuditEntry[] {
   return auditById.get(id)!;
 }
 
+function persistMetaToSupabase(meta: DisbursementMeta): void {
+  if (!isSupabaseConfigured()) return;
+  void import("@/lib/db/disbursement-meta")
+    .then(({ upsertDisbursementMeta }) => upsertDisbursementMeta(meta))
+    .catch((e) => {
+      console.warn("[disbursements/store] Supabase meta persist failed:", e);
+    });
+}
+
+function mergeMeta(local: DisbursementMeta | undefined, remote: DisbursementMeta): DisbursementMeta {
+  return {
+    ...(local ?? { disbursementId: remote.disbursementId, createdAt: remote.createdAt }),
+    ...remote,
+    uploadedVerificationByEmail: local?.uploadedVerificationByEmail ?? remote.uploadedVerificationByEmail,
+  };
+}
+
+/** Recover invitesSentAt from audit when meta row was lost (legacy in-memory only). */
+export function invitesSentAtFromAudit(disbursementId: string): string | undefined {
+  for (const entry of getDisbursementAudit(disbursementId)) {
+    if (entry.action === "invites_sent") return entry.at;
+  }
+  return undefined;
+}
+
+export async function getDisbursementMetaAsync(
+  id: string
+): Promise<DisbursementMeta | undefined> {
+  const local = metaById.get(id);
+  const auditInvitesAt = invitesSentAtFromAudit(id);
+
+  if (!isSupabaseConfigured()) {
+    if (!local && !auditInvitesAt) return undefined;
+    return {
+      disbursementId: id,
+      createdAt: local?.createdAt ?? auditInvitesAt ?? new Date().toISOString(),
+      ...local,
+      invitesSentAt: local?.invitesSentAt ?? auditInvitesAt,
+    };
+  }
+
+  try {
+    const { fetchDisbursementMeta } = await import("@/lib/db/disbursement-meta");
+    const fromDb = await fetchDisbursementMeta(id);
+    if (!fromDb && !local && !auditInvitesAt) return undefined;
+
+    const merged = fromDb
+      ? mergeMeta(local, fromDb)
+      : {
+          disbursementId: id,
+          createdAt: local?.createdAt ?? auditInvitesAt ?? new Date().toISOString(),
+          ...local,
+        };
+
+    if (!merged.invitesSentAt && auditInvitesAt) {
+      merged.invitesSentAt = auditInvitesAt;
+      persistMetaToSupabase(merged);
+    }
+
+    return merged;
+  } catch (e) {
+    console.warn("[disbursements/store] Supabase meta load failed:", e);
+    if (!local && !auditInvitesAt) return undefined;
+    return {
+      disbursementId: id,
+      createdAt: local?.createdAt ?? auditInvitesAt ?? new Date().toISOString(),
+      ...local,
+      invitesSentAt: local?.invitesSentAt ?? auditInvitesAt,
+    };
+  }
+}
+
+export async function getAllDisbursementMetaAsync(): Promise<Record<string, DisbursementMeta>> {
+  const local = Object.fromEntries(metaById);
+  if (!isSupabaseConfigured()) {
+    const out = { ...local };
+    for (const id of Object.keys(out)) {
+      if (!out[id].invitesSentAt) {
+        const fromAudit = invitesSentAtFromAudit(id);
+        if (fromAudit) out[id] = { ...out[id], invitesSentAt: fromAudit };
+      }
+    }
+    return out;
+  }
+
+  try {
+    const { fetchAllDisbursementMeta } = await import("@/lib/db/disbursement-meta");
+    const fromDb = await fetchAllDisbursementMeta();
+    const merged: Record<string, DisbursementMeta> = { ...local };
+
+    for (const [id, dbMeta] of Object.entries(fromDb)) {
+      merged[id] = mergeMeta(local[id], dbMeta);
+    }
+
+    for (const id of new Set([...Object.keys(local), ...Object.keys(fromDb)])) {
+      const meta = merged[id];
+      if (meta && !meta.invitesSentAt) {
+        const fromAudit = invitesSentAtFromAudit(id);
+        if (fromAudit) {
+          merged[id] = { ...meta, invitesSentAt: fromAudit };
+          persistMetaToSupabase(merged[id]);
+        }
+      }
+    }
+
+    return merged;
+  } catch (e) {
+    console.warn("[disbursements/store] Supabase meta load-all failed:", e);
+    return local;
+  }
+}
+
 export function getDisbursementMeta(id: string): DisbursementMeta | undefined {
   return metaById.get(id);
 }
@@ -225,6 +338,7 @@ export function ensureDisbursementMeta(
   };
   metaById.set(id, meta);
   persistStore();
+  persistMetaToSupabase(meta);
   return meta;
 }
 
@@ -268,6 +382,7 @@ export function markInvitesSent(
       failed: String(summary.failed),
     },
   });
+  persistMetaToSupabase(meta);
 }
 
 export function markHotlinkCommitted(
@@ -284,6 +399,7 @@ export function markHotlinkCommitted(
     actorLabel: actor.label,
     message: "Hotlink enabled — recipients can claim funds without further NGO approval",
   });
+  persistMetaToSupabase(meta);
 }
 
 export function markPaymentsStarted(
@@ -301,6 +417,7 @@ export function markPaymentsStarted(
     actorLabel: actor.label,
     message: `Payments started for batch "${batchName}"`,
   });
+  persistMetaToSupabase(meta);
 }
 
 export function archiveDeletedDisbursement(params: {

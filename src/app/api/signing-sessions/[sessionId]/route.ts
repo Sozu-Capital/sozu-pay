@@ -16,7 +16,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { sessionId } = await params;
-  const signingSession = getSigningSession(sessionId);
+  const signingSession = await getSigningSession(sessionId);
   if (!signingSession) {
     return NextResponse.json({ error: "Signing session not found.", code: "SESSION_NOT_FOUND" }, { status: 404 });
   }
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { sessionId } = await params;
-  const signingSession = getSigningSession(sessionId);
+  const signingSession = await getSigningSession(sessionId);
   if (!signingSession) {
     logPasskeyEvent("warn", {
       action: "complete_session",
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: verified.error, code: verified.code }, { status: 403 });
   }
 
-  const marked = markSigningSessionVerified(sessionId, { credentialId, contractId });
+  const marked = await markSigningSessionVerified(sessionId, { credentialId, contractId });
   if (!marked.ok) {
     logPasskeyEvent("error", {
       action: "complete_session",

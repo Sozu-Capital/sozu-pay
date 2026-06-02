@@ -11,7 +11,7 @@ import { verifyPasskeyAuthorization } from "@/lib/signing-sessions/verify-passke
 import { appendAuditEvent } from "@/lib/audit";
 import {
   actorLabelFromUser,
-  getDisbursementMeta,
+  getDisbursementMetaAsync,
   markHotlinkCommitted,
   markPaymentsStarted,
 } from "@/lib/disbursements/store";
@@ -32,7 +32,7 @@ export async function POST(
   if (!auth.ok) return auth.response;
 
   const { id: disbursementId } = await params;
-  const meta = getDisbursementMeta(disbursementId);
+  const meta = await getDisbursementMetaAsync(disbursementId);
   if (!meta?.invitesSentAt) {
     return NextResponse.json(
       { error: "Send invite emails before enabling Hotlink.", code: "INVITES_REQUIRED" },
@@ -52,7 +52,7 @@ export async function POST(
     );
   }
 
-  const signingSession = getSigningSession(sessionId);
+  const signingSession = await getSigningSession(sessionId);
   if (!signingSession || signingSession.disbursementId !== disbursementId) {
     return NextResponse.json({ error: "Signing session not found.", code: "SESSION_NOT_FOUND" }, { status: 404 });
   }
@@ -77,10 +77,10 @@ export async function POST(
     if (!verified.ok) {
       return NextResponse.json({ error: verified.error, code: verified.code }, { status: 403 });
     }
-    markSigningSessionVerified(sessionId, { credentialId, contractId });
+    await markSigningSessionVerified(sessionId, { credentialId, contractId });
   }
 
-  const consumed = consumeSigningSession(sessionId, session.id);
+  const consumed = await consumeSigningSession(sessionId, session.id);
   if (!consumed.ok) {
     return NextResponse.json({ error: consumed.error, code: consumed.code }, { status: 400 });
   }

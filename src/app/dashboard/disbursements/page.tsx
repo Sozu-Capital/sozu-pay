@@ -562,14 +562,7 @@ export default function DisbursementsPage() {
       setActionMsg(
         t("invitesSent", { sent: data.sent, skipped: data.skipped, failed: data.failed })
       );
-      setMetaById((prev) => ({
-        ...prev,
-        [id]: {
-          ...prev[id],
-          disbursementId: id,
-          invitesSentAt: new Date().toISOString(),
-        },
-      }));
+      await fetchList();
       if (selectedId === id) await refreshDetail(id);
     } catch (e) {
       setActionMsg(e instanceof Error ? e.message : "Network error");
@@ -1110,7 +1103,11 @@ export default function DisbursementsPage() {
 
         {disbursements.map((d) => {
           const meta = metaById[d.id];
-          const invitesSent = Boolean(meta?.invitesSentAt);
+          const detailMeta =
+            selectedId === d.id && detail?.disbursement.id === d.id
+              ? (detail as { meta?: DisbursementMeta | null }).meta
+              : null;
+          const invitesSent = Boolean(meta?.invitesSentAt ?? detailMeta?.invitesSentAt);
           const canEdit = DELETABLE_DISBURSEMENT_STATUSES.has(d.status);
 
           return (

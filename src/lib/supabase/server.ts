@@ -2,6 +2,12 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 let _supabase: SupabaseClient | null = null;
 
+export function isSupabaseConfigured(): boolean {
+  const url =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
+  return Boolean(url && process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
 /** Server-only Supabase client. Bypasses RLS. Use in API routes only. */
 export function getSupabase(): SupabaseClient {
   if (!_supabase) {

@@ -17,7 +17,7 @@ import {
   appendDisbursementAudit,
   archiveCompletedIfNeeded,
   ensureDisbursementMeta,
-  getAllDisbursementMeta,
+  getAllDisbursementMetaAsync,
 } from "@/lib/disbursements/store";
 import { getUserBySessionId } from "@/lib/db/users";
 import { verificationByEmailFromCsv } from "@/lib/disbursements/csv";
@@ -54,11 +54,12 @@ export async function GET() {
     for (const d of disbursements) {
       archiveCompletedIfNeeded({ disbursement: d });
     }
+    const meta = await getAllDisbursementMetaAsync();
     return NextResponse.json({
       disbursements,
       wallets,
       assets,
-      meta: getAllDisbursementMeta(),
+      meta,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

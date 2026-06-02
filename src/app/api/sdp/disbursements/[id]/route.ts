@@ -11,7 +11,7 @@ import { mapReceiverToBeneficiaryRow } from "@/lib/sdp/receiverDisplay";
 import { resolveBeneficiaryHintsByEmails } from "@/lib/sdp/resolve-beneficiary-hints";
 import { resolveAddressesToSozuTags } from "@/lib/payment/resolve-address-to-tag";
 import {
-  getDisbursementMeta,
+  getDisbursementMetaAsync,
   mergedUploadedVerificationsAsync,
   syncPaymentAuditEvents,
 } from "@/lib/disbursements/store";
@@ -54,7 +54,7 @@ export async function GET(
       resolveBeneficiaryHintsByEmails(receiverEmails),
     ]);
 
-    const meta = getDisbursementMeta(id);
+    const meta = await getDisbursementMetaAsync(id);
     const uploadedVerificationByEmail = await mergedUploadedVerificationsAsync(id);
 
     const payments = receivers.map((r) =>

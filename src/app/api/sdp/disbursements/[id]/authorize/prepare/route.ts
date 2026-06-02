@@ -23,7 +23,7 @@ export async function POST(
 
   try {
     const disbursement = await getDisbursement(disbursementId);
-    const signingSession = createDisbursementSigningSession({
+    const signingSession = await createDisbursementSigningSession({
       disbursementId,
       userId: auth.user.id,
       privyUserId: session.id,

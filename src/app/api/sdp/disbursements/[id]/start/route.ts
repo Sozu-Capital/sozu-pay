@@ -43,7 +43,7 @@ export async function POST(
     );
   }
 
-  const signingSession = getSigningSession(sessionId);
+  const signingSession = await getSigningSession(sessionId);
   if (!signingSession) {
     logPasskeyEvent("warn", {
       action: "start_disbursement",
@@ -95,13 +95,13 @@ export async function POST(
       return NextResponse.json({ error: verified.error, code: verified.code }, { status: 403 });
     }
 
-    const marked = markSigningSessionVerified(sessionId, { credentialId, contractId });
+    const marked = await markSigningSessionVerified(sessionId, { credentialId, contractId });
     if (!marked.ok) {
       return NextResponse.json({ error: marked.error, code: marked.code }, { status: 400 });
     }
   }
 
-  const consumed = consumeSigningSession(sessionId, session.id);
+  const consumed = await consumeSigningSession(sessionId, session.id);
   if (!consumed.ok) {
     logPasskeyEvent("error", {
       action: "start_disbursement",

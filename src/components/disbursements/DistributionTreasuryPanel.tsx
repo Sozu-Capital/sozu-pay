@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
+import { TreasuryDistributionDonut } from "@/components/disbursements/TreasuryDistributionDonut";
 import {
   executePasskeyDistributionTransfer,
   type DistributionTransferDirection,
@@ -23,9 +24,11 @@ type Balances = {
 type Props = {
   /** Refresh after transfer (e.g. re-run batch preflight). */
   onTransferred?: () => void;
+  /** Called whenever balances refresh (for per-campaign funding hints). */
+  onBalancesChange?: (balances: Balances) => void;
 };
 
-export function DistributionTreasuryPanel({ onTransferred }: Props) {
+export function DistributionTreasuryPanel({ onTransferred, onBalancesChange }: Props) {
   const t = useTranslations("disbursementsPage.distributionTreasury");
   const { ready, kit } = useSmartAccountKitContext();
 
@@ -48,6 +51,7 @@ export function DistributionTreasuryPanel({ onTransferred }: Props) {
         return;
       }
       setBalances(data);
+      onBalancesChange?.(data);
     } catch {
       setError(t("loadFailed"));
     } finally {
@@ -125,6 +129,11 @@ export function DistributionTreasuryPanel({ onTransferred }: Props) {
           {t("viewHistory")}
         </Link>
       </div>
+
+      <TreasuryDistributionDonut
+        treasuryUsdc={balances.orgCombinedUsdc}
+        distributionUsdc={balances.distributionUsdc}
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
         <div className="rounded-md bg-gray-50 dark:bg-gray-800/60 p-3">

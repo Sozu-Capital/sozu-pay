@@ -1031,8 +1031,21 @@
       "transferFailed": "Transfer failed.",
       "successToDistribution": "Sent {amount} USDC to SDP distribution (tx {hash}…).",
       "successToTreasury": "Swept {amount} USDC back to org treasury (tx {hash}…).",
-      "sweepBackDisabledHint": "Sweep-back requires SDP_DISTRIBUTION_SEED on the server (matches the distribution public key)."
-    }
+      "sweepBackDisabledHint": "Sweep-back requires SDP_DISTRIBUTION_SEED on the server (matches the distribution public key).",
+      "donutTotal": "Total USDC"
+    },
+    "fundBatch": "Fund batch ({amount} {asset})",
+    "fundBatchSigning": "Signing…",
+    "fundBatchSuccess": "Funded batch with {amount} USDC (tx {hash}…).",
+    "fundBatchHint": "Fund the SDP distribution wallet with the batch amount before Hotlink or manual release — otherwise payouts cannot settle.",
+    "batchFunded": "Distribution funded",
+    "batchNeedsFunding": "Needs distribution funding",
+    "batchAlreadyFunded": "This batch is already fully disbursed.",
+    "releasePayments": "Release payments",
+    "releasePaymentsRunning": "Releasing…",
+    "releasePaymentsSuccess": "Retried {count} failed payment(s). SDP will submit Stellar transfers shortly.",
+    "releasePaymentsPending": "No failed payments. Registered beneficiaries with pending payments are processed automatically when the distribution account is funded.",
+    "hotlinkActiveHint": "Hotlink is active — when beneficiaries finish SozuCredit registration, SDP pays them automatically from the distribution account."
   }
 }
 

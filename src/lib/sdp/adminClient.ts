@@ -364,3 +364,13 @@ export async function retryReceiverWalletInvitation(
     method: "PATCH",
   });
 }
+
+/** Retry FAILED payments so SDP TSS can re-submit Stellar transfers. */
+export async function retryFailedPayments(paymentIds: string[]): Promise<void> {
+  if (paymentIds.length === 0) return;
+  await sdpFetch<{ message: string }>("/payments/retry", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ payment_ids: paymentIds }),
+  });
+}

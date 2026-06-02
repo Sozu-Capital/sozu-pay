@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getSupabase } from "@/lib/supabase/server";
+import { getSozuCreditSupabase } from "@/lib/sozucredit/supabase";
 import { normalizeStellarAddressInput } from "@/lib/payment/stellar-address";
 
 function stellarWalletUserColumn(): string {
@@ -11,10 +12,42 @@ function stellarWalletPublicKeyColumn(): string {
   return process.env.SOZUPAY_STELLAR_WALLET_PUBLIC_KEY_COLUMN?.trim() || "public_key";
 }
 
+async function resolveAddressFromSozuCredit(normalized: string): Promise<string | null> {
+  const creditSb = getSozuCreditSupabase();
+  if (!creditSb) return null;
+
+  const pkCol =
+    process.env.SOZUCREDIT_STELLAR_WALLET_PUBLIC_KEY_COLUMN?.trim() || "public_key";
+  const userCol = process.env.SOZUCREDIT_STELLAR_WALLET_USER_ID_COLUMN?.trim() || "user_id";
+
+  const { data: wallet } = await creditSb
+    .from("stellar_wallets")
+    .select(userCol)
+    .eq(pkCol, normalized)
+    .limit(1)
+    .maybeSingle();
+
+  const walletUserId = (wallet as Record<string, string> | null)?.[userCol];
+  if (!walletUserId) return null;
+
+  const { data: profile } = await creditSb
+    .from("profiles")
+    .select("username")
+    .eq("id", walletUserId)
+    .limit(1)
+    .maybeSingle();
+
+  const username = (profile as { username?: string } | null)?.username?.trim();
+  return username ? username.replace(/^\$+/, "") : null;
+}
+
 /** Reverse lookup: Stellar address → Sozu tag ($username), when known. */
 export async function resolveAddressToSozuTag(address: string): Promise<string | null> {
   const normalized = normalizeStellarAddressInput(address);
   if (!normalized) return null;
+
+  const fromCredit = await resolveAddressFromSozuCredit(normalized);
+  if (fromCredit) return fromCredit;
 
   const sb = getSupabase();
   const pkCol = stellarWalletPublicKeyColumn();

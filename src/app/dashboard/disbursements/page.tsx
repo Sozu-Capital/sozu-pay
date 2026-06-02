@@ -11,9 +11,11 @@ import { DisbursementAuditButton } from "@/components/disbursements/Disbursement
 import { BeneficiaryFieldCell } from "@/components/disbursements/BeneficiaryFieldCell";
 import { EditDisbursementRecipients } from "@/components/disbursements/EditDisbursementRecipients";
 import { DistributionTreasuryPanel } from "@/components/disbursements/DistributionTreasuryPanel";
+import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 import { recipientsToCSV, parseDisbursementCsvText } from "@/lib/disbursements/csv";
 import { normalizeVerificationForSdp } from "@/lib/disbursements/normalizeVerification";
+import { executePasskeyDistributionTransfer } from "@/lib/stellar/smartAccounts/executePasskeyDistributionTransfer";
 import type { BeneficiaryLifecycleState } from "@/lib/sdp/receiverDisplay";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -115,6 +117,17 @@ const LIFECYCLE_STATUS_COLORS: Record<BeneficiaryLifecycleState, string> = {
 const DELETABLE_DISBURSEMENT_STATUSES = new Set(["DRAFT", "READY"]);
 const EDITABLE_RECIPIENT_STATUSES = new Set(["DRAFT", "READY"]);
 
+function batchRemainingUsdc(d: SdpDisbursement): number {
+  const total = parseFloat(d.total_amount) || 0;
+  const disbursed = parseFloat(d.disbursed_amount) || 0;
+  return Math.max(0, total - disbursed);
+}
+
+function formatBatchAmount(n: number): string {
+  if (n <= 0) return "0";
+  return n.toFixed(7).replace(/\.?0+$/, "");
+}
+
 const EMPTY_FORM: DraftRecipient = {
   name: "",
   email: "",
@@ -142,6 +155,7 @@ function formatSozuTag(tag: string | null): string {
 export default function DisbursementsPage() {
   const t = useTranslations("disbursementsPage");
   const { profile } = useDashboardProfile() ?? { profile: null };
+  const { ready: kitReady, kit } = useSmartAccountKitContext();
   const isDisbursementAdmin =
     profile?.can_manage_disbursements === true ||
     profile?.admin_level === "admin" ||
@@ -192,6 +206,10 @@ export default function DisbursementsPage() {
   const [authorizeDisbursementId, setAuthorizeDisbursementId] = useState<string | null>(null);
   const [authorizeAction, setAuthorizeAction] = useState<"start" | "commit" | null>(null);
   const [committingId, setCommittingId] = useState<string | null>(null);
+  const [fundingId, setFundingId] = useState<string | null>(null);
+  const [releasingId, setReleasingId] = useState<string | null>(null);
+  const [distributionUsdc, setDistributionUsdc] = useState<string>("0");
+  const [distributionConfigured, setDistributionConfigured] = useState(false);
 
   // ── Fetch list ────────────────────────────────────────────────────────────
 
@@ -548,6 +566,61 @@ export default function DisbursementsPage() {
 
   // ── Send invites ──────────────────────────────────────────────────────────
 
+  async function handleFundBatch(id: string, amount: number) {
+    if (!kitReady || !kit) {
+      setActionMsg(t("distributionTreasury.kitNotReady"));
+      return;
+    }
+    if (amount <= 0) {
+      setActionMsg(t("batchAlreadyFunded"));
+      return;
+    }
+
+    setFundingId(id);
+    setActionMsg(null);
+    try {
+      const result = await executePasskeyDistributionTransfer({
+        kit,
+        direction: "to_distribution",
+        amount: formatBatchAmount(amount),
+      });
+      setActionMsg(t("fundBatchSuccess", { amount: result.amount, hash: result.stellarTxHash.slice(0, 12) }));
+      await fetchList();
+      if (selectedId === id) await refreshDetail(id);
+    } catch (e) {
+      setActionMsg(e instanceof Error ? e.message : t("distributionTreasury.transferFailed"));
+    } finally {
+      setFundingId(null);
+    }
+  }
+
+  async function handleReleasePayments(id: string) {
+    setReleasingId(id);
+    setActionMsg(null);
+    try {
+      const res = await fetch(`/api/sdp/disbursements/${id}/release-payments`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setActionMsg(data.error ? `Error: ${data.error}` : `Error: ${res.status}`);
+        return;
+      }
+      if (data.retried > 0) {
+        setActionMsg(t("releasePaymentsSuccess", { count: data.retried }));
+      } else {
+        setActionMsg(data.message ?? t("releasePaymentsPending"));
+      }
+      await fetchList();
+      if (selectedId === id) await refreshDetail(id);
+    } catch (e) {
+      setActionMsg(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setReleasingId(null);
+    }
+  }
+
   async function handleSendInvites(id: string) {
     setSendingId(id);
     setActionMsg(null);
@@ -654,7 +727,15 @@ export default function DisbursementsPage() {
         </div>
       )}
 
-      {isDisbursementAdmin ? <DistributionTreasuryPanel onTransferred={() => void fetchList()} /> : null}
+      {isDisbursementAdmin ? (
+        <DistributionTreasuryPanel
+          onTransferred={() => void fetchList()}
+          onBalancesChange={(b) => {
+            setDistributionUsdc(b.distributionUsdc);
+            setDistributionConfigured(b.configured);
+          }}
+        />
+      ) : null}
 
       {/* ── Create form ───────────────────────────────────────────────────── */}
       {showCreate && (
@@ -1114,6 +1195,19 @@ export default function DisbursementsPage() {
               : null;
           const invitesSent = Boolean(meta?.invitesSentAt ?? detailMeta?.invitesSentAt);
           const canEdit = DELETABLE_DISBURSEMENT_STATUSES.has(d.status);
+          const batchRemaining = batchRemainingUsdc(d);
+          const batchFunded =
+            !distributionConfigured || parseFloat(distributionUsdc) >= batchRemaining;
+          const showRelease =
+            d.status === "STARTED" &&
+            (d.failed_payments > 0 ||
+              (selectedId === d.id &&
+                detail?.disbursement.id === d.id &&
+                detail.payments.some(
+                  (p) =>
+                    p.lifecycle_state === "live" &&
+                    p.payment_status.toUpperCase() !== "SUCCESS"
+                )));
 
           return (
           <div
@@ -1134,6 +1228,9 @@ export default function DisbursementsPage() {
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   {d.total_payments} {t("payments")} · {d.asset.code} · {d.wallet.name}
                   {meta?.hotlinkAt ? ` · ${t("hotlinkActive")}` : null}
+                  {isDisbursementAdmin && batchRemaining > 0 ? (
+                    batchFunded ? ` · ${t("batchFunded")}` : ` · ${t("batchNeedsFunding")}`
+                  ) : null}
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -1222,6 +1319,19 @@ export default function DisbursementsPage() {
                   >
                     {sendingId === d.id ? t("sending") : t("sendInvites")}
                   </button>
+                  {isDisbursementAdmin && batchRemaining > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => void handleFundBatch(d.id, batchRemaining)}
+                      disabled={fundingId === d.id || !kitReady || !distributionConfigured}
+                      title={!distributionConfigured ? t("distributionTreasury.notConfigured") : undefined}
+                      className="px-3 py-1.5 rounded bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {fundingId === d.id
+                        ? t("fundBatchSigning")
+                        : t("fundBatch", { amount: formatBatchAmount(batchRemaining), asset: d.asset.code })}
+                    </button>
+                  )}
                   {(d.status === "READY" || d.status === "DRAFT") && (
                     <button
                       type="button"
@@ -1245,6 +1355,16 @@ export default function DisbursementsPage() {
                         {committingId === d.id ? t("hotlinkCommitting") : t("hotlink")}
                       </button>
                     )}
+                  {showRelease && (
+                    <button
+                      type="button"
+                      onClick={() => void handleReleasePayments(d.id)}
+                      disabled={releasingId === d.id}
+                      className="px-3 py-1.5 rounded bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-60"
+                    >
+                      {releasingId === d.id ? t("releasePaymentsRunning") : t("releasePayments")}
+                    </button>
+                  )}
                   {canEdit && detail?.disbursement.id === d.id && detail.receivers && (
                     <EditDisbursementRecipients
                       disbursementId={d.id}
@@ -1253,6 +1373,12 @@ export default function DisbursementsPage() {
                     />
                   )}
                 </div>
+                {meta?.hotlinkAt && d.status === "STARTED" && batchRemaining > 0 ? (
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400">{t("hotlinkActiveHint")}</p>
+                ) : null}
+                {!batchFunded && batchRemaining > 0 && isDisbursementAdmin ? (
+                  <p className="text-xs text-amber-700 dark:text-amber-400">{t("fundBatchHint")}</p>
+                ) : null}
                 {!invitesSent && (d.status === "READY" || d.status === "DRAFT") && (
                   <p className="text-xs text-amber-700 dark:text-amber-400">{t("invitesRequiredHint")}</p>
                 )}

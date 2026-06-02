@@ -98,7 +98,8 @@ export function mapReceiverToBeneficiaryRow(
   receiver: SdpReceiver,
   tagByAddress: Map<string, string>,
   hintsByEmail: Map<string, BeneficiaryHint> = new Map(),
-  uploadedVerificationByEmail: Record<string, string> = {}
+  uploadedVerificationByEmail: Record<string, string> = {},
+  persistedSozuTagByEmail: Record<string, string> = {}
 ): BeneficiaryRow {
   const payment = receiver.payment;
   const wallet = receiver.receiver_wallet;
@@ -106,10 +107,11 @@ export function mapReceiverToBeneficiaryRow(
   const emailKey = receiver.email?.trim().toLowerCase() ?? "";
   const hints = emailKey ? hintsByEmail.get(emailKey) : undefined;
 
+  const persistedTag = emailKey ? persistedSozuTagByEmail[emailKey]?.trim().replace(/^\$+/, "") : "";
   const sozuTag =
     (stellarAddress ? tagByAddress.get(stellarAddress) ?? null : null) ??
     hints?.sozuTag ??
-    null;
+    (persistedTag || null);
 
   const fromExternalId = externalIdAsBeneficiaryName(receiver.external_id ?? "");
   const legalName = hints?.fullName || fromExternalId || "";

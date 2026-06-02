@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getSupabase } from "@/lib/supabase/server";
+import { getSozuCreditSupabase } from "@/lib/sozucredit/supabase";
 
 export type BeneficiaryHint = {
   fullName: string | null;
@@ -20,6 +21,50 @@ async function lookupSozuCreditProfileByEmail(email: string): Promise<{
   username: string | null;
   displayName: string | null;
 }> {
+  const creditSb = getSozuCreditSupabase();
+  if (creditSb) {
+    try {
+      const creditUrl = (
+        process.env.SOZUCREDIT_SUPABASE_URL ??
+        process.env.NEXT_PUBLIC_SOZUCREDIT_SUPABASE_URL ??
+        ""
+      ).replace(/\/$/, "");
+      const creditKey = process.env.SOZUCREDIT_SUPABASE_SERVICE_ROLE_KEY?.trim();
+      if (creditUrl && creditKey) {
+        const res = await fetch(
+          `${creditUrl}/auth/v1/admin/users?page=1&per_page=50&filter=${encodeURIComponent(`email.eq.${email}`)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${creditKey}`,
+              apikey: creditKey,
+            },
+            cache: "no-store",
+          }
+        );
+        if (res.ok) {
+          const json = (await res.json()) as { users?: Array<{ id?: string; email?: string }> };
+          const user =
+            json.users?.find((u) => u.email?.trim().toLowerCase() === email) ?? json.users?.[0];
+          if (user?.id) {
+            const { data: profile } = await creditSb
+              .from("profiles")
+              .select("username, display_name")
+              .eq("id", user.id)
+              .limit(1)
+              .maybeSingle();
+            const p = profile as { username?: string; display_name?: string } | null;
+            return {
+              username: p?.username?.trim().replace(/^\$+/, "") || null,
+              displayName: p?.display_name?.trim() || null,
+            };
+          }
+        }
+      }
+    } catch {
+      // fall through to SozuPay DB
+    }
+  }
+
   const baseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "").replace(
     /\/$/,
     ""

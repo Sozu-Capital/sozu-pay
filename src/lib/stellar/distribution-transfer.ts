@@ -1,25 +1,45 @@
 import "server-only";
 
-import { Asset, Keypair, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
+import {
+  Address,
+  Contract,
+  Keypair,
+  rpc,
+  TransactionBuilder,
+  xdr,
+} from "@stellar/stellar-sdk";
 import type { Organization } from "@/lib/db/organizations";
-import { getHorizon } from "@/lib/stellar/server";
-import { getUsdcBalance, getUsdcIssuer } from "@/lib/stellar/balance";
+import { getUsdcBalance } from "@/lib/stellar/balance";
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
 import {
   buildUnsignedSorobanPayout,
+  getSorobanUsdcTokenId,
   resolveOrgDisbursementContractId,
   resolveOrgTreasuryContractId,
   submitSignedSorobanEnvelope,
 } from "@/lib/stellar/org-treasury";
-import { getNetworkPassphrase } from "@/lib/stellar/soroban-common";
+import {
+  amountToI128,
+  getNetworkPassphrase,
+  getSorobanRpcUrl,
+} from "@/lib/stellar/soroban-common";
 import {
   readDistributionPublicKey,
   readDistributionSecret,
 } from "@/lib/sdp/distributionAccount";
 import { PayoutFundsError } from "@/lib/stellar/soroban-payout-errors";
 
-function isPublicNetwork(): boolean {
-  return process.env.STELLAR_NETWORK === "public";
+function i128ScValFromAmount(amount: string): xdr.ScVal {
+  const amountI128 = amountToI128(amount);
+  const mask64 = BigInt("0xffffffffffffffff");
+  const lo = amountI128 & mask64;
+  const hi = amountI128 >> BigInt(64);
+  return xdr.ScVal.scvI128(
+    new xdr.Int128Parts({
+      lo: lo as unknown as xdr.Uint64,
+      hi: hi as unknown as xdr.Uint64,
+    })
+  );
 }
 
 export type DistributionBalances = {
@@ -119,7 +139,7 @@ export async function buildUnsignedTreasuryToDistributionTransfer(params: {
   };
 }
 
-/** Classic USDC payment: SDP distribution G → org treasury C (server-signed). */
+/** Soroban SAC transfer: SDP distribution G → org treasury C (server-signed). */
 export async function transferDistributionToTreasury(params: {
   amount: string;
   treasuryContractId: string;
@@ -160,25 +180,58 @@ export async function transferDistributionToTreasury(params: {
     throw new Error("Distribution secret does not match configured public key.");
   }
 
-  const horizon = getHorizon();
-  const account = await horizon.loadAccount(source.publicKey());
-  const tx = new TransactionBuilder(account, {
+  const rpcUrl = getSorobanRpcUrl();
+  const server = new rpc.Server(rpcUrl, { allowHttp: rpcUrl.startsWith("http://") });
+  const networkPassphrase = getNetworkPassphrase();
+  const token = new Contract(getSorobanUsdcTokenId());
+
+  const account = await server.getAccount(source.publicKey());
+  const rawTx = new TransactionBuilder(account, {
     fee: "100000",
-    networkPassphrase: getNetworkPassphrase(),
+    networkPassphrase,
   })
     .addOperation(
-      Operation.payment({
-        destination: treasury,
-        asset: new Asset("USDC", getUsdcIssuer()),
-        amount: params.amount,
-      })
+      token.call(
+        "transfer",
+        Address.fromString(source.publicKey()).toScVal(),
+        Address.fromString(treasury).toScVal(),
+        i128ScValFromAmount(params.amount)
+      )
     )
     .setTimeout(60)
     .build();
 
-  tx.sign(source);
-  const res = await horizon.submitTransaction(tx);
-  return res.hash;
+  let prepared;
+  try {
+    prepared = await server.prepareTransaction(rawTx);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/insufficient/i.test(msg)) {
+      throw new PayoutFundsError({
+        message: `SDP distribution account has ${distributionBal.toFixed(2)} USDC but sweep requires ${amountNum} USDC.`,
+        disbursementBalance: distributionBal.toFixed(7),
+        requestedAmount: params.amount,
+      });
+    }
+    throw new Error(
+      msg.includes("destination") || msg.includes("Invalid")
+        ? `Could not sweep to treasury contract ${treasury.slice(0, 8)}… — ${msg}`
+        : msg
+    );
+  }
+
+  prepared.sign(source);
+  const result = await server.sendTransaction(prepared);
+  if (result.status === "ERROR") {
+    const detail = String(result.errorResult ?? "Soroban submit failed");
+    throw new Error(
+      /destination/i.test(detail)
+        ? `Treasury contract ${treasury.slice(0, 8)}… cannot receive this transfer. Confirm treasury_contract_id is your org Soroban smart account (C…).`
+        : detail
+    );
+  }
+  if (!result.hash) throw new Error("No transaction hash from Soroban RPC");
+  return result.hash;
 }
 
 export { submitSignedSorobanEnvelope };

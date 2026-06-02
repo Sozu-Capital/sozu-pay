@@ -4,8 +4,12 @@ import { useEffect, useRef, useState } from "react";
 
 type Props = {
   value: string;
+  /** Shown in the input while editing (format hint). */
   placeholder: string;
+  /** Shown when value is empty (not a real DOB). */
+  emptyLabel?: string;
   disabled?: boolean;
+  disabledTitle?: string;
   saving?: boolean;
   onSave: (next: string) => void | Promise<void>;
   className?: string;
@@ -14,7 +18,9 @@ type Props = {
 export function BeneficiaryFieldCell({
   value,
   placeholder,
+  emptyLabel = "—",
   disabled,
+  disabledTitle,
   saving,
   onSave,
   className,
@@ -40,8 +46,8 @@ export function BeneficiaryFieldCell({
 
   if (disabled) {
     return (
-      <span className={className}>
-        {value.trim() || "—"}
+      <span className={className} title={disabledTitle}>
+        {value.trim() || emptyLabel}
       </span>
     );
   }
@@ -58,7 +64,7 @@ export function BeneficiaryFieldCell({
         {display ? (
           display
         ) : (
-          <span className="text-gray-400 italic font-normal">{placeholder}</span>
+          <span className="text-gray-400 italic font-normal">{emptyLabel}</span>
         )}
       </button>
     );

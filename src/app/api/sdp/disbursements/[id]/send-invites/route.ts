@@ -16,7 +16,11 @@ import {
   externalIdToDisplayName,
   receiverVerificationDob,
 } from "@/lib/sdp/receiverDisplay";
-import { actorLabelFromUser, markInvitesSent } from "@/lib/disbursements/store";
+import {
+  actorLabelFromUser,
+  getUploadedVerificationForEmail,
+  markInvitesSent,
+} from "@/lib/disbursements/store";
 import { getUserBySessionId } from "@/lib/db/users";
 
 const WALLET_BASE_URL =
@@ -147,11 +151,13 @@ export async function POST(
             // Append tenant as unsigned param AFTER the signature so existing
             // verifiers can ignore it while new SozuCredit versions read it.
             const tenantName = process.env.SDP_TENANT_NAME?.trim();
+            const uploadedDob = getUploadedVerificationForEmail(id, receiver.email);
+            const inviteDob = uploadedDob || receiverVerificationDob(receiver);
             registrationUrl = appendUnsignedInviteParams(signedUrl, {
               tenant: tenantName,
               be: receiver.email,
               bn: externalIdToDisplayName(receiver.external_id ?? ""),
-              bd: receiverVerificationDob(receiver),
+              bd: inviteDob,
             });
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);

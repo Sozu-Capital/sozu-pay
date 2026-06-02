@@ -86,6 +86,8 @@ export interface BeneficiaryRow {
   /** Editable full legal name (empty when CSV id is an opaque code like RCP001). */
   legal_name: string;
   date_of_birth: string | null;
+  /** Where the DOB shown in the dashboard came from. */
+  date_of_birth_source?: "uploaded" | "sdp" | null;
   sozu_tag: string | null;
   contact: string | null;
   receiver: { id: string; email?: string; phone_number?: string };
@@ -95,7 +97,8 @@ export interface BeneficiaryRow {
 export function mapReceiverToBeneficiaryRow(
   receiver: SdpReceiver,
   tagByAddress: Map<string, string>,
-  hintsByEmail: Map<string, BeneficiaryHint> = new Map()
+  hintsByEmail: Map<string, BeneficiaryHint> = new Map(),
+  uploadedVerificationByEmail: Record<string, string> = {}
 ): BeneficiaryRow {
   const payment = receiver.payment;
   const wallet = receiver.receiver_wallet;
@@ -112,6 +115,10 @@ export function mapReceiverToBeneficiaryRow(
   const legalName = hints?.fullName || fromExternalId || "";
   const beneficiaryName = legalName || "—";
 
+  const uploadedDob = emailKey ? uploadedVerificationByEmail[emailKey]?.trim() : "";
+  const sdpDob = receiverVerificationDob(receiver);
+  const dateOfBirth = uploadedDob || sdpDob || null;
+
   return {
     id: payment?.id ?? receiver.id,
     amount: payment?.amount ?? "—",
@@ -120,7 +127,8 @@ export function mapReceiverToBeneficiaryRow(
     stellar_transaction_id: payment?.stellar_transaction_id ?? null,
     beneficiary_name: beneficiaryName,
     legal_name: legalName,
-    date_of_birth: receiverVerificationDob(receiver) || null,
+    date_of_birth: dateOfBirth,
+    date_of_birth_source: uploadedDob ? "uploaded" : sdpDob ? "sdp" : null,
     sozu_tag: sozuTag,
     contact: receiver.email ?? receiver.phone_number ?? null,
     receiver: {

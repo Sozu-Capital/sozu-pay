@@ -14,6 +14,7 @@ import {
 import { recipientsToCSV, type RecipientRow } from "@/lib/disbursements/csv";
 import { normalizeVerificationForSdp } from "@/lib/disbursements/normalizeVerification";
 import { getUserBySessionId } from "@/lib/db/users";
+import { recordUploadedVerifications } from "@/lib/disbursements/store";
 
 const EDITABLE = new Set(["DRAFT", "READY"]);
 
@@ -58,6 +59,13 @@ export async function PATCH(
   if (!recipients) {
     return NextResponse.json({ error: "recipients array is required" }, { status: 400 });
   }
+  const missingDob = recipients.some((r) => !(r.verification ?? "").trim());
+  if (missingDob) {
+    return NextResponse.json(
+      { error: "Each recipient needs a date of birth (YYYY-MM-DD) in the verification field." },
+      { status: 400 }
+    );
+  }
 
   const user = await getUserBySessionId(session.id);
   const actor = {
@@ -84,6 +92,12 @@ export async function PATCH(
     await uploadInstructions(id, Buffer.from(csv, "utf-8"));
 
     ensureDisbursementMeta(id);
+    recordUploadedVerifications(
+      id,
+      Object.fromEntries(
+        recipients.map((r) => [r.email.toLowerCase(), r.verification ?? ""])
+      )
+    );
     for (const email of nextEmails) {
       if (!prevEmails.has(email)) {
         const row = recipients.find((r) => r.email.toLowerCase() === email)!;

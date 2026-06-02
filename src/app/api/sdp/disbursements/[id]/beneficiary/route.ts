@@ -22,6 +22,7 @@ import {
   receiverVerificationDob,
 } from "@/lib/sdp/receiverDisplay";
 import { getUserBySessionId } from "@/lib/db/users";
+import { recordUploadedVerifications } from "@/lib/disbursements/store";
 
 const EDITABLE = new Set(["DRAFT", "READY"]);
 
@@ -124,6 +125,9 @@ export async function PATCH(
     await uploadInstructions(id, Buffer.from(csv, "utf-8"));
 
     ensureDisbursementMeta(id);
+    if (body.dateOfBirth !== undefined && updated.verification) {
+      recordUploadedVerifications(id, { [email]: updated.verification });
+    }
 
     const newLegalName = updated.name.trim();
     const newDob = updated.verification?.trim() ?? "";

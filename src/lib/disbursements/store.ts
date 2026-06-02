@@ -33,6 +33,8 @@ export interface DisbursementMeta {
   createdAt: string;
   createdByUserId?: string;
   createdByLabel?: string;
+  /** DOB sent in CSV upload (SDP admin API often returns empty after hashing). */
+  uploadedVerificationByEmail?: Record<string, string>;
   invitesSentAt?: string;
   invitesSentBy?: string;
   invitesSentByLabel?: string;
@@ -78,6 +80,30 @@ export function getDisbursementMeta(id: string): DisbursementMeta | undefined {
 
 export function getAllDisbursementMeta(): Record<string, DisbursementMeta> {
   return Object.fromEntries(metaById);
+}
+
+/** Merge DOB values we uploaded to SDP (key = lowercased email). */
+export function recordUploadedVerifications(
+  disbursementId: string,
+  byEmail: Record<string, string>
+): void {
+  const meta = ensureDisbursementMeta(disbursementId);
+  const prev = meta.uploadedVerificationByEmail ?? {};
+  const next: Record<string, string> = { ...prev };
+  for (const [email, dob] of Object.entries(byEmail)) {
+    const key = email.trim().toLowerCase();
+    const iso = dob.trim();
+    if (key && iso) next[key] = iso;
+  }
+  meta.uploadedVerificationByEmail = next;
+}
+
+export function getUploadedVerificationForEmail(
+  disbursementId: string,
+  email: string
+): string | undefined {
+  const key = email.trim().toLowerCase();
+  return getDisbursementMeta(disbursementId)?.uploadedVerificationByEmail?.[key];
 }
 
 export function ensureDisbursementMeta(

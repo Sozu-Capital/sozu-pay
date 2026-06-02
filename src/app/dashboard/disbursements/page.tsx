@@ -46,6 +46,7 @@ interface SdpPayment {
   beneficiary_name: string;
   legal_name: string;
   date_of_birth: string | null;
+  date_of_birth_source?: "uploaded" | "sdp" | null;
   sozu_tag: string | null;
   contact: string | null;
   receiver: { id: string; email?: string; phone_number?: string };
@@ -1339,11 +1340,15 @@ export default function DisbursementsPage() {
                                 </div>
                               ) : null}
                             </td>
-                            <td className="py-2 pr-4 text-gray-600 dark:text-gray-400 hidden sm:table-cell whitespace-nowrap max-w-[140px]">
+                            <td className="py-2 pr-4 text-gray-600 dark:text-gray-400 hidden sm:table-cell whitespace-nowrap max-w-[160px]">
                               <BeneficiaryFieldCell
                                 value={p.date_of_birth ?? ""}
                                 placeholder={t("verificationPlaceholder")}
+                                emptyLabel={t("dobEmptyLabel")}
                                 disabled={!canEditRecipients}
+                                disabledTitle={
+                                  canEditRecipients ? undefined : t("dobEditDisabledHint")
+                                }
                                 saving={savingBeneficiaryEmail === p.receiver.email}
                                 onSave={(dateOfBirth) => {
                                   const email = p.receiver.email?.trim();
@@ -1352,6 +1357,16 @@ export default function DisbursementsPage() {
                                 }}
                                 className="font-normal text-gray-600 dark:text-gray-400"
                               />
+                              {p.date_of_birth && p.date_of_birth_source === "uploaded" ? (
+                                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                                  {t("dobUploadedHint")}
+                                </p>
+                              ) : null}
+                              {!p.date_of_birth && !canEditRecipients ? (
+                                <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
+                                  {t("dobUnknownAfterStart")}
+                                </p>
+                              ) : null}
                             </td>
                             <td
                               className="py-2 pr-4 text-gray-700 dark:text-gray-300 hidden md:table-cell font-mono text-xs"

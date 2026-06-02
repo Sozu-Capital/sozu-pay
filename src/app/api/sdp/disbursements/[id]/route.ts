@@ -53,8 +53,16 @@ export async function GET(
       resolveBeneficiaryHintsByEmails(receiverEmails),
     ]);
 
+    const meta = getDisbursementMeta(id);
+    const uploadedVerificationByEmail = meta?.uploadedVerificationByEmail ?? {};
+
     const payments = receivers.map((r) =>
-      mapReceiverToBeneficiaryRow(r, tagByAddress, hintsByEmail)
+      mapReceiverToBeneficiaryRow(
+        r,
+        tagByAddress,
+        hintsByEmail,
+        uploadedVerificationByEmail
+      )
     );
 
     syncPaymentAuditEvents(
@@ -71,7 +79,7 @@ export async function GET(
       disbursement,
       payments,
       receivers,
-      meta: getDisbursementMeta(id) ?? null,
+      meta: meta ?? null,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

@@ -20,7 +20,9 @@ import {
   getAllDisbursementMeta,
 } from "@/lib/disbursements/store";
 import { getUserBySessionId } from "@/lib/db/users";
+import { verificationByEmailFromCsv } from "@/lib/disbursements/csv";
 import { normalizeDisbursementCsvText, findInvalidVerificationRows } from "@/lib/disbursements/normalizeVerification";
+import { recordUploadedVerifications } from "@/lib/disbursements/store";
 
 function notConfigured() {
   return NextResponse.json({ error: sdpNotConfiguredMessage() }, { status: 503 });
@@ -142,6 +144,10 @@ export async function POST(request: Request) {
       createdByUserId: session.id,
       createdByLabel: label,
     });
+    recordUploadedVerifications(
+      disbursement.id,
+      verificationByEmailFromCsv(normalizedCsv)
+    );
     appendDisbursementAudit(disbursement.id, {
       action: "created",
       actorUserId: session.id,

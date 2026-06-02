@@ -21,6 +21,18 @@ export function slugifyLegalName(name: string): string {
     .replace(/[^a-z0-9_]/g, "");
 }
 
+/** Email → YYYY-MM-DD verification from normalized disbursement CSV text. */
+export function verificationByEmailFromCsv(csvText: string): Record<string, string> {
+  const rows = parseDisbursementCsvText(csvText);
+  const out: Record<string, string> = {};
+  for (const r of rows) {
+    const email = r.email.trim().toLowerCase();
+    const dob = (r.verification ?? "").trim();
+    if (email && dob) out[email] = dob;
+  }
+  return out;
+}
+
 export function recipientsToCSV(recipients: RecipientRow[], defaultAmount = ""): string {
   const rows = recipients.map((r) => {
     const id = slugifyLegalName(r.name);

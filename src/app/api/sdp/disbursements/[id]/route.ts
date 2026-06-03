@@ -2,22 +2,21 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
 import {
+  archiveCompletedIfNeededAsync,
   archiveDeletedDisbursementAsync,
   actorLabelFromUser,
+  getDisbursementMetaAsync,
+  mergedUploadedVerificationsAsync,
+  syncPaymentAuditEvents,
 } from "@/lib/disbursements/store";
 import { getUserBySessionId } from "@/lib/db/users";
 import { deleteDisbursement, getDisbursement, listReceivers } from "@/lib/sdp/adminClient";
 import { mapReceiverToBeneficiaryRow } from "@/lib/sdp/receiverDisplay";
 import { resolveBeneficiaryHintsByEmails } from "@/lib/sdp/resolve-beneficiary-hints";
 import { resolveAddressesToSozuTags } from "@/lib/payment/resolve-address-to-tag";
-import {
-  getDisbursementMetaAsync,
-  mergedUploadedVerificationsAsync,
-  syncPaymentAuditEvents,
-  maybeArchiveCompletedDisbursement,
-} from "@/lib/disbursements/store";
 import { applyManualPaymentsToBeneficiaryRows } from "@/lib/disbursements/payableReceivers";
 import { overlayDisbursementStats } from "@/lib/disbursements/mergeDisbursementStats";
+import { paymentRowsFromBeneficiaryRows } from "@/lib/disbursements/paymentRows";
 import { requireDisbursementOrgAccess } from "@/lib/disbursements/org-scope";
 import { fetchBeneficiarySozuTags, upsertBeneficiarySozuTags } from "@/lib/db/beneficiary-sozu-tags";
 
@@ -112,8 +111,11 @@ export async function GET(
       }))
     );
 
-    const overlaidDisbursement = overlayDisbursementStats(disbursement, meta ?? undefined);
-    maybeArchiveCompletedDisbursement(disbursement, meta ?? undefined);
+    const paymentRows = paymentRowsFromBeneficiaryRows(payments);
+    const overlaidDisbursement = overlayDisbursementStats(disbursement, meta ?? undefined, {
+      paymentRows,
+    });
+    await archiveCompletedIfNeededAsync({ disbursement: overlaidDisbursement });
 
     return NextResponse.json({
       disbursement: overlaidDisbursement,

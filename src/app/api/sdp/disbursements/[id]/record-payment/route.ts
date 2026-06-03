@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
-import { actorLabelFromUser, recordManualDisbursementPayment, maybeArchiveCompletedDisbursement } from "@/lib/disbursements/store";
+import {
+  actorLabelFromUser,
+  recordManualDisbursementPaymentAsync,
+  archiveCompletedIfNeededAsync,
+  getDisbursementMetaAsync,
+} from "@/lib/disbursements/store";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getDisbursement } from "@/lib/sdp/adminClient";
 import { requireDisbursementOrgAccess } from "@/lib/disbursements/org-scope";
+import { overlayDisbursementStats } from "@/lib/disbursements/mergeDisbursementStats";
 
 /**
  * POST /api/sdp/disbursements/[id]/record-payment
@@ -43,17 +49,26 @@ export async function POST(
 
   const user = await getUserBySessionId(session.id);
   const label = user ? actorLabelFromUser(user) : session.id;
-  recordManualDisbursementPayment(
+  await recordManualDisbursementPaymentAsync(
     disbursementId,
     { userId: session.id, label },
     { paymentId, txHash, amount, recipientAddress, recipientLabel }
   );
 
   try {
-    const disbursement = await getDisbursement(disbursementId);
-    const { getDisbursementMetaAsync } = await import("@/lib/disbursements/store");
-    const meta = await getDisbursementMetaAsync(disbursementId);
-    maybeArchiveCompletedDisbursement(disbursement, meta ?? undefined);
+    const [disbursement, meta] = await Promise.all([
+      getDisbursement(disbursementId),
+      getDisbursementMetaAsync(disbursementId),
+    ]);
+    const overlaid = overlayDisbursementStats(
+      {
+        ...disbursement,
+        asset: { code: disbursement.asset.code, issuer: disbursement.asset.issuer ?? "" },
+        wallet: { id: disbursement.wallet.id ?? "", name: disbursement.wallet.name },
+      },
+      meta ?? undefined
+    );
+    await archiveCompletedIfNeededAsync({ disbursement: overlaid });
   } catch (e) {
     console.warn("[record-payment] archive check failed:", e);
   }

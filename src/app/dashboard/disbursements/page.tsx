@@ -111,6 +111,7 @@ const STATUS_COLORS: Record<string, string> = {
   STARTED: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
   PAUSED: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300",
   COMPLETED: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+  ARCHIVED: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
   FAILED: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
 };
 
@@ -156,6 +157,40 @@ function isSdpConfigError(message: string, status?: number): boolean {
 function formatSozuTag(tag: string | null): string {
   if (!tag) return "—";
   return tag.startsWith("$") ? tag : `$${tag}`;
+}
+
+const DISBURSEMENT_STATUS_KEYS = new Set([
+  "DRAFT",
+  "READY",
+  "STARTED",
+  "PAUSED",
+  "COMPLETED",
+  "ARCHIVED",
+  "FAILED",
+]);
+
+function formatDisbursementStatus(
+  status: string,
+  t: ReturnType<typeof useTranslations<"disbursementsPage">>
+): string {
+  const key = status.toUpperCase();
+  if (key === "COMPLETED") return t("campaignPaid");
+  if (DISBURSEMENT_STATUS_KEYS.has(key)) {
+    return t(`disbursementStatus.${key}` as "disbursementStatus.DRAFT");
+  }
+  return status;
+}
+
+function formatPaymentStatus(
+  status: string,
+  t: ReturnType<typeof useTranslations<"disbursementsPage">>
+): string {
+  const key = status.toUpperCase();
+  if (key === "FAILED") return t("paymentStatus.FAILED");
+  if (key in { DRAFT: 1, READY: 1, PENDING: 1, PAUSED: 1, SUCCESS: 1 }) {
+    return t(`paymentStatus.${key}` as "paymentStatus.DRAFT");
+  }
+  return status;
 }
 
 
@@ -1342,7 +1377,8 @@ export default function DisbursementsPage() {
                   />
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  {detail.disbursement.total_payments} {t("payments")} · {detail.disbursement.status}
+                  {detail.disbursement.total_payments} {t("payments")} ·{" "}
+                  {formatDisbursementStatus(detail.disbursement.status, t)}
                 </p>
               </div>
               <Link
@@ -1367,7 +1403,7 @@ export default function DisbursementsPage() {
                       <tr key={p.id} className="border-t border-gray-200 dark:border-gray-700">
                         <td className="px-3 py-2">{p.beneficiary_name || p.receiver.email || "—"}</td>
                         <td className="px-3 py-2">{p.amount}</td>
-                        <td className="px-3 py-2">{p.payment_status}</td>
+                        <td className="px-3 py-2">{formatPaymentStatus(p.payment_status, t)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1510,7 +1546,7 @@ export default function DisbursementsPage() {
                     STATUS_COLORS[d.status] ?? STATUS_COLORS.DRAFT
                   }`}
                 >
-                  {d.status === "COMPLETED" ? t("campaignPaid") : d.status}
+                  {formatDisbursementStatus(d.status, t)}
                 </span>
                 <span className="text-sm font-semibold text-gray-900 dark:text-white hidden sm:inline">
                   {d.total_amount} {d.asset.code}

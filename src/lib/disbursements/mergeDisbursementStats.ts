@@ -1,5 +1,40 @@
 import type { DisbursementMeta } from "@/lib/disbursements/store";
 
+export type DisbursementPaymentRow = {
+  payment_status: string;
+  amount: string;
+};
+
+export type OverlayDisbursementOptions = {
+  paymentRows?: DisbursementPaymentRow[];
+};
+
+const SUCCESS_PAYMENT_STATUSES = new Set(["SUCCESS", "PAID"]);
+const FAILED_PAYMENT_STATUSES = new Set(["FAILED"]);
+
+export function derivePaymentStatsFromRows(rows: DisbursementPaymentRow[]): {
+  successful: number;
+  failed: number;
+  disbursed: number;
+} {
+  let successful = 0;
+  let failed = 0;
+  let disbursed = 0;
+
+  for (const row of rows) {
+    const status = row.payment_status.toUpperCase();
+    const amt = parseFloat(String(row.amount).replace(/[^0-9.-]/g, "")) || 0;
+    if (SUCCESS_PAYMENT_STATUSES.has(status)) {
+      successful += 1;
+      disbursed += amt;
+    } else if (FAILED_PAYMENT_STATUSES.has(status)) {
+      failed += 1;
+    }
+  }
+
+  return { successful, failed, disbursed };
+}
+
 export type DisbursementListItem = {
   id: string;
   name: string;
@@ -32,23 +67,31 @@ export function isDisbursementArchived(meta?: DisbursementMeta | null): boolean 
 
 export function overlayDisbursementStats<T extends DisbursementListItem>(
   disbursement: T,
-  meta?: DisbursementMeta | null
+  meta?: DisbursementMeta | null,
+  options?: OverlayDisbursementOptions
 ): T {
   const manualCount = manualPaymentCount(meta);
   const manualSum = manualDisbursedSum(meta);
+  const rowStats = options?.paymentRows?.length
+    ? derivePaymentStatsFromRows(options.paymentRows)
+    : { successful: 0, failed: 0, disbursed: 0 };
   const sdpSuccess = disbursement.successful_payments;
   const sdpDisbursed = parseFloat(disbursement.disbursed_amount) || 0;
 
-  const successful = Math.max(sdpSuccess, manualCount);
-  const disbursed = Math.max(sdpDisbursed, manualSum);
+  const successful = Math.max(sdpSuccess, manualCount, rowStats.successful);
+  const disbursed = Math.max(sdpDisbursed, manualSum, rowStats.disbursed);
+  const failed = Math.max(disbursement.failed_payments, rowStats.failed);
   const total = disbursement.total_payments;
   const totalAmount = parseFloat(disbursement.total_amount) || 0;
   const sdpStatus = disbursement.status.toUpperCase();
   const allPaid =
     total > 0 &&
     successful >= total &&
+    failed === 0 &&
     (sdpStatus === "COMPLETED" ||
-      (totalAmount > 0 && disbursed + 1e-9 >= totalAmount));
+      successful >= total ||
+      totalAmount <= 0 ||
+      disbursed + 1e-9 >= totalAmount);
 
   let status = disbursement.status;
   if (allPaid) status = "COMPLETED";
@@ -58,17 +101,18 @@ export function overlayDisbursementStats<T extends DisbursementListItem>(
     ...disbursement,
     successful_payments: successful,
     disbursed_amount: disbursed.toFixed(7).replace(/\.?0+$/, ""),
-    failed_payments: allPaid ? 0 : disbursement.failed_payments,
+    failed_payments: allPaid ? 0 : failed,
     status,
   };
 }
 
 export function batchRemainingUsdc(
   disbursement: DisbursementListItem,
-  meta?: DisbursementMeta | null
+  meta?: DisbursementMeta | null,
+  options?: OverlayDisbursementOptions
 ): number {
   if (isDisbursementArchived(meta)) return 0;
-  const overlaid = overlayDisbursementStats(disbursement, meta);
+  const overlaid = overlayDisbursementStats(disbursement, meta, options);
   if (overlaid.status === "COMPLETED") return 0;
   const total = parseFloat(overlaid.total_amount) || 0;
   const disbursed = parseFloat(overlaid.disbursed_amount) || 0;
@@ -77,9 +121,10 @@ export function batchRemainingUsdc(
 
 export function isDisbursementFullyPaid(
   disbursement: DisbursementListItem,
-  meta?: DisbursementMeta | null
+  meta?: DisbursementMeta | null,
+  options?: OverlayDisbursementOptions
 ): boolean {
-  const overlaid = overlayDisbursementStats(disbursement, meta);
+  const overlaid = overlayDisbursementStats(disbursement, meta, options);
   return overlaid.status === "COMPLETED";
 }
 
@@ -88,11 +133,12 @@ const LIVE_CAMPAIGN_STATUSES = new Set(["DRAFT", "READY", "STARTED", "PAUSED"]);
 /** Whether a batch should appear on the active Disbursements page (not History). */
 export function isActiveDisbursementCampaign(
   disbursement: DisbursementListItem,
-  meta?: DisbursementMeta | null
+  meta?: DisbursementMeta | null,
+  options?: OverlayDisbursementOptions
 ): boolean {
   if (isDisbursementArchived(meta)) return false;
 
-  const overlaid = overlayDisbursementStats(disbursement, meta);
+  const overlaid = overlayDisbursementStats(disbursement, meta, options);
   if (overlaid.status === "COMPLETED") return false;
 
   const sdpStatus = disbursement.status.toUpperCase();

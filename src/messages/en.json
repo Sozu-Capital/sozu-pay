@@ -953,6 +953,23 @@
     "sendInvitesHint": "Fund the distribution wallet first, then send invites to open SozuCredit registration.",
     "sendInvitesNeedsFunding": "Fund the distribution wallet with {amount} {asset} before sending invites.",
     "campaignPaid": "Paid",
+    "disbursementStatus": {
+      "DRAFT": "Draft",
+      "READY": "Ready",
+      "STARTED": "In progress",
+      "PAUSED": "Paused",
+      "COMPLETED": "Paid",
+      "ARCHIVED": "Archived",
+      "FAILED": "Failed"
+    },
+    "paymentStatus": {
+      "DRAFT": "Draft",
+      "READY": "Ready",
+      "PENDING": "Pending",
+      "PAUSED": "Paused",
+      "SUCCESS": "Paid",
+      "FAILED": "Failed"
+    },
     "invitesSentAndStarted": "Campaign started — {sent} invite(s) sent ({skipped} skipped, {failed} failed). Beneficiaries can register on SozuCredit.",
     "sending": "Sending…",
     "campaignLive": "Campaign live",

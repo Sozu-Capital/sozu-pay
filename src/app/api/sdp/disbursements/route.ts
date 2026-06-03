@@ -9,6 +9,7 @@ import {
   listAssets,
   ensureSozuCreditWallet,
 } from "@/lib/sdp/adminClient";
+import { fetchDisbursementPaymentRows } from "@/lib/disbursements/paymentRows";
 import {
   PublishBatchError,
   publishDisbursementBatchToSdp,
@@ -70,20 +71,29 @@ export async function GET() {
 
     const orgDisbursements = filterDisbursementsForOrg(disbursements, meta, orgId);
 
-    for (const d of orgDisbursements) {
-      const overlaid = overlayDisbursementStats(d, meta[d.id]);
+    const enriched = await Promise.all(
+      orgDisbursements.map(async (d) => {
+        const paymentRows = await fetchDisbursementPaymentRows(d.id, d.status);
+        const overlaid = overlayDisbursementStats(d, meta[d.id], { paymentRows });
+        return { d, paymentRows, overlaid };
+      })
+    );
+
+    for (const { overlaid } of enriched) {
       if (
-        isDisbursementFullyPaid(overlaid, meta[d.id]) &&
-        !isDisbursementArchived(meta[d.id])
+        isDisbursementFullyPaid(overlaid, meta[overlaid.id]) &&
+        !isDisbursementArchived(meta[overlaid.id])
       ) {
         await archiveCompletedIfNeededAsync({ disbursement: overlaid });
       }
     }
     meta = filterMetaForOrg(await getAllDisbursementMetaAsync(), orgId);
 
-    const activeDisbursements = orgDisbursements
-      .filter((d) => isActiveDisbursementCampaign(d, meta[d.id]))
-      .map((d) => overlayDisbursementStats(d, meta[d.id]));
+    const activeDisbursements = enriched
+      .filter(({ overlaid, paymentRows }) =>
+        isActiveDisbursementCampaign(overlaid, meta[overlaid.id], { paymentRows })
+      )
+      .map(({ overlaid }) => overlaid);
 
     return NextResponse.json({
       disbursements: activeDisbursements,

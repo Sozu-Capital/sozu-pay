@@ -1029,6 +1029,23 @@
     "sendInvitesHint": "Financiá la billetera de distribución primero, luego enviá invitaciones para abrir el registro en Sozu Credit.",
     "sendInvitesNeedsFunding": "Financiá la billetera de distribución con {amount} {asset} antes de enviar invitaciones.",
     "campaignPaid": "Pagado",
+    "disbursementStatus": {
+      "DRAFT": "Borrador",
+      "READY": "Listo",
+      "STARTED": "En curso",
+      "PAUSED": "Pausado",
+      "COMPLETED": "Pagado",
+      "ARCHIVED": "Archivado",
+      "FAILED": "Fallido"
+    },
+    "paymentStatus": {
+      "DRAFT": "Borrador",
+      "READY": "Listo",
+      "PENDING": "Pendiente",
+      "PAUSED": "Pausado",
+      "SUCCESS": "Pagado",
+      "FAILED": "Fallido"
+    },
     "invitesSentAndStarted": "Campaña iniciada — {sent} invitación(es) enviada(s) ({skipped} omitidas, {failed} fallidas). Los beneficiarios pueden registrarse en Sozu Credit.",
     "sending": "Enviando…",
     "campaignLive": "Campaña activa",

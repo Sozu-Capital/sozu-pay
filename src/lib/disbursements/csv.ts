@@ -118,26 +118,46 @@ export function parseDisbursementCsvText(text: string): RecipientRow[] {
   return rows;
 }
 
+/** Resolve YYYY-MM-DD for a beneficiary: SDP plaintext (rare) → our uploaded copy. */
+export function resolveRecipientVerification(params: {
+  email: string;
+  verificationFieldValue?: string;
+  verification?: string;
+  uploadedByEmail?: Record<string, string>;
+}): string {
+  const fromSdp = normalizeVerificationForSdp(
+    params.verificationFieldValue?.trim() ?? params.verification?.trim() ?? ""
+  );
+  if (fromSdp) return fromSdp;
+
+  const uploaded = params.uploadedByEmail?.[params.email.trim().toLowerCase()]?.trim() ?? "";
+  return normalizeVerificationForSdp(uploaded) ?? "";
+}
+
 export function receiversToRecipientRows(
   receivers: Array<{
     email?: string;
     phone_number?: string;
     external_id?: string;
     payment?: { amount?: string; verification_field_value?: string; verification?: string } | null;
-  }>
+  }>,
+  uploadedByEmail: Record<string, string> = {}
 ): RecipientRow[] {
   return receivers
     .filter((r) => r.email?.trim())
-    .map((r) => ({
-      name: externalIdAsBeneficiaryName(r.external_id ?? "") ?? "",
-      email: r.email!.trim(),
-      phone: r.phone_number?.trim() ?? "",
-      amount: r.payment?.amount?.trim() ?? "",
-      verification:
-        normalizeVerificationForSdp(
-          r.payment?.verification_field_value?.trim() ??
-            r.payment?.verification?.trim() ??
-            ""
-        ) ?? "",
-    }));
+    .map((r) => {
+      const email = r.email!.trim();
+      return {
+        name: externalIdAsBeneficiaryName(r.external_id ?? "") ?? "",
+        email,
+        phone: r.phone_number?.trim() ?? "",
+        amount: r.payment?.amount?.trim() ?? "",
+        verification: resolveRecipientVerification({
+          email,
+          verificationFieldValue: r.payment?.verification_field_value,
+          verification: r.payment?.verification,
+          uploadedByEmail,
+        }),
+      };
+    });
 }

@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { overlayDisbursementStats, isDisbursementFullyPaid } from "@/lib/disbursements/mergeDisbursementStats";
+import { normalizeVerificationForSdp } from "@/lib/disbursements/normalizeVerification";
 
 /**
  * Per-disbursement metadata, audit trail, and history archive.
@@ -367,8 +368,8 @@ export function recordUploadedVerifications(
   const next: Record<string, string> = { ...prev };
   for (const [email, dob] of Object.entries(byEmail)) {
     const key = email.trim().toLowerCase();
-    const iso = dob.trim();
-    if (key && iso) next[key] = iso;
+    const iso = normalizeVerificationForSdp(dob) ?? dob.trim();
+    if (key && iso && /^\d{4}-\d{2}-\d{2}$/.test(iso)) next[key] = iso;
   }
   meta.uploadedVerificationByEmail = next;
   persistStore();

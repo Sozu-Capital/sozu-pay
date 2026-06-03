@@ -238,6 +238,7 @@ export default function DisbursementsPage() {
     disbursement: SdpDisbursement;
     payments: SdpPayment[];
     receivers?: SdpReceiverRow[];
+    uploadedVerificationByEmail?: Record<string, string>;
   } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -331,6 +332,7 @@ export default function DisbursementsPage() {
         disbursement: data.disbursement,
         payments: data.payments ?? [],
         receivers: data.receivers ?? [],
+        uploadedVerificationByEmail: data.uploadedVerificationByEmail ?? {},
       });
       if (data.meta) {
         setMetaById((prev) => ({ ...prev, [id]: data.meta }));
@@ -1668,6 +1670,7 @@ export default function DisbursementsPage() {
                     <EditDisbursementRecipients
                       disbursementId={d.id}
                       receivers={detail.receivers}
+                      uploadedVerificationByEmail={detail.uploadedVerificationByEmail}
                       onSaved={() => void refreshDetail(d.id)}
                     />
                   )}

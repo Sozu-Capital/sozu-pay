@@ -11,15 +11,18 @@ import {
   appendDisbursementAudit,
   ensureDisbursementMeta,
 } from "@/lib/disbursements/store";
-import { recipientsToCSV, type RecipientRow } from "@/lib/disbursements/csv";
+import { recipientsToCSV, type RecipientRow, resolveRecipientVerification } from "@/lib/disbursements/csv";
 import { normalizeVerificationForSdp } from "@/lib/disbursements/normalizeVerification";
 import { getUserBySessionId } from "@/lib/db/users";
-import { recordUploadedVerifications } from "@/lib/disbursements/store";
+import { recordUploadedVerifications, mergedUploadedVerificationsAsync } from "@/lib/disbursements/store";
 import { requireDisbursementOrgAccess } from "@/lib/disbursements/org-scope";
 
 const EDITABLE = new Set(["DRAFT", "READY"]);
 
-function parseRecipients(body: unknown): RecipientRow[] | null {
+function parseRecipients(
+  body: unknown,
+  uploadedByEmail: Record<string, string> = {}
+): RecipientRow[] | null {
   if (!body || typeof body !== "object") return null;
   const recipients = (body as { recipients?: unknown }).recipients;
   if (!Array.isArray(recipients)) return null;
@@ -30,12 +33,16 @@ function parseRecipients(body: unknown): RecipientRow[] | null {
     const name = String(row.name ?? "").trim();
     const email = String(row.email ?? "").trim();
     if (!name || !email) continue;
+    const rawVerification = String(row.verification ?? "").trim();
+    const verification =
+      normalizeVerificationForSdp(rawVerification) ??
+      (resolveRecipientVerification({ email, uploadedByEmail }) || "");
     rows.push({
       name,
       email,
       phone: String(row.phone ?? "").trim(),
       amount: String(row.amount ?? "").trim(),
-      verification: normalizeVerificationForSdp(String(row.verification ?? "")) ?? "",
+      verification,
     });
   }
   return rows.length > 0 ? rows : null;
@@ -56,7 +63,8 @@ export async function PATCH(
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
-  const recipients = parseRecipients(await request.json().catch(() => null));
+  const uploadedByEmail = await mergedUploadedVerificationsAsync(id);
+  const recipients = parseRecipients(await request.json().catch(() => null), uploadedByEmail);
   if (!recipients) {
     return NextResponse.json({ error: "recipients array is required" }, { status: 400 });
   }

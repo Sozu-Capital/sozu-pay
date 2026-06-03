@@ -122,6 +122,7 @@ export async function GET(
       payments,
       receivers,
       meta: meta ?? null,
+      uploadedVerificationByEmail: uploadedVerificationByEmail,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

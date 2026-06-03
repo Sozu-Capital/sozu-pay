@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import type { RecipientRow } from "@/lib/disbursements/csv";
+import {
+  receiversToRecipientRows,
+  type RecipientRow,
+} from "@/lib/disbursements/csv";
 import { normalizeVerificationForSdp } from "@/lib/disbursements/normalizeVerification";
 
 type Props = {
@@ -13,6 +16,7 @@ type Props = {
     external_id?: string;
     payment?: { amount?: string; verification_field_value?: string; verification?: string } | null;
   }>;
+  uploadedVerificationByEmail?: Record<string, string>;
   onSaved: () => void;
 };
 
@@ -24,26 +28,12 @@ const EMPTY: RecipientRow = {
   verification: "",
 };
 
-function receiversToRows(
-  receivers: Props["receivers"]
-): RecipientRow[] {
-  return receivers
-    .filter((r) => r.email?.trim())
-    .map((r) => ({
-      name: (r.external_id ?? r.email ?? "").replace(/_/g, " "),
-      email: r.email!.trim(),
-      phone: r.phone_number?.trim() ?? "",
-      amount: r.payment?.amount?.trim() ?? "",
-      verification:
-        normalizeVerificationForSdp(
-          r.payment?.verification_field_value?.trim() ??
-            r.payment?.verification?.trim() ??
-            ""
-        ) ?? "",
-    }));
-}
-
-export function EditDisbursementRecipients({ disbursementId, receivers, onSaved }: Props) {
+export function EditDisbursementRecipients({
+  disbursementId,
+  receivers,
+  uploadedVerificationByEmail = {},
+  onSaved,
+}: Props) {
   const t = useTranslations("disbursementsPage");
   const [editing, setEditing] = useState(false);
   const [rows, setRows] = useState<RecipientRow[]>([]);
@@ -52,8 +42,10 @@ export function EditDisbursementRecipients({ disbursementId, receivers, onSaved 
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (editing) setRows(receiversToRows(receivers));
-  }, [editing, receivers]);
+    if (editing) {
+      setRows(receiversToRecipientRows(receivers, uploadedVerificationByEmail));
+    }
+  }, [editing, receivers, uploadedVerificationByEmail]);
 
   function addRow() {
     if (!form.name.trim() || !form.email.trim()) return;
@@ -61,6 +53,11 @@ export function EditDisbursementRecipients({ disbursementId, receivers, onSaved 
     const verification = rawVerification
       ? (normalizeVerificationForSdp(rawVerification) ?? "")
       : "";
+    if (!verification) {
+      setError(t("errorMissingVerification"));
+      return;
+    }
+    setError(null);
     setRows((prev) => [...prev, { ...form, verification }]);
     setForm(EMPTY);
   }
@@ -69,18 +66,37 @@ export function EditDisbursementRecipients({ disbursementId, receivers, onSaved 
     setRows((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function updateRowVerification(index: number, value: string) {
+    setRows((prev) =>
+      prev.map((row, i) =>
+        i === index
+          ? { ...row, verification: normalizeVerificationForSdp(value) ?? value.trim() }
+          : row
+      )
+    );
+  }
+
   async function save() {
     if (rows.length === 0) {
       setError(t("errorNoRecipients"));
       return;
     }
+    const missingDob = rows.some((r) => !normalizeVerificationForSdp(r.verification ?? ""));
+    if (missingDob) {
+      setError(t("errorMissingVerification"));
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
+      const normalizedRows = rows.map((r) => ({
+        ...r,
+        verification: normalizeVerificationForSdp(r.verification ?? "") ?? "",
+      }));
       const res = await fetch(`/api/sdp/disbursements/${disbursementId}/recipients`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipients: rows }),
+        body: JSON.stringify({ recipients: normalizedRows }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -149,7 +165,7 @@ export function EditDisbursementRecipients({ disbursementId, receivers, onSaved 
         <input
           type="text"
           inputMode="numeric"
-          placeholder="1997-08-05"
+          placeholder={t("verificationPlaceholder")}
           value={form.verification}
           onChange={(e) => setForm((f) => ({ ...f, verification: e.target.value }))}
           onBlur={(e) => {
@@ -171,15 +187,36 @@ export function EditDisbursementRecipients({ disbursementId, receivers, onSaved 
       </button>
 
       {rows.length > 0 && (
-        <ul className="text-sm space-y-1 max-h-32 overflow-y-auto">
+        <ul className="text-sm space-y-2 max-h-48 overflow-y-auto">
           {rows.map((r, i) => (
-            <li key={`${r.email}-${i}`} className="flex justify-between gap-2 text-gray-700 dark:text-gray-300">
-              <span className="truncate">
-                {r.name} · {r.email} · {r.amount || "—"}
-              </span>
-              <button type="button" onClick={() => removeRow(i)} className="text-red-500 shrink-0 text-xs">
-                {t("removeRecipient")}
-              </button>
+            <li
+              key={`${r.email}-${i}`}
+              className="rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 space-y-2"
+            >
+              <div className="flex justify-between gap-2 text-gray-700 dark:text-gray-300">
+                <span className="truncate">
+                  {r.name} · {r.email} · {r.amount || "—"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeRow(i)}
+                  className="text-red-500 shrink-0 text-xs"
+                >
+                  {t("removeRecipient")}
+                </button>
+              </div>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder={t("verificationPlaceholder")}
+                value={r.verification ?? ""}
+                onChange={(e) => updateRowVerification(i, e.target.value)}
+                onBlur={(e) => {
+                  const n = normalizeVerificationForSdp(e.target.value);
+                  if (n && n !== e.target.value.trim()) updateRowVerification(i, n);
+                }}
+                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-950 px-2 py-1 text-xs font-mono"
+              />
             </li>
           ))}
         </ul>

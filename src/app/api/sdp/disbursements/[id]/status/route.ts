@@ -4,8 +4,8 @@ import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
 import {
   getDisbursement,
   pauseDisbursement,
-  startDisbursement,
 } from "@/lib/sdp/adminClient";
+import { distributeDisbursementPayments } from "@/lib/sdp/distributePayments";
 import {
   actorLabelFromUser,
   appendDisbursementAudit,
@@ -61,7 +61,7 @@ export async function PATCH(
         );
       }
       try {
-        await startDisbursement(id);
+        await distributeDisbursementPayments(id);
       } catch (e) {
         const raw = e instanceof Error ? e.message : String(e);
         const formatted = formatSdpStartError(raw);

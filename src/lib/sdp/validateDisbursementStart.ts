@@ -176,6 +176,13 @@ export function formatSdpStartError(raw: string): { code: string; error: string 
         `Use "Fund distribution" on the Disbursements page, then open a new passkey authorization and retry.`,
     };
   }
+  if (/not ready to be started/i.test(text)) {
+    return {
+      code: "ALREADY_STARTED",
+      error:
+        "This batch is already started. Use Distribuir to authorize payout release — SDP processes registered beneficiaries automatically when the distribution wallet is funded.",
+    };
+  }
   if (/409/.test(text)) {
     return { code: "SDP_CONFLICT", error: text.replace(/^SDP PATCH[^\n]*→\s*409:\s*/i, "").slice(0, 400) };
   }

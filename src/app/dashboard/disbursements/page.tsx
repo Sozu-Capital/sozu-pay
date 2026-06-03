@@ -74,8 +74,6 @@ interface DisbursementMeta {
 
 const CARD_ACTION_BTN =
   "px-3 py-1.5 rounded text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed";
-const AUTO_RELEASE_BTN =
-  "px-2 py-0.5 rounded text-[10px] font-medium leading-tight shrink-0 disabled:opacity-50 disabled:cursor-not-allowed";
 
 interface SdpReceiverRow {
   email?: string;
@@ -213,7 +211,7 @@ export default function DisbursementsPage() {
   const [authorizeDisbursementId, setAuthorizeDisbursementId] = useState<string | null>(null);
   const [authorizeAction, setAuthorizeAction] = useState<"start" | "commit" | null>(null);
   const [fundingId, setFundingId] = useState<string | null>(null);
-  const [releasingId, setReleasingId] = useState<string | null>(null);
+  const [togglingAutoId, setTogglingAutoId] = useState<string | null>(null);
   const [distributionUsdc, setDistributionUsdc] = useState<string>("0");
   const [distributionConfigured, setDistributionConfigured] = useState(false);
 
@@ -499,11 +497,39 @@ export default function DisbursementsPage() {
     setAuthorizeDisbursementId(id);
   }
 
-  function handleAutoRelease(id: string, name: string) {
-    if (!window.confirm(t("autoReleaseConfirm", { name }))) return;
+  function handleAutoReleaseToggle(id: string, name: string, currentlyActive: boolean) {
+    if (currentlyActive) {
+      void disableAutoRelease(id);
+      return;
+    }
     setActionMsg(null);
     setAuthorizeAction("commit");
     setAuthorizeDisbursementId(id);
+  }
+
+  async function disableAutoRelease(id: string) {
+    setTogglingAutoId(id);
+    setActionMsg(null);
+    try {
+      const res = await fetch(`/api/sdp/disbursements/${id}/auto-release`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: false }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setActionMsg(data.error ? `Error: ${data.error}` : `Error: ${res.status}`);
+        return;
+      }
+      setActionMsg(t("autoReleaseDisabled"));
+      await fetchList();
+      if (selectedId === id) await refreshDetail(id);
+    } catch (e) {
+      setActionMsg(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setTogglingAutoId(null);
+    }
   }
 
   async function completeStart(id: string, auth: DisbursementAuthorizeResult) {
@@ -528,7 +554,15 @@ export default function DisbursementsPage() {
       }
       setAuthorizeDisbursementId(null);
       setAuthorizeAction(null);
-      setActionMsg(t("disbursementStarted"));
+      if (typeof data.retried === "number" && data.retried > 0) {
+        setActionMsg(t("distributeRetried", { count: data.retried }));
+      } else if (typeof data.registeredPending === "number" && data.registeredPending > 0) {
+        setActionMsg(t("distributePending", { count: data.registeredPending }));
+      } else if (data.started) {
+        setActionMsg(t("disbursementStarted"));
+      } else {
+        setActionMsg(t("distributeComplete"));
+      }
       await fetchList();
       if (selectedId === id) await refreshDetail(id);
     } catch (e) {
@@ -629,33 +663,6 @@ export default function DisbursementsPage() {
       setActionMsg(e instanceof Error ? e.message : t("distributionTreasury.transferFailed"));
     } finally {
       setFundingId(null);
-    }
-  }
-
-  async function handleReleasePayments(id: string) {
-    setReleasingId(id);
-    setActionMsg(null);
-    try {
-      const res = await fetch(`/api/sdp/disbursements/${id}/release-payments`, {
-        method: "POST",
-        credentials: "include",
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setActionMsg(data.error ? `Error: ${data.error}` : `Error: ${res.status}`);
-        return;
-      }
-      if (data.retried > 0) {
-        setActionMsg(t("releasePaymentsSuccess", { count: data.retried }));
-      } else {
-        setActionMsg(data.message ?? t("releasePaymentsPending"));
-      }
-      await fetchList();
-      if (selectedId === id) await refreshDetail(id);
-    } catch (e) {
-      setActionMsg(e instanceof Error ? e.message : "Network error");
-    } finally {
-      setReleasingId(null);
     }
   }
 
@@ -1239,22 +1246,24 @@ export default function DisbursementsPage() {
           const batchRemaining = batchRemainingUsdc(d);
           const batchFunded =
             !distributionConfigured || parseFloat(distributionUsdc) >= batchRemaining;
-          const showRelease =
-            d.status === "STARTED" &&
-            (d.failed_payments > 0 ||
-              (selectedId === d.id &&
-                detail?.disbursement.id === d.id &&
-                detail.payments.some(
-                  (p) =>
-                    p.lifecycle_state === "live" &&
-                    p.payment_status.toUpperCase() !== "SUCCESS"
-                )));
+          const hasOutstandingPayments =
+            d.successful_payments < d.total_payments ||
+            d.failed_payments > 0 ||
+            (selectedId === d.id &&
+              detail?.disbursement.id === d.id &&
+              detail.payments.some((p) => {
+                const status = p.payment_status.toUpperCase();
+                return status !== "SUCCESS" && status !== "CANCELED";
+              }));
           const showDistribuir =
             isDisbursementAdmin &&
             invitesSent &&
-            (d.status === "DRAFT" || d.status === "READY" || d.status === "STARTED");
-          const showAutoRelease =
-            isDisbursementAdmin && invitesSent && !hotlinkActive && showDistribuir;
+            hasOutstandingPayments &&
+            (d.status === "DRAFT" ||
+              d.status === "READY" ||
+              d.status === "STARTED" ||
+              d.status === "PAUSED");
+          const showAutoReleaseToggle = isDisbursementAdmin && invitesSent;
 
           return (
           <div
@@ -1357,26 +1366,39 @@ export default function DisbursementsPage() {
                 <span className="text-sm font-semibold text-gray-900 dark:text-white hidden sm:inline">
                   {d.total_amount} {d.asset.code}
                 </span>
-                {hotlinkActive ? (
-                  <span
-                    className={`${AUTO_RELEASE_BTN} border border-amber-300/60 dark:border-amber-700/60 text-amber-700 dark:text-amber-300 bg-amber-50/80 dark:bg-amber-950/30`}
-                    title={t("autoReleaseActiveHint")}
+                {showAutoReleaseToggle ? (
+                  <label
+                    className="flex items-center gap-1.5 shrink-0 cursor-pointer select-none"
+                    title={hotlinkActive ? t("autoReleaseActiveHint") : t("autoReleaseHint")}
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    {t("autoReleaseActive")}
-                  </span>
-                ) : showAutoRelease ? (
-                  <button
-                    type="button"
-                    title={t("autoReleaseHint")}
-                    disabled={committingId === d.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleAutoRelease(d.id, d.name);
-                    }}
-                    className={`${AUTO_RELEASE_BTN} border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800`}
-                  >
-                    {committingId === d.id ? t("autoReleaseCommitting") : t("autoRelease")}
-                  </button>
+                    <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 hidden sm:inline">
+                      {t("autoRelease")}
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={hotlinkActive}
+                      aria-label={t("autoRelease")}
+                      disabled={
+                        togglingAutoId === d.id ||
+                        committingId === d.id ||
+                        (!hotlinkActive && !batchFunded && batchRemaining > 0)
+                      }
+                      onClick={() => handleAutoReleaseToggle(d.id, d.name, hotlinkActive)}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/50 disabled:opacity-40 ${
+                        hotlinkActive
+                          ? "bg-amber-500"
+                          : "bg-gray-300 dark:bg-gray-600"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                          hotlinkActive ? "translate-x-4" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </label>
                 ) : null}
                 <svg
                   className={`w-4 h-4 text-gray-400 transition-transform ${
@@ -1436,21 +1458,20 @@ export default function DisbursementsPage() {
                     <button
                       type="button"
                       onClick={() => handleStart(d.id)}
-                      disabled={startingId === d.id}
-                      title={!invitesSent ? t("startPaymentsDisabledHint") : undefined}
+                      disabled={startingId === d.id || (!batchFunded && batchRemaining > 0)}
+                      title={
+                        !batchFunded && batchRemaining > 0
+                          ? t("fundBatchHint", {
+                              amount: formatBatchAmount(batchRemaining),
+                              asset: d.asset.code,
+                            })
+                          : !invitesSent
+                            ? t("startPaymentsDisabledHint")
+                            : undefined
+                      }
                       className={`${CARD_ACTION_BTN} bg-green-600 text-white hover:bg-green-700 disabled:opacity-40`}
                     >
                       {startingId === d.id ? t("starting") : t("startPayments")}
-                    </button>
-                  )}
-                  {showRelease && (
-                    <button
-                      type="button"
-                      onClick={() => void handleReleasePayments(d.id)}
-                      disabled={releasingId === d.id}
-                      className={`${CARD_ACTION_BTN} bg-teal-600 text-white hover:bg-teal-700`}
-                    >
-                      {releasingId === d.id ? t("releasePaymentsRunning") : t("releasePayments")}
                     </button>
                   )}
                   {canEdit && detail?.disbursement.id === d.id && detail.receivers && (

@@ -12,6 +12,7 @@ export type DisbursementAuditAction =
   | "invites_sent"
   | "payments_started"
   | "hotlink_committed"
+  | "hotlink_disabled"
   | "campaign_paused"
   | "campaign_resumed"
   | "recipient_added"
@@ -399,7 +400,24 @@ export function markHotlinkCommitted(
     action: "hotlink_committed",
     actorUserId: actor.userId,
     actorLabel: actor.label,
-    message: "Hotlink enabled — recipients can claim funds without further NGO approval",
+    message: "Auto pay enabled — SDP releases funds when beneficiaries finish registration",
+  });
+  persistMetaToSupabase(meta);
+}
+
+export function clearHotlinkCommitted(
+  disbursementId: string,
+  actor: { userId: string; label: string }
+): void {
+  const meta = ensureDisbursementMeta(disbursementId);
+  delete meta.hotlinkAt;
+  delete meta.hotlinkBy;
+  delete meta.hotlinkByLabel;
+  appendDisbursementAudit(disbursementId, {
+    action: "hotlink_disabled",
+    actorUserId: actor.userId,
+    actorLabel: actor.label,
+    message: "Auto pay disabled — use Distribuir to release payments manually",
   });
   persistMetaToSupabase(meta);
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { requireDisbursementAuthorized } from "@/lib/auth/disbursement-auth";
-import { startDisbursement } from "@/lib/sdp/adminClient";
+import { distributeDisbursementPayments } from "@/lib/sdp/distributePayments";
 import {
   consumeSigningSession,
   getSigningSession,
@@ -112,8 +112,9 @@ export async function POST(
     );
   }
 
+  let distributeResult: Awaited<ReturnType<typeof distributeDisbursementPayments>>;
   try {
-    await startDisbursement(disbursementId);
+    distributeResult = await distributeDisbursementPayments(disbursementId);
   } catch (e) {
     const raw = e instanceof Error ? e.message : String(e);
     const formatted = formatSdpStartError(raw);
@@ -139,7 +140,7 @@ export async function POST(
 
     appendAuditEvent(
       "disbursement_started",
-      `Batch disbursement "${signingSession.disbursementName}" started (passkey authorized by ${actorLabel})`,
+      `Batch disbursement "${signingSession.disbursementName}" distributed (passkey authorized by ${actorLabel})`,
       session.id,
       {
         signerWallet: consumed.session.contractId,
@@ -157,10 +158,12 @@ export async function POST(
       details: {
         contractId: consumed.session.contractId,
         credentialId: consumed.session.credentialId,
+        retried: distributeResult.retried,
+        registeredPending: distributeResult.registeredPending,
       },
     });
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, ...distributeResult });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[api/sdp/disbursements/[id]/start] post-start bookkeeping", msg);

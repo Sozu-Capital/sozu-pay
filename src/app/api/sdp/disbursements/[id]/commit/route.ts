@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { requireDisbursementAuthorized } from "@/lib/auth/disbursement-auth";
-import { getDisbursement, startDisbursement } from "@/lib/sdp/adminClient";
+import { getDisbursement } from "@/lib/sdp/adminClient";
+import { distributeDisbursementPayments } from "@/lib/sdp/distributePayments";
 import {
   consumeSigningSession,
   getSigningSession,
@@ -98,13 +99,13 @@ export async function POST(
 
   try {
     const disbursement = await getDisbursement(disbursementId);
-    if (disbursement.status === "DRAFT" || disbursement.status === "READY") {
+    if (disbursement.status === "DRAFT" || disbursement.status === "READY" || disbursement.status === "PAUSED") {
       try {
-        await startDisbursement(disbursementId);
+        await distributeDisbursementPayments(disbursementId);
       } catch (e) {
         const raw = e instanceof Error ? e.message : String(e);
         const formatted = formatSdpStartError(raw);
-        console.error("[api/sdp/disbursements/[id]/commit] startDisbursement", raw);
+        console.error("[api/sdp/disbursements/[id]/commit] distribute", raw);
         return NextResponse.json({ error: formatted.error, code: formatted.code }, { status: 400 });
       }
       markPaymentsStarted(disbursementId, actor, disbursement.name);

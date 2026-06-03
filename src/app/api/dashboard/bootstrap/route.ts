@@ -34,7 +34,7 @@ export async function GET() {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const orgId = user.org_id ?? session.orgId ?? null;
+  const orgId = session.orgId ?? null;
   const org_payout_wallet_public_key = getOrgDisbursementPublicKey();
 
   // Load org and smart account in parallel — only 2 DB calls total.

@@ -131,16 +131,38 @@ export async function preflightDisbursementStart(params: {
   });
 }
 
+/** Extract human-readable SDP error text from adminClient throw messages. */
+function extractSdpErrorBody(raw: string): string {
+  const text = raw.trim();
+  const jsonStart = text.indexOf("{");
+  if (jsonStart >= 0) {
+    try {
+      const parsed = JSON.parse(text.slice(jsonStart)) as { error?: string; message?: string };
+      if (typeof parsed.error === "string" && parsed.error.trim()) return parsed.error.trim();
+      if (typeof parsed.message === "string" && parsed.message.trim()) return parsed.message.trim();
+    } catch {
+      // fall through
+    }
+  }
+  return text.replace(/^SDP \w+[^\n]*→\s*\d+:\s*/i, "").trim();
+}
+
 /** Turn raw SDP PATCH /status errors into dashboard-friendly messages. */
 export function formatSdpStartError(raw: string): { code: string; error: string } {
-  const text = raw.trim();
-  if (/insufficient.*balance|409.*balance/i.test(text)) {
-    const amountMatch = text.match(/at least ([\d.]+)/i);
+  const extracted = extractSdpErrorBody(raw);
+  const text = extracted.toLowerCase();
+
+  if (
+    /account balance|insufficient|distribution account|needs to be recharged|recharged with at least/i.test(
+      text
+    )
+  ) {
+    const amountMatch = extracted.match(/at least ([\d.]+)/i);
     const required = amountMatch?.[1] ?? "?";
     return {
       code: "SDP_DISTRIBUTION_UNDERFUNDED",
       error:
-        `SDP could not start this batch automatically (needs at least ${required} USDC in its distribution account). ` +
+        `SDP could not auto-start this batch (Railway distribution account needs at least ${required} USDC). ` +
         `Invites were still sent — use Distribuir to pay from your org smart account once beneficiaries register.`,
     };
   }
@@ -151,8 +173,11 @@ export function formatSdpStartError(raw: string): { code: string; error: string 
         "This batch is already started. Use Distribuir to pay registered beneficiaries from your org smart account.",
     };
   }
-  if (/409/.test(text)) {
-    return { code: "SDP_CONFLICT", error: text.replace(/^SDP PATCH[^\n]*→\s*409:\s*/i, "").slice(0, 400) };
+  if (/409/.test(raw)) {
+    return {
+      code: "SDP_CONFLICT",
+      error: extracted.length > 400 ? `${extracted.slice(0, 400)}…` : extracted,
+    };
   }
-  return { code: "SDP_START_FAILED", error: text.length > 400 ? `${text.slice(0, 400)}…` : text };
+  return { code: "SDP_START_FAILED", error: extracted.length > 400 ? `${extracted.slice(0, 400)}…` : extracted };
 }

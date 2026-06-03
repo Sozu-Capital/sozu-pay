@@ -14,7 +14,7 @@ export function sessionUserFromDbUser(user: User): SessionUser {
     email: user.email,
     username: user.username ?? undefined,
     twoFactorEnabled: false,
-    orgId: user.org_id,
+    // Org context is chosen on /onboarding/organizations after each login (set-org).
   };
 }
 

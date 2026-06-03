@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
+import { formatCompactUsd } from "@/lib/format-compact-usd";
 
 type Props = {
   treasuryUsdc: string;
@@ -87,14 +88,6 @@ export function TreasuryDistributionDonut({
     });
   }, [segments, total]);
 
-  const fmt = (n: number) =>
-    new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(n);
-
   return (
     <div className={`flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:gap-6 ${className}`}>
       <div className="relative shrink-0">
@@ -104,7 +97,12 @@ export function TreasuryDistributionDonut({
           ))}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-2">
-          <span className="text-sm font-semibold text-gray-900 dark:text-white">{fmt(total)}</span>
+          <span className="text-[10px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            {t("donutTotal")}
+          </span>
+          <span className="text-lg font-bold text-gray-900 dark:text-white tabular-nums leading-tight">
+            {formatCompactUsd(total)}
+          </span>
         </div>
       </div>
       <ul className="space-y-2 text-sm min-w-[10rem]">
@@ -118,7 +116,7 @@ export function TreasuryDistributionDonut({
               {seg.id === "treasury" ? t("orgTreasury") : t("sdpDistribution")}
             </span>
             <span className="font-medium text-gray-900 dark:text-white tabular-nums">
-              {total > 0 ? `${seg.pct.toFixed(0)}%` : "—"}
+              {total > 0 ? formatCompactUsd(seg.amount) : "—"}
             </span>
           </li>
         ))}

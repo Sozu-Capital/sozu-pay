@@ -57,7 +57,7 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
   const user = await getUserBySessionId(session.id);
   if (!user) return null;
 
-  const orgId = user.org_id ?? session.orgId ?? null;
+  const orgId = session.orgId ?? null;
   const org_payout_wallet_public_key = getOrgDisbursementPublicKey();
 
   const [org, memberSa] = await Promise.all([

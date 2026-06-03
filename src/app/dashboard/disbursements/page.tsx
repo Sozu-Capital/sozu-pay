@@ -821,13 +821,16 @@ export default function DisbursementsPage() {
         setActionMsg(`Error: ${data.error ?? res.status}`);
         return;
       }
-      setActionMsg(
-        data.startWarning
-          ? `${data.campaignStarted ? t("invitesSentAndStarted", { sent: data.sent, skipped: data.skipped, failed: data.failed }) : t("invitesSent", { sent: data.sent, skipped: data.skipped, failed: data.failed })} · ${data.startWarning}`
-          : data.campaignStarted
-            ? t("invitesSentAndStarted", { sent: data.sent, skipped: data.skipped, failed: data.failed })
-            : t("invitesSent", { sent: data.sent, skipped: data.skipped, failed: data.failed })
-      );
+      const inviteSummary = data.campaignStarted
+        ? t("invitesSentAndStarted", { sent: data.sent, skipped: data.skipped, failed: data.failed })
+        : t("invitesSent", { sent: data.sent, skipped: data.skipped, failed: data.failed });
+      const startNote =
+        data.startWarningCode === "SDP_DISTRIBUTION_UNDERFUNDED"
+          ? t("sdpStartSkippedUseDistribuir")
+          : typeof data.startWarning === "string" && data.startWarning.trim()
+            ? data.startWarning.trim()
+            : null;
+      setActionMsg(startNote ? `${inviteSummary} · ${startNote}` : inviteSummary);
       await fetchList();
       if (selectedId === id) await refreshDetail(id);
     } catch (e) {
@@ -1435,7 +1438,7 @@ export default function DisbursementsPage() {
           const canEdit = DELETABLE_DISBURSEMENT_STATUSES.has(d.status);
           const batchRemaining = batchRemainingUsdc(d, meta);
           const batchFunded =
-            batchRemaining <= 0 || parseFloat(orgCombinedUsdc) >= batchRemaining;
+            batchRemaining <= 0 || parseFloat(distributionUsdc) >= batchRemaining;
           const hasOutstandingPayments =
             d.status !== "COMPLETED" &&
             (d.successful_payments < d.total_payments ||
@@ -1610,6 +1613,39 @@ export default function DisbursementsPage() {
                   />
                 </svg>
               </div>
+              {isDisbursementAdmin && batchRemaining > 0 ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleFundBatch(d.id, batchRemaining);
+                  }}
+                  disabled={fundingId === d.id || !kitReady || !distributionConfigured}
+                  title={
+                    !distributionConfigured
+                      ? t("distributionTreasury.notConfigured")
+                      : t("fundBatchHint", {
+                          amount: formatBatchAmount(batchRemaining),
+                          asset: d.asset.code,
+                        })
+                  }
+                  className="ml-2 shrink-0 inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  </span>
+                  <span className="hidden sm:inline">
+                    {fundingId === d.id ? t("fundBatchSigning") : t("fundBatch")}
+                  </span>
+                </button>
+              ) : null}
             </div>
 
             {/* Expanded detail */}
@@ -1641,24 +1677,6 @@ export default function DisbursementsPage() {
                       {sendingId === d.id ? t("sending") : t("sendInvites")}
                     </button>
                   ) : null}
-                  {isDisbursementAdmin && batchRemaining > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => void handleFundBatch(d.id, batchRemaining)}
-                      disabled={fundingId === d.id || !kitReady || !distributionConfigured}
-                      title={
-                        !distributionConfigured
-                          ? t("distributionTreasury.notConfigured")
-                          : t("fundBatchHint", {
-                              amount: formatBatchAmount(batchRemaining),
-                              asset: d.asset.code,
-                            })
-                      }
-                      className={`${CARD_ACTION_BTN} bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40`}
-                    >
-                      {fundingId === d.id ? t("fundBatchSigning") : t("fundBatch")}
-                    </button>
-                  )}
                   {showDistribuir && (
                     <button
                       type="button"

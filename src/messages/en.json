@@ -1009,6 +1009,7 @@
     "distributePaidMany": "{count} payments sent successfully.",
     "distributeFailed": "Could not complete payment. Check disbursement contract balance and try again.",
     "invitesSent": "Invites sent: {sent} sent, {skipped} skipped (already registered), {failed} failed.",
+    "sdpStartSkippedUseDistribuir": "SDP could not auto-start the campaign (Railway distribution account is unfunded). Invites were sent — use Distribuir to pay from your org smart account once beneficiaries register.",
     "deleteBatch": "Delete batch",
     "deleting": "Deleting…",
     "deleteConfirm": "Delete batch \"{name}\"? This cannot be undone.",

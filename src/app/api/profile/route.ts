@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSession, setSession } from "@/lib/auth/session";
+import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
@@ -58,14 +58,6 @@ export async function GET() {
         ? "legacy"
         : null;
   const org_has_recovery = !!(org?.recovery_encrypted_secret);
-
-  if (user.org_id && session.orgId !== user.org_id) {
-    try {
-      await setSession({ ...session, orgId: user.org_id });
-    } catch {
-      // non-fatal
-    }
-  }
 
   return NextResponse.json({
     email: user.email,

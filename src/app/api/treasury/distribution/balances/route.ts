@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
 import { getOrganizationForUser } from "@/lib/db/organizations";
-import { fetchDistributionBalances } from "@/lib/stellar/distribution-transfer";
-import { isOrgDistributionConfigured } from "@/lib/sdp/org-distribution";
+import { fetchDistributionBalances, isTreasuryDistributionFundingConfigured } from "@/lib/stellar/distribution-transfer";
 
 /**
  * GET /api/treasury/distribution/balances
@@ -24,7 +23,7 @@ export async function GET() {
   try {
     const balances = await fetchDistributionBalances(org);
     return NextResponse.json({
-      configured: isOrgDistributionConfigured(org),
+      configured: isTreasuryDistributionFundingConfigured(org),
       ...balances,
     });
   } catch (e) {

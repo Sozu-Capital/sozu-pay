@@ -1078,6 +1078,7 @@
     "distributePaidMany": "{count} pagos enviados correctamente.",
     "distributeFailed": "No se pudo completar el pago. Verificá el saldo del contrato de desembolso e intentá de nuevo.",
     "invitesSent": "Invitaciones enviadas: {sent} enviadas, {skipped} omitidas (ya registradas), {failed} fallidas.",
+    "sdpStartSkippedUseDistribuir": "SDP no pudo iniciar la campaña (falta saldo en la cuenta de distribución de Railway). Las invitaciones se enviaron — use Distribuir para pagar desde la cuenta inteligente de su organización cuando los beneficiarios se registren.",
     "deleteBatch": "Eliminar lote",
     "deleting": "Eliminando…",
     "deleteConfirm": "¿Eliminar el lote \"{name}\"? Esta acción no se puede deshacer.",
@@ -1147,6 +1148,8 @@
     "distributionTreasury": {
       "title": "Billetera de distribución SDP",
       "subtitle": "Mové USDC entre la tesorería de tu org (Soroban) y la cuenta de distribución de SDP antes de iniciar pagos. Requiere passkey — puede pedirte firmar dos veces si los fondos salen de la tesorería org.",
+      "donutSubtitle": "Saldo org (Soroban) vs cuenta de distribución SDP en Railway. Fondeá cada lote desde su tarjeta antes de enviar invitaciones o distribuir.",
+      "donutTotal": "Total USDC",
       "orgTreasury": "Tesorería org (Soroban)",
       "sdpDistribution": "Distribución SDP (Stellar)",
       "amountLabel": "Monto (USDC)",

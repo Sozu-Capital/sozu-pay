@@ -12,7 +12,7 @@ import {
 } from "@/lib/stellar/distribution-transfer";
 import { resolveOrgTreasuryContractId } from "@/lib/stellar/org-treasury";
 import { formatSorobanPayoutError } from "@/lib/stellar/soroban-payout-errors";
-import { resolveOrgDistributionPublicKey } from "@/lib/sdp/org-distribution";
+import { readDistributionPublicKey } from "@/lib/sdp/distributionAccount";
 import { LOCALE_COOKIE, readServerLocaleCookie } from "@/lib/i18n/locale";
 
 type TransferDirection = "to_distribution" | "to_treasury";
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
 
   const locale = readServerLocaleCookie((await cookies()).get(LOCALE_COOKIE)?.value);
   const actorLabel = actorLabelFromUser(auth.user);
-  const distributionPk = resolveOrgDistributionPublicKey(org) ?? "";
+  const distributionPk = readDistributionPublicKey() || "";
 
   try {
     if (direction === "to_distribution") {

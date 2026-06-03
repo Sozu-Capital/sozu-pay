@@ -28,8 +28,6 @@ import {
   readDistributionSecret,
 } from "@/lib/sdp/distributionAccount";
 import {
-  isOrgDistributionConfigured,
-  isOrgDistributionSweepBackEnabled,
   resolveOrgDistributionPublicKey,
   resolveOrgDistributionSecret,
 } from "@/lib/sdp/org-distribution";
@@ -59,10 +57,25 @@ export type DistributionBalances = {
   sweepBackEnabled: boolean;
 };
 
+/** Org Soroban payout + Railway SDP distribution key (shared tenant account). */
+export function isTreasuryDistributionFundingConfigured(org: Organization): boolean {
+  const sdpPk = readDistributionPublicKey();
+  return sdpPk.startsWith("G") && Boolean(resolveOrgDisbursementContractId(org));
+}
+
+function resolveSdpDistributionPublicKey(): string | null {
+  const pk = readDistributionPublicKey().trim().replace(/^stellar:/i, "");
+  return pk.startsWith("G") ? pk : null;
+}
+
+function resolveSdpDistributionSecret(): string | null {
+  return readDistributionSecret();
+}
+
 export async function fetchDistributionBalances(org: Organization): Promise<DistributionBalances> {
   const treasuryContractId = resolveOrgTreasuryContractId(org);
   const disbursementContractId = resolveOrgDisbursementContractId(org);
-  const distributionPublicKey = resolveOrgDistributionPublicKey(org);
+  const distributionPublicKey = resolveSdpDistributionPublicKey();
 
   let treasuryUsdc = "0";
   let disbursementUsdc = "0";
@@ -86,6 +99,9 @@ export async function fetchDistributionBalances(org: Organization): Promise<Dist
     distributionUsdc = await getUsdcBalance(distributionPublicKey);
   }
 
+  const sweepSecret =
+    resolveOrgDistributionSecret(org) ?? resolveSdpDistributionSecret();
+
   return {
     treasuryContractId,
     disbursementContractId,
@@ -94,7 +110,7 @@ export async function fetchDistributionBalances(org: Organization): Promise<Dist
     disbursementUsdc,
     distributionPublicKey,
     distributionUsdc,
-    sweepBackEnabled: isOrgDistributionSweepBackEnabled(org),
+    sweepBackEnabled: Boolean(distributionPublicKey && sweepSecret),
   };
 }
 
@@ -117,10 +133,12 @@ export async function buildUnsignedTreasuryToDistributionTransfer(params: {
   amount: string;
 }> {
   const distributionRaw =
-    params.distributionPublicKey ?? resolveOrgDistributionPublicKey(params.org);
-  const distribution = (distributionRaw ?? "").trim().toUpperCase();
+    params.distributionPublicKey ?? resolveSdpDistributionPublicKey() ?? "";
+  const distribution = distributionRaw.trim().toUpperCase();
   if (!distribution.startsWith("G")) {
-    throw new Error("SDP distribution public key is not configured or invalid.");
+    throw new Error(
+      "Railway SDP distribution public key is not configured (SDP_DISTRIBUTION_PUBLIC_KEY)."
+    );
   }
 
   const disbursementContractId = resolveOrgDisbursementContractId(params.org);
@@ -153,16 +171,17 @@ export async function transferDistributionToTreasury(params: {
   amount: string;
   treasuryContractId: string;
 }): Promise<string> {
-  const secret = resolveOrgDistributionSecret(params.org);
+  const secret = resolveOrgDistributionSecret(params.org) ?? resolveSdpDistributionSecret();
   if (!secret) {
     throw new Error(
-      "Distribution sweep-back is not configured for this organization."
+      "Distribution sweep-back is not configured (SDP_DISTRIBUTION_SEED on Railway)."
     );
   }
 
-  const distributionPk = resolveOrgDistributionPublicKey(params.org);
+  const distributionPk =
+    resolveSdpDistributionPublicKey() ?? resolveOrgDistributionPublicKey(params.org);
   if (!distributionPk) {
-    throw new Error("Organization distribution public key is not configured.");
+    throw new Error("SDP distribution public key is not configured.");
   }
 
   const amountNum = parseFloat(params.amount);

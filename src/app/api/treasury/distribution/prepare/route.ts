@@ -5,12 +5,9 @@ import { getOrganizationForUser } from "@/lib/db/organizations";
 import {
   buildUnsignedTreasuryToDistributionTransfer,
   fetchDistributionBalances,
+  isTreasuryDistributionFundingConfigured,
 } from "@/lib/stellar/distribution-transfer";
-import {
-  isOrgDistributionConfigured,
-  isOrgDistributionSweepBackEnabled,
-  resolveOrgDistributionPublicKey,
-} from "@/lib/sdp/org-distribution";
+import { readDistributionPublicKey } from "@/lib/sdp/distributionAccount";
 import { resolveOrgTreasuryContractId } from "@/lib/stellar/org-treasury";
 import { PayoutFundsError, formatPayoutFundsError } from "@/lib/stellar/soroban-payout-errors";
 import { cookies } from "next/headers";
@@ -39,11 +36,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Organization not found." }, { status: 404 });
   }
 
-  if (!isOrgDistributionConfigured(org)) {
+  if (!isTreasuryDistributionFundingConfigured(org)) {
     return NextResponse.json(
       {
         error:
-          "Your organization does not have a distribution wallet yet. Complete org wallet setup first.",
+          "Org Soroban treasury or Railway SDP distribution key is not configured. Set up your org smart wallet and SDP_DISTRIBUTION_PUBLIC_KEY.",
         code: "DISTRIBUTION_NOT_CONFIGURED",
       },
       { status: 400 }
@@ -68,11 +65,12 @@ export async function POST(request: NextRequest) {
 
   try {
     if (direction === "to_treasury") {
-      if (!isOrgDistributionSweepBackEnabled(org)) {
+      const balances = await fetchDistributionBalances(org);
+      if (!balances.sweepBackEnabled) {
         return NextResponse.json(
           {
             error:
-              "Sweep-back is not configured for this organization's distribution wallet.",
+              "Sweep-back is not configured (SDP_DISTRIBUTION_SEED on Railway).",
             code: "SWEEP_BACK_NOT_CONFIGURED",
           },
           { status: 400 }
@@ -87,7 +85,6 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const balances = await fetchDistributionBalances(org);
       const distributionBal = parseFloat(balances.distributionUsdc) || 0;
       const amountNum = parseFloat(amount);
       if (distributionBal + 1e-9 < amountNum) {
@@ -104,7 +101,7 @@ export async function POST(request: NextRequest) {
         direction,
         amount,
         requiresPasskey: true,
-        distributionPublicKey: resolveOrgDistributionPublicKey(org),
+        distributionPublicKey: balances.distributionPublicKey ?? readDistributionPublicKey(),
         treasuryContractId,
         distributionUsdc: balances.distributionUsdc,
       });

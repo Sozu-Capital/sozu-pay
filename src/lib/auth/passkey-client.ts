@@ -257,5 +257,5 @@ export async function loginWithPin(params: {
     }
     throw new Error(data.error ?? "PIN login failed");
   }
-  return { redirect: data.redirect ?? "/dashboard" };
+  return { redirect: data.redirect ?? "/onboarding/organizations" };
 }

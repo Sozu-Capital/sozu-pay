@@ -130,6 +130,7 @@ export async function POST(
     // Best-effort START so SDP moves receiver wallets toward READY; Soroban payouts do not need SDP TSS funded.
     let campaignStarted = disbursement.status.toUpperCase() === "STARTED";
     let startWarning: string | undefined;
+    let startWarningCode: string | undefined;
     if (disbursement.status === "DRAFT" || disbursement.status === "READY") {
       try {
         await startDisbursement(id);
@@ -137,6 +138,7 @@ export async function POST(
       } catch (e) {
         const raw = e instanceof Error ? e.message : String(e);
         const formatted = formatSdpStartError(raw);
+        startWarningCode = formatted.code;
         startWarning = formatted.error;
         console.warn("[send-invites] startDisbursement failed (continuing with invites):", raw);
       }
@@ -266,6 +268,7 @@ export async function POST(
       failed: failedCount,
       campaignStarted,
       startWarning,
+      startWarningCode,
       results,
     });
   } catch (e) {

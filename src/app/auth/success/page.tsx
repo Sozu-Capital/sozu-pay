@@ -8,7 +8,7 @@ export default function AuthSuccessPage() {
 
   useEffect(() => {
     const t = setTimeout(() => {
-      router.replace("/dashboard");
+      router.replace("/onboarding/organizations");
     }, 2200);
     return () => clearTimeout(t);
   }, [router]);
@@ -38,7 +38,7 @@ export default function AuthSuccessPage() {
           Auth successful
         </h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Taking you to your dashboard…
+          Choose your organization…
         </p>
       </div>
     </main>

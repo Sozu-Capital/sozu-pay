@@ -69,16 +69,7 @@ export function middleware(request: NextRequest) {
     if (returnTo && returnTo.startsWith("/")) {
       return NextResponse.redirect(new URL(returnTo, request.url));
     }
-    if (usePasskeyAuth) {
-      // Peek at the session payload (no HMAC check needed for redirect decisions).
-      // Users with an orgId already set go straight to /dashboard.
-      const orgId = peekOrgIdFromSessionCookie(session);
-      if (orgId) {
-        return NextResponse.redirect(new URL("/dashboard", request.url));
-      }
-      return NextResponse.redirect(new URL("/onboarding/organizations", request.url));
-    }
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL("/onboarding/organizations", request.url));
   }
 
   const isDashboard = pathname.startsWith("/dashboard");
@@ -90,6 +81,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(
       homeUrl(request, { returnTo: pathname + request.nextUrl.search })
     );
+  }
+
+  if (isDashboard && session && usePasskeyAuth && !AUTH_MOCK) {
+    const orgId = peekOrgIdFromSessionCookie(session);
+    if (!orgId) {
+      return NextResponse.redirect(new URL("/onboarding/organizations", request.url));
+    }
   }
 
   if (isSdpRegister && !session) {

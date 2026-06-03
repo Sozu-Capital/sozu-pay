@@ -5,9 +5,10 @@ import { getDisbursement, listReceivers } from "@/lib/sdp/adminClient";
 import { mapReceiverToBeneficiaryRow } from "@/lib/sdp/receiverDisplay";
 import {
   getDisbursementAudit,
-  getDisbursementMeta,
+  getDisbursementMetaAsync,
   syncPaymentAuditEvents,
 } from "@/lib/disbursements/store";
+import { applyManualPaymentsToBeneficiaryRows } from "@/lib/disbursements/payableReceivers";
 
 /** GET /api/sdp/disbursements/[id]/audit */
 export async function GET(
@@ -23,11 +24,15 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const [disbursement, receivers] = await Promise.all([
+    const [disbursement, receivers, meta] = await Promise.all([
       getDisbursement(id),
       listReceivers(id),
+      getDisbursementMetaAsync(id),
     ]);
-    const payments = receivers.map((r) => mapReceiverToBeneficiaryRow(r, new Map(), new Map()));
+    const payments = applyManualPaymentsToBeneficiaryRows(
+      receivers.map((r) => mapReceiverToBeneficiaryRow(r, new Map(), new Map())),
+      meta?.manualPayments ?? {}
+    );
     syncPaymentAuditEvents(
       id,
       payments.map((p) => ({
@@ -39,7 +44,7 @@ export async function GET(
     );
 
     return NextResponse.json({
-      meta: getDisbursementMeta(id) ?? null,
+      meta: meta ?? null,
       disbursement: {
         id: disbursement.id,
         name: disbursement.name,

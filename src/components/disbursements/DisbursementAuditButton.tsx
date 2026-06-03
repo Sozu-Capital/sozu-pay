@@ -3,12 +3,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
+const STELLAR_EXPERT =
+  process.env.NEXT_PUBLIC_STELLAR_NETWORK === "public"
+    ? "https://stellar.expert/explorer/public"
+    : "https://stellar.expert/explorer/testnet";
+
 interface AuditEvent {
   id: string;
   at: string;
   action: string;
   actorLabel: string;
   message: string;
+  metadata?: Record<string, string>;
 }
 
 type Props = {
@@ -94,14 +100,28 @@ export function DisbursementAuditButton({ disbursementId, disbursementName }: Pr
               <p className="text-xs text-gray-500 dark:text-gray-400 px-1 py-2">{t("auditEmpty")}</p>
             )}
             <ul className="space-y-2">
-              {events.map((ev) => (
-                <li key={ev.id} className="text-xs px-1">
-                  <p className="text-gray-800 dark:text-gray-200">{ev.message}</p>
-                  <p className="text-gray-500 dark:text-gray-500 mt-0.5">
-                    {new Date(ev.at).toLocaleString()} · {ev.actorLabel}
-                  </p>
-                </li>
-              ))}
+              {events.map((ev) => {
+                const txHash = ev.metadata?.txHash?.trim();
+                return (
+                  <li key={ev.id} className="text-xs px-1">
+                    <p className="text-gray-800 dark:text-gray-200">{ev.message}</p>
+                    {txHash ? (
+                      <a
+                        href={`${STELLAR_EXPERT}/tx/${txHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 inline-block font-mono text-blue-600 dark:text-blue-400 hover:underline"
+                        title={txHash}
+                      >
+                        {t("auditViewTx", { hash: `${txHash.slice(0, 10)}…` })}
+                      </a>
+                    ) : null}
+                    <p className="text-gray-500 dark:text-gray-500 mt-0.5">
+                      {new Date(ev.at).toLocaleString()} · {ev.actorLabel}
+                    </p>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </div>

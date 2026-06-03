@@ -19,6 +19,10 @@ import {
   ensureDisbursementMeta,
   getAllDisbursementMetaAsync,
 } from "@/lib/disbursements/store";
+import {
+  isDisbursementArchived,
+  overlayDisbursementStats,
+} from "@/lib/disbursements/mergeDisbursementStats";
 import { getUserBySessionId } from "@/lib/db/users";
 import { verificationByEmailFromCsv } from "@/lib/disbursements/csv";
 import { normalizeDisbursementCsvText, findInvalidVerificationRows } from "@/lib/disbursements/normalizeVerification";
@@ -51,12 +55,23 @@ export async function GET() {
     );
 
     const wallets = await listWallets();
+    let meta = await getAllDisbursementMetaAsync();
+
     for (const d of disbursements) {
-      archiveCompletedIfNeeded({ disbursement: d });
+      const overlaid = overlayDisbursementStats(d, meta[d.id]);
+      if (overlaid.status === "COMPLETED" && !isDisbursementArchived(meta[d.id])) {
+        archiveCompletedIfNeeded({ disbursement: overlaid });
+      }
     }
-    const meta = await getAllDisbursementMetaAsync();
+    meta = await getAllDisbursementMetaAsync();
+
+    const activeDisbursements = disbursements
+      .filter((d) => !isDisbursementArchived(meta[d.id]))
+      .map((d) => overlayDisbursementStats(d, meta[d.id]))
+      .filter((d) => d.status !== "COMPLETED");
+
     return NextResponse.json({
-      disbursements,
+      disbursements: activeDisbursements,
       wallets,
       assets,
       meta,

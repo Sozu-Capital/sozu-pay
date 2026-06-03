@@ -14,8 +14,10 @@ import {
   getDisbursementMetaAsync,
   mergedUploadedVerificationsAsync,
   syncPaymentAuditEvents,
+  maybeArchiveCompletedDisbursement,
 } from "@/lib/disbursements/store";
 import { applyManualPaymentsToBeneficiaryRows } from "@/lib/disbursements/payableReceivers";
+import { overlayDisbursementStats } from "@/lib/disbursements/mergeDisbursementStats";
 import { fetchBeneficiarySozuTags, upsertBeneficiarySozuTags } from "@/lib/db/beneficiary-sozu-tags";
 
 /**
@@ -106,8 +108,11 @@ export async function GET(
       }))
     );
 
+    const overlaidDisbursement = overlayDisbursementStats(disbursement, meta ?? undefined);
+    maybeArchiveCompletedDisbursement(disbursement, meta ?? undefined);
+
     return NextResponse.json({
-      disbursement,
+      disbursement: overlaidDisbursement,
       payments,
       receivers,
       meta: meta ?? null,
@@ -119,7 +124,7 @@ export async function GET(
   }
 }
 
-/** DELETE /api/sdp/disbursements/[id] — remove a DRAFT or READY batch (admin only). */
+/** DELETE /api/sdp/disbursements/[id] — archive or hard-delete a batch (admin only). */
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -136,16 +141,28 @@ export async function DELETE(
     const existing = await getDisbursement(id);
     const user = await getUserBySessionId(session.id);
     const label = user ? actorLabelFromUser(user) : session.id;
-    const deleted = await deleteDisbursement(id);
+    const canHardDelete = existing.status === "DRAFT" || existing.status === "READY";
+    let sdpDeleted = false;
+
+    if (canHardDelete) {
+      try {
+        await deleteDisbursement(id);
+        sdpDeleted = true;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (!/started|cannot delete/i.test(msg)) throw e;
+      }
+    }
+
     archiveDeletedDisbursement({
       disbursement: existing,
       actor: { userId: session.id, label },
+      sdpDeleted,
     });
-    return NextResponse.json({ ok: true, disbursement: deleted });
+    return NextResponse.json({ ok: true, archived: true, sdpDeleted });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[api/sdp/disbursements/[id] DELETE]", msg);
-    const status = /started|cannot delete/i.test(msg) ? 400 : 502;
-    return NextResponse.json({ error: msg }, { status });
+    return NextResponse.json({ error: msg }, { status: 502 });
   }
 }

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
-import { actorLabelFromUser, recordManualDisbursementPayment } from "@/lib/disbursements/store";
+import { actorLabelFromUser, recordManualDisbursementPayment, maybeArchiveCompletedDisbursement } from "@/lib/disbursements/store";
 import { getUserBySessionId } from "@/lib/db/users";
+import { getDisbursement } from "@/lib/sdp/adminClient";
 
 /**
  * POST /api/sdp/disbursements/[id]/record-payment
@@ -42,6 +43,15 @@ export async function POST(
     { userId: session.id, label },
     { paymentId, txHash, amount, recipientAddress, recipientLabel }
   );
+
+  try {
+    const disbursement = await getDisbursement(disbursementId);
+    const { getDisbursementMetaAsync } = await import("@/lib/disbursements/store");
+    const meta = await getDisbursementMetaAsync(disbursementId);
+    maybeArchiveCompletedDisbursement(disbursement, meta ?? undefined);
+  } catch (e) {
+    console.warn("[record-payment] archive check failed:", e);
+  }
 
   return NextResponse.json({ ok: true, paymentId, txHash });
 }

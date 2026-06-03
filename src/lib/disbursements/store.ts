@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
+import { overlayDisbursementStats } from "@/lib/disbursements/mergeDisbursementStats";
 
 /**
  * Per-disbursement metadata, audit trail, and history archive.
@@ -23,7 +24,8 @@ export type DisbursementAuditAction =
   | "deleted"
   | "payment_success"
   | "payment_failed"
-  | "payment_pending";
+  | "payment_pending"
+  | "campaign_completed";
 
 export interface DisbursementAuditEntry {
   id: string;
@@ -53,6 +55,8 @@ export interface DisbursementMeta {
   paymentsStartedByLabel?: string;
   /** Passkey Soroban payouts recorded locally when SDP TSS has not updated yet. */
   manualPayments?: Record<string, ManualPaymentRecord>;
+  archivedAt?: string;
+  archiveReason?: "deleted" | "completed";
 }
 
 export interface ManualPaymentRecord {
@@ -87,6 +91,7 @@ const STORE_FILE = join(DATA_DIR, "disbursement-store.json");
 type PersistedStore = {
   meta: Record<string, DisbursementMeta>;
   audits: Record<string, DisbursementAuditEntry[]>;
+  history: DisbursementHistoryRecord[];
 };
 
 const metaById = new Map<string, DisbursementMeta>();
@@ -105,6 +110,12 @@ function loadPersistedStore(): void {
     for (const [id, rows] of Object.entries(parsed.audits ?? {})) {
       auditById.set(id, rows);
     }
+    for (const row of parsed.history ?? []) {
+      if (!history.some((h) => h.id === row.id && h.archived_at === row.archived_at)) {
+        history.push(row);
+      }
+    }
+    history.sort((a, b) => new Date(b.archived_at).getTime() - new Date(a.archived_at).getTime());
   } catch (e) {
     console.warn("[disbursements/store] failed to load persisted store:", e);
   }
@@ -116,6 +127,7 @@ function persistStore(): void {
     const payload: PersistedStore = {
       meta: Object.fromEntries(metaById),
       audits: Object.fromEntries(auditById),
+      history,
     };
     writeFileSync(STORE_FILE, JSON.stringify(payload, null, 2), "utf8");
   } catch (e) {
@@ -186,6 +198,8 @@ function mergeMeta(local: DisbursementMeta | undefined, remote: DisbursementMeta
       ...(remote.manualPayments ?? {}),
       ...(local?.manualPayments ?? {}),
     },
+    archivedAt: local?.archivedAt ?? remote.archivedAt,
+    archiveReason: local?.archiveReason ?? remote.archiveReason,
   };
 }
 
@@ -438,6 +452,34 @@ export function recordManualDisbursementPayment(
   persistMetaToSupabase(meta);
 }
 
+export function maybeArchiveCompletedDisbursement(
+  disbursement: {
+    id: string;
+    name: string;
+    status: string;
+    total_payments: number;
+    successful_payments: number;
+    failed_payments: number;
+    total_amount: string;
+    disbursed_amount: string;
+    asset: { code: string; issuer?: string };
+    wallet: { name: string; id?: string };
+    created_at: string;
+  },
+  meta?: DisbursementMeta | null
+): void {
+  archiveCompletedIfNeeded({
+    disbursement: overlayDisbursementStats(
+      {
+        ...disbursement,
+        asset: { code: disbursement.asset.code, issuer: disbursement.asset.issuer ?? "" },
+        wallet: { id: disbursement.wallet.id ?? "", name: disbursement.wallet.name },
+      },
+      meta ?? undefined
+    ),
+  });
+}
+
 export function markHotlinkCommitted(
   disbursementId: string,
   actor: { userId: string; label: string }
@@ -505,34 +547,47 @@ export function archiveDeletedDisbursement(params: {
     created_at: string;
   };
   actor: { userId: string; label: string };
+  sdpDeleted?: boolean;
 }): void {
-  const { disbursement, actor } = params;
+  const { disbursement, actor, sdpDeleted = false } = params;
+  const meta = ensureDisbursementMeta(disbursement.id);
+  meta.archivedAt = new Date().toISOString();
+  meta.archiveReason = "deleted";
+  delete meta.hotlinkAt;
+  delete meta.hotlinkBy;
+  delete meta.hotlinkByLabel;
+
   appendDisbursementAudit(disbursement.id, {
     action: "deleted",
     actorUserId: actor.userId,
     actorLabel: actor.label,
-    message: `Batch "${disbursement.name}" deleted`,
+    message: sdpDeleted
+      ? `Batch "${disbursement.name}" deleted`
+      : `Batch "${disbursement.name}" archived (removed from active list)`,
   });
-  history.unshift({
-    id: disbursement.id,
-    name: disbursement.name,
-    status: disbursement.status,
-    total_payments: disbursement.total_payments,
-    successful_payments: disbursement.successful_payments,
-    failed_payments: disbursement.failed_payments,
-    total_amount: disbursement.total_amount,
-    disbursed_amount: disbursement.disbursed_amount,
-    asset_code: disbursement.asset.code,
-    wallet_name: disbursement.wallet.name,
-    created_at: disbursement.created_at,
-    archived_at: new Date().toISOString(),
-    archive_reason: "deleted",
-    archived_by: actor.userId,
-    archived_by_label: actor.label,
-  });
-  metaById.delete(disbursement.id);
-  auditById.delete(disbursement.id);
+
+  if (!history.some((h) => h.id === disbursement.id && h.archive_reason === "deleted")) {
+    history.unshift({
+      id: disbursement.id,
+      name: disbursement.name,
+      status: disbursement.status,
+      total_payments: disbursement.total_payments,
+      successful_payments: disbursement.successful_payments,
+      failed_payments: disbursement.failed_payments,
+      total_amount: disbursement.total_amount,
+      disbursed_amount: disbursement.disbursed_amount,
+      asset_code: disbursement.asset.code,
+      wallet_name: disbursement.wallet.name,
+      created_at: disbursement.created_at,
+      archived_at: meta.archivedAt,
+      archive_reason: "deleted",
+      archived_by: actor.userId,
+      archived_by_label: actor.label,
+    });
+  }
+
   persistStore();
+  persistMetaToSupabase(meta);
 }
 
 export function archiveCompletedIfNeeded(params: {
@@ -551,23 +606,44 @@ export function archiveCompletedIfNeeded(params: {
   };
 }): void {
   const { disbursement } = params;
-  if (disbursement.status !== "COMPLETED") return;
+  const allPaid =
+    disbursement.total_payments > 0 &&
+    disbursement.successful_payments >= disbursement.total_payments;
+  if (!allPaid && disbursement.status !== "COMPLETED") return;
   if (history.some((h) => h.id === disbursement.id && h.archive_reason === "completed")) return;
+
+  const meta = ensureDisbursementMeta(disbursement.id);
+  meta.archivedAt = new Date().toISOString();
+  meta.archiveReason = "completed";
+  delete meta.hotlinkAt;
+  delete meta.hotlinkBy;
+  delete meta.hotlinkByLabel;
+
   history.unshift({
     id: disbursement.id,
     name: disbursement.name,
-    status: disbursement.status,
+    status: "COMPLETED",
     total_payments: disbursement.total_payments,
     successful_payments: disbursement.successful_payments,
-    failed_payments: disbursement.failed_payments,
+    failed_payments: 0,
     total_amount: disbursement.total_amount,
     disbursed_amount: disbursement.disbursed_amount,
     asset_code: disbursement.asset.code,
     wallet_name: disbursement.wallet.name,
     created_at: disbursement.created_at,
-    archived_at: new Date().toISOString(),
+    archived_at: meta.archivedAt,
     archive_reason: "completed",
   });
+
+  appendDisbursementAudit(disbursement.id, {
+    action: "campaign_completed",
+    actorUserId: "system",
+    actorLabel: "System",
+    message: `Batch "${disbursement.name}" completed — all beneficiaries paid`,
+  });
+
+  persistStore();
+  persistMetaToSupabase(meta);
 }
 
 export function getDisbursementHistory(): DisbursementHistoryRecord[] {

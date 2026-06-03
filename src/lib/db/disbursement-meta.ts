@@ -1,5 +1,5 @@
 import { getSupabase } from "@/lib/supabase/server";
-import type { DisbursementMeta } from "@/lib/disbursements/store";
+import type { DisbursementMeta, ManualPaymentRecord } from "@/lib/disbursements/store";
 
 type MetaRow = {
   disbursement_id: string;
@@ -15,6 +15,9 @@ type MetaRow = {
   payments_started_at: string | null;
   payments_started_by: string | null;
   payments_started_by_label: string | null;
+  manual_payments?: Record<string, ManualPaymentRecord> | null;
+  archived_at?: string | null;
+  archive_reason?: string | null;
 };
 
 function rowToMeta(row: MetaRow): DisbursementMeta {
@@ -32,6 +35,12 @@ function rowToMeta(row: MetaRow): DisbursementMeta {
     paymentsStartedAt: row.payments_started_at ?? undefined,
     paymentsStartedBy: row.payments_started_by ?? undefined,
     paymentsStartedByLabel: row.payments_started_by_label ?? undefined,
+    manualPayments: row.manual_payments ?? undefined,
+    archivedAt: row.archived_at ?? undefined,
+    archiveReason:
+      row.archive_reason === "deleted" || row.archive_reason === "completed"
+        ? row.archive_reason
+        : undefined,
   };
 }
 
@@ -50,6 +59,9 @@ function metaToRow(meta: DisbursementMeta): MetaRow {
     payments_started_at: meta.paymentsStartedAt ?? null,
     payments_started_by: meta.paymentsStartedBy ?? null,
     payments_started_by_label: meta.paymentsStartedByLabel ?? null,
+    manual_payments: meta.manualPayments ?? null,
+    archived_at: meta.archivedAt ?? null,
+    archive_reason: meta.archiveReason ?? null,
   };
 }
 

@@ -19,6 +19,8 @@ import { normalizeVerificationForSdp } from "@/lib/disbursements/normalizeVerifi
 import { executePasskeyDistributionTransfer } from "@/lib/stellar/smartAccounts/executePasskeyDistributionTransfer";
 import { executePasskeySorobanPayout } from "@/lib/stellar/smartAccounts/signSorobanPayout";
 import type { BeneficiaryLifecycleState } from "@/lib/sdp/receiverDisplay";
+import { batchRemainingUsdc } from "@/lib/disbursements/mergeDisbursementStats";
+import type { DisbursementMeta } from "@/lib/disbursements/store";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -64,14 +66,6 @@ interface DraftRecipient {
   phone: string;
   amount: string;
   verification: string;
-}
-
-interface DisbursementMeta {
-  disbursementId: string;
-  invitesSentAt?: string;
-  hotlinkAt?: string;
-  paymentsStartedAt?: string;
-  createdByLabel?: string;
 }
 
 const CARD_ACTION_BTN =
@@ -134,14 +128,8 @@ const LIFECYCLE_STATUS_COLORS: Record<BeneficiaryLifecycleState, string> = {
   sent: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
 };
 
-const DELETABLE_DISBURSEMENT_STATUSES = new Set(["DRAFT", "READY", "PAUSED"]);
+const DELETABLE_DISBURSEMENT_STATUSES = new Set(["DRAFT", "READY", "PAUSED", "STARTED"]);
 const EDITABLE_RECIPIENT_STATUSES = new Set(["DRAFT", "READY"]);
-
-function batchRemainingUsdc(d: SdpDisbursement): number {
-  const total = parseFloat(d.total_amount) || 0;
-  const disbursed = parseFloat(d.disbursed_amount) || 0;
-  return Math.max(0, total - disbursed);
-}
 
 function formatBatchAmount(n: number): string {
   if (n <= 0) return "0";
@@ -780,7 +768,7 @@ export default function DisbursementsPage() {
 
   async function handleDelete(id: string, name: string) {
     if (!isDisbursementAdmin) return;
-    if (!window.confirm(t("deleteConfirm", { name }))) return;
+    if (!window.confirm(t("deleteArchiveConfirm", { name }))) return;
 
     setDeletingId(id);
     setActionMsg(null);
@@ -788,12 +776,7 @@ export default function DisbursementsPage() {
       const res = await fetch(`/api/sdp/disbursements/${id}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const msg = data.error ?? t("deleteFailed");
-        setActionMsg(
-          res.status === 400 && /started|cannot delete/i.test(String(msg))
-            ? t("deleteStartedError")
-            : `Error: ${msg}`
-        );
+        setActionMsg(`Error: ${data.error ?? res.status}`);
         return;
       }
       setActionMsg(t("deleteSuccess"));
@@ -1324,27 +1307,33 @@ export default function DisbursementsPage() {
           const invitesSent = Boolean(meta?.invitesSentAt ?? detailMeta?.invitesSentAt);
           const hotlinkActive = Boolean(meta?.hotlinkAt ?? detailMeta?.hotlinkAt);
           const canEdit = DELETABLE_DISBURSEMENT_STATUSES.has(d.status);
-          const batchRemaining = batchRemainingUsdc(d);
+          const batchRemaining = batchRemainingUsdc(d, meta);
           const batchFunded =
-            !distributionConfigured || parseFloat(distributionUsdc) >= batchRemaining;
+            batchRemaining <= 0 ||
+            !distributionConfigured ||
+            parseFloat(distributionUsdc) >= batchRemaining;
           const hasOutstandingPayments =
-            d.successful_payments < d.total_payments ||
-            d.failed_payments > 0 ||
-            (selectedId === d.id &&
-              detail?.disbursement.id === d.id &&
-              detail.payments.some((p) => {
-                const status = p.payment_status.toUpperCase();
-                return status !== "SUCCESS" && status !== "CANCELED";
-              }));
+            d.status !== "COMPLETED" &&
+            (d.successful_payments < d.total_payments ||
+              d.failed_payments > 0 ||
+              (selectedId === d.id &&
+                detail?.disbursement.id === d.id &&
+                detail.payments.some((p) => {
+                  const status = p.payment_status.toUpperCase();
+                  return status !== "SUCCESS" && status !== "CANCELED";
+                })));
           const showDistribuir =
             isDisbursementAdmin &&
             invitesSent &&
             hasOutstandingPayments &&
+            d.status !== "COMPLETED" &&
             (d.status === "DRAFT" ||
               d.status === "READY" ||
               d.status === "STARTED" ||
               d.status === "PAUSED");
-          const showAutoReleaseToggle = isDisbursementAdmin && invitesSent;
+          const showAutoReleaseToggle =
+            isDisbursementAdmin && invitesSent && d.status !== "COMPLETED";
+          const showDelete = isDisbursementAdmin && d.status !== "COMPLETED";
 
           return (
           <div
@@ -1416,7 +1405,7 @@ export default function DisbursementsPage() {
                     />
                   </svg>
                 </button>
-                {isDisbursementAdmin && canEdit && (
+                {showDelete && (
                   <button
                     type="button"
                     title={t("deleteBatch")}
@@ -1442,7 +1431,7 @@ export default function DisbursementsPage() {
                     STATUS_COLORS[d.status] ?? STATUS_COLORS.DRAFT
                   }`}
                 >
-                  {d.status}
+                  {d.status === "COMPLETED" ? t("campaignPaid") : d.status}
                 </span>
                 <span className="text-sm font-semibold text-gray-900 dark:text-white hidden sm:inline">
                   {d.total_amount} {d.asset.code}
@@ -1511,8 +1500,19 @@ export default function DisbursementsPage() {
                     <button
                       type="button"
                       onClick={() => void handleSendInvites(d.id)}
-                      disabled={sendingId === d.id}
-                      className={`${CARD_ACTION_BTN} bg-indigo-600 text-white hover:bg-indigo-700`}
+                      disabled={
+                        sendingId === d.id ||
+                        (!invitesSent && batchRemaining > 0 && !batchFunded)
+                      }
+                      title={
+                        !invitesSent && batchRemaining > 0 && !batchFunded
+                          ? t("sendInvitesNeedsFunding", {
+                              amount: formatBatchAmount(batchRemaining),
+                              asset: d.asset.code,
+                            })
+                          : undefined
+                      }
+                      className={`${CARD_ACTION_BTN} bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40`}
                     >
                       {sendingId === d.id ? t("sending") : t("sendInvites")}
                     </button>

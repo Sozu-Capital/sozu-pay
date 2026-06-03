@@ -15,8 +15,16 @@ CREATE TABLE IF NOT EXISTS sdp_disbursement_meta (
   payments_started_at timestamptz,
   payments_started_by text,
   payments_started_by_label text,
+  manual_payments jsonb,
+  archived_at timestamptz,
+  archive_reason text,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Migration for existing deployments:
+-- ALTER TABLE sdp_disbursement_meta ADD COLUMN IF NOT EXISTS manual_payments jsonb;
+-- ALTER TABLE sdp_disbursement_meta ADD COLUMN IF NOT EXISTS archived_at timestamptz;
+-- ALTER TABLE sdp_disbursement_meta ADD COLUMN IF NOT EXISTS archive_reason text;
 
 CREATE TABLE IF NOT EXISTS disbursement_signing_sessions (
   id uuid PRIMARY KEY,

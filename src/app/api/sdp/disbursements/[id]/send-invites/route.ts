@@ -22,7 +22,7 @@ import {
   markInvitesSent,
   mergedUploadedVerificationsAsync,
 } from "@/lib/disbursements/store";
-import { formatSdpStartError } from "@/lib/sdp/validateDisbursementStart";
+import { formatSdpStartError, validateDisbursementFunds } from "@/lib/sdp/validateDisbursementStart";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationById } from "@/lib/db/organizations";
 
@@ -110,6 +110,18 @@ export async function POST(
     ]);
 
     const uploadedByEmail = await mergedUploadedVerificationsAsync(id);
+
+    if (!org) {
+      return NextResponse.json({ error: "Organization not found." }, { status: 404 });
+    }
+
+    const funding = await validateDisbursementFunds({ org, disbursement });
+    if (!funding.ok) {
+      return NextResponse.json(
+        { error: funding.error, code: funding.code },
+        { status: 400 }
+      );
+    }
 
     // Sending invites opens registration — SDP requires batch STARTED (wallet DRAFT → READY).
     let campaignStarted = disbursement.status.toUpperCase() === "STARTED";

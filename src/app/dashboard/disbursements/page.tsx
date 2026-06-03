@@ -112,7 +112,7 @@ const LIFECYCLE_STATUS_COLORS: Record<BeneficiaryLifecycleState, string> = {
   sent: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
 };
 
-const DELETABLE_DISBURSEMENT_STATUSES = new Set(["DRAFT", "READY"]);
+const DELETABLE_DISBURSEMENT_STATUSES = new Set(["DRAFT", "READY", "PAUSED"]);
 const EDITABLE_RECIPIENT_STATUSES = new Set(["DRAFT", "READY"]);
 
 function batchRemainingUsdc(d: SdpDisbursement): number {
@@ -599,7 +599,7 @@ export default function DisbursementsPage() {
     }
   }
 
-  // ── Delete batch (admin only; DRAFT / READY) ───────────────────────────────
+  // ── Delete batch (admin only; DRAFT / READY / PAUSED) ─────────────────────
 
   async function handleDelete(id: string, name: string) {
     if (!isDisbursementAdmin) return;
@@ -1172,20 +1172,6 @@ export default function DisbursementsPage() {
           >
             <div className="flex items-center justify-between px-5 py-4 gap-3">
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                {isDisbursementAdmin ? (
-                  <button
-                    type="button"
-                    title={t("sendInvites")}
-                    disabled={sendingId === d.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void handleSendInvites(d.id);
-                    }}
-                    className="shrink-0 px-3 py-1.5 rounded bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-60"
-                  >
-                    {sendingId === d.id ? t("sending") : t("sendInvites")}
-                  </button>
-                ) : null}
                 <div className="space-y-0.5 min-w-0">
                   <div className="flex items-center gap-1 min-w-0">
                     <p className="font-medium text-gray-900 dark:text-white truncate">{d.name}</p>
@@ -1210,17 +1196,17 @@ export default function DisbursementsPage() {
                       e.stopPropagation();
                       void handleToggleCampaign(d.id, d.status);
                     }}
-                    className={`px-2.5 py-1 rounded-full text-xs font-semibold border disabled:opacity-50 ${
-                      d.status === "STARTED"
-                        ? "border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-                        : "border-green-300 dark:border-green-700 text-green-800 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-950/30"
-                    }`}
+                    className="p-1.5 rounded-full border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
                   >
-                    {togglingId === d.id
-                      ? t("togglingCampaign")
-                      : d.status === "STARTED"
-                        ? t("stopCampaign")
-                        : t("startCampaign")}
+                    {d.status === "STARTED" ? (
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                        <rect x="6" y="6" width="12" height="12" rx="1" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    )}
                   </button>
                 ) : null}
                 <button
@@ -1300,6 +1286,16 @@ export default function DisbursementsPage() {
               >
                 {/* Actions */}
                 <div className="flex flex-wrap items-center gap-2">
+                  {isDisbursementAdmin ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleSendInvites(d.id)}
+                      disabled={sendingId === d.id}
+                      className="px-3 py-1.5 rounded bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-60"
+                    >
+                      {sendingId === d.id ? t("sending") : t("sendInvites")}
+                    </button>
+                  ) : null}
                   {isDisbursementAdmin && batchRemaining > 0 && (
                     <button
                       type="button"

@@ -4,10 +4,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import {
-  DisbursementAuthorizeModal,
-  type DisbursementAuthorizeResult,
-} from "@/components/DisbursementAuthorizeModal";
-import { DisbursementAuditButton } from "@/components/disbursements/DisbursementAuditButton";
+  DisbursementAuditButton,
+} from "@/components/disbursements/DisbursementAuditButton";
 import { BeneficiaryFieldCell } from "@/components/disbursements/BeneficiaryFieldCell";
 import { EditDisbursementRecipients } from "@/components/disbursements/EditDisbursementRecipients";
 import { DistributionTreasuryPanel } from "@/components/disbursements/DistributionTreasuryPanel";
@@ -199,13 +197,10 @@ export default function DisbursementsPage() {
   const [savingBeneficiaryEmail, setSavingBeneficiaryEmail] = useState<string | null>(null);
 
   // Actions
-  const [startingId, setStartingId] = useState<string | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
-  const [authorizeDisbursementId, setAuthorizeDisbursementId] = useState<string | null>(null);
-  const [authorizeAction, setAuthorizeAction] = useState<"start" | "commit" | null>(null);
-  const [committingId, setCommittingId] = useState<string | null>(null);
   const [fundingId, setFundingId] = useState<string | null>(null);
   const [releasingId, setReleasingId] = useState<string | null>(null);
   const [distributionUsdc, setDistributionUsdc] = useState<string>("0");
@@ -485,86 +480,35 @@ export default function DisbursementsPage() {
     }
   }
 
-  // ── Start disbursement (passkey authorization required) ───────────────────
+  // ── Send invites (starts campaign + emails) ───────────────────────────────
 
-  function handleStart(id: string) {
+  async function handleToggleCampaign(id: string, currentStatus: string) {
+    const next = currentStatus === "STARTED" ? "PAUSED" : "STARTED";
+    if (currentStatus !== "STARTED" && currentStatus !== "PAUSED") return;
+
+    setTogglingId(id);
     setActionMsg(null);
-    setAuthorizeAction("start");
-    setAuthorizeDisbursementId(id);
-  }
-
-  function handleCommit(id: string, name: string) {
-    if (!window.confirm(t("hotlinkConfirm", { name }))) return;
-    setActionMsg(null);
-    setAuthorizeAction("commit");
-    setAuthorizeDisbursementId(id);
-  }
-
-  async function completeStart(id: string, auth: DisbursementAuthorizeResult) {
-    setStartingId(id);
     try {
-      const res = await fetch(`/api/sdp/disbursements/${id}/start`, {
-        method: "POST",
+      const res = await fetch(`/api/sdp/disbursements/${id}/status`, {
+        method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: auth.sessionId,
-          credentialId: auth.credentialId,
-          contractId: auth.contractId,
-        }),
+        body: JSON.stringify({ status: next }),
       });
       const data = await res.json();
       if (!res.ok) {
         setActionMsg(data.error ? `Error: ${data.error}` : `Error: ${res.status}`);
-        setAuthorizeDisbursementId(null);
-        setAuthorizeAction(null);
         return;
       }
-      setAuthorizeDisbursementId(null);
-      setAuthorizeAction(null);
-      setActionMsg(t("disbursementStarted"));
+      setActionMsg(next === "PAUSED" ? t("campaignPaused") : t("campaignResumed"));
       await fetchList();
       if (selectedId === id) await refreshDetail(id);
     } catch (e) {
       setActionMsg(e instanceof Error ? e.message : "Network error");
     } finally {
-      setStartingId(null);
+      setTogglingId(null);
     }
   }
-
-  async function completeCommit(id: string, auth: DisbursementAuthorizeResult) {
-    setCommittingId(id);
-    try {
-      const res = await fetch(`/api/sdp/disbursements/${id}/commit`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: auth.sessionId,
-          credentialId: auth.credentialId,
-          contractId: auth.contractId,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setActionMsg(data.error ? `Error: ${data.error}` : `Error: ${res.status}`);
-        setAuthorizeDisbursementId(null);
-        setAuthorizeAction(null);
-        return;
-      }
-      setAuthorizeDisbursementId(null);
-      setAuthorizeAction(null);
-      setActionMsg(t("hotlinkSuccess"));
-      await fetchList();
-      if (selectedId === id) await refreshDetail(id);
-    } catch (e) {
-      setActionMsg(e instanceof Error ? e.message : "Network error");
-    } finally {
-      setCommittingId(null);
-    }
-  }
-
-  // ── Send invites ──────────────────────────────────────────────────────────
 
   async function handleFundBatch(id: string, amount: number) {
     if (!kitReady || !kit) {
@@ -585,6 +529,12 @@ export default function DisbursementsPage() {
         amount: formatBatchAmount(amount),
       });
       setActionMsg(t("fundBatchSuccess", { amount: result.amount, hash: result.stellarTxHash.slice(0, 12) }));
+      const balRes = await fetch("/api/treasury/distribution/balances", { credentials: "include" });
+      if (balRes.ok) {
+        const bal = (await balRes.json()) as { distributionUsdc?: string; configured?: boolean };
+        if (bal.distributionUsdc) setDistributionUsdc(bal.distributionUsdc);
+        if (bal.configured != null) setDistributionConfigured(bal.configured);
+      }
       await fetchList();
       if (selectedId === id) await refreshDetail(id);
     } catch (e) {
@@ -636,7 +586,9 @@ export default function DisbursementsPage() {
         return;
       }
       setActionMsg(
-        t("invitesSent", { sent: data.sent, skipped: data.skipped, failed: data.failed })
+        data.campaignStarted
+          ? t("invitesSentAndStarted", { sent: data.sent, skipped: data.skipped, failed: data.failed })
+          : t("invitesSent", { sent: data.sent, skipped: data.skipped, failed: data.failed })
       );
       await fetchList();
       if (selectedId === id) await refreshDetail(id);
@@ -729,7 +681,6 @@ export default function DisbursementsPage() {
 
       {isDisbursementAdmin ? (
         <DistributionTreasuryPanel
-          onTransferred={() => void fetchList()}
           onBalancesChange={(b) => {
             setDistributionUsdc(b.distributionUsdc);
             setDistributionConfigured(b.configured);
@@ -1220,20 +1171,58 @@ export default function DisbursementsPage() {
             onClick={() => setSelectedId(selectedId === d.id ? null : d.id)}
           >
             <div className="flex items-center justify-between px-5 py-4 gap-3">
-              <div className="space-y-0.5 min-w-0 flex-1">
-                <div className="flex items-center gap-1 min-w-0">
-                  <p className="font-medium text-gray-900 dark:text-white truncate">{d.name}</p>
-                  <DisbursementAuditButton disbursementId={d.id} disbursementName={d.name} />
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                {isDisbursementAdmin ? (
+                  <button
+                    type="button"
+                    title={t("sendInvites")}
+                    disabled={sendingId === d.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleSendInvites(d.id);
+                    }}
+                    className="shrink-0 px-3 py-1.5 rounded bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-60"
+                  >
+                    {sendingId === d.id ? t("sending") : t("sendInvites")}
+                  </button>
+                ) : null}
+                <div className="space-y-0.5 min-w-0">
+                  <div className="flex items-center gap-1 min-w-0">
+                    <p className="font-medium text-gray-900 dark:text-white truncate">{d.name}</p>
+                    <DisbursementAuditButton disbursementId={d.id} disbursementName={d.name} />
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {d.total_payments} {t("payments")} · {d.asset.code} · {d.wallet.name}
+                    {invitesSent ? ` · ${t("campaignLive")}` : null}
+                    {isDisbursementAdmin && batchRemaining > 0 ? (
+                      batchFunded ? ` · ${t("batchFunded")}` : ` · ${t("batchNeedsFunding")}`
+                    ) : null}
+                  </p>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {d.total_payments} {t("payments")} · {d.asset.code} · {d.wallet.name}
-                  {meta?.hotlinkAt ? ` · ${t("hotlinkActive")}` : null}
-                  {isDisbursementAdmin && batchRemaining > 0 ? (
-                    batchFunded ? ` · ${t("batchFunded")}` : ` · ${t("batchNeedsFunding")}`
-                  ) : null}
-                </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                {isDisbursementAdmin && (d.status === "STARTED" || d.status === "PAUSED") ? (
+                  <button
+                    type="button"
+                    title={d.status === "STARTED" ? t("pauseCampaign") : t("resumeCampaign")}
+                    disabled={togglingId === d.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleToggleCampaign(d.id, d.status);
+                    }}
+                    className={`px-2.5 py-1 rounded-full text-xs font-semibold border disabled:opacity-50 ${
+                      d.status === "STARTED"
+                        ? "border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                        : "border-green-300 dark:border-green-700 text-green-800 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-950/30"
+                    }`}
+                  >
+                    {togglingId === d.id
+                      ? t("togglingCampaign")
+                      : d.status === "STARTED"
+                        ? t("stopCampaign")
+                        : t("startCampaign")}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   title={t("refresh")}
@@ -1311,14 +1300,6 @@ export default function DisbursementsPage() {
               >
                 {/* Actions */}
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void handleSendInvites(d.id)}
-                    disabled={sendingId === d.id}
-                    className="px-3 py-1.5 rounded bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-60"
-                  >
-                    {sendingId === d.id ? t("sending") : t("sendInvites")}
-                  </button>
                   {isDisbursementAdmin && batchRemaining > 0 && (
                     <button
                       type="button"
@@ -1332,29 +1313,6 @@ export default function DisbursementsPage() {
                         : t("fundBatch", { amount: formatBatchAmount(batchRemaining), asset: d.asset.code })}
                     </button>
                   )}
-                  {(d.status === "READY" || d.status === "DRAFT") && (
-                    <button
-                      type="button"
-                      onClick={() => handleStart(d.id)}
-                      disabled={startingId === d.id || !invitesSent}
-                      title={!invitesSent ? t("startPaymentsDisabledHint") : undefined}
-                      className="px-3 py-1.5 rounded bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {startingId === d.id ? t("starting") : t("startPayments")}
-                    </button>
-                  )}
-                  {(d.status === "READY" || d.status === "DRAFT" || d.status === "STARTED") &&
-                    !meta?.hotlinkAt && (
-                      <button
-                        type="button"
-                        onClick={() => handleCommit(d.id, d.name)}
-                        disabled={committingId === d.id || !invitesSent}
-                        title={!invitesSent ? t("hotlinkDisabledHint") : undefined}
-                        className="px-3 py-1.5 rounded bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        {committingId === d.id ? t("hotlinkCommitting") : t("hotlink")}
-                      </button>
-                    )}
                   {showRelease && (
                     <button
                       type="button"
@@ -1373,15 +1331,12 @@ export default function DisbursementsPage() {
                     />
                   )}
                 </div>
-                {meta?.hotlinkAt && d.status === "STARTED" && batchRemaining > 0 ? (
-                  <p className="text-xs text-emerald-700 dark:text-emerald-400">{t("hotlinkActiveHint")}</p>
-                ) : null}
                 {!batchFunded && batchRemaining > 0 && isDisbursementAdmin ? (
                   <p className="text-xs text-amber-700 dark:text-amber-400">{t("fundBatchHint")}</p>
                 ) : null}
-                {!invitesSent && (d.status === "READY" || d.status === "DRAFT") && (
-                  <p className="text-xs text-amber-700 dark:text-amber-400">{t("invitesRequiredHint")}</p>
-                )}
+                {!invitesSent && (d.status === "READY" || d.status === "DRAFT") ? (
+                  <p className="text-xs text-amber-700 dark:text-amber-400">{t("sendInvitesHint")}</p>
+                ) : null}
 
                 {/* Stats */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1572,22 +1527,6 @@ export default function DisbursementsPage() {
           {t("viewHistory")}
         </Link>
       </div>
-
-      {authorizeDisbursementId && authorizeAction && (
-        <DisbursementAuthorizeModal
-          open
-          disbursementId={authorizeDisbursementId}
-          onClose={() => {
-            setAuthorizeDisbursementId(null);
-            setAuthorizeAction(null);
-          }}
-          onAuthorized={(auth) =>
-            authorizeAction === "commit"
-              ? completeCommit(authorizeDisbursementId, auth)
-              : completeStart(authorizeDisbursementId, auth)
-          }
-        />
-      )}
     </div>
   );
 }

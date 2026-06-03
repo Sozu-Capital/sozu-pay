@@ -199,6 +199,10 @@
   },
   "dashboardBalance": {
     "title": "Billetera Stellar on-chain",
+    "treasurySub": "Tesorería org · USDC",
+    "distributionLabel": "Billetera de distribución SDP",
+    "distributionSub": "Reservado para lotes activos",
+    "viewDisbursements": "Distribuciones activas",
     "inVault": "En bóveda: {amount} USDC"
   },
   "dashboardStats": {

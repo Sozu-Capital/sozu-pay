@@ -10,6 +10,7 @@ import { getUsdcBalance } from "@/lib/stellar/balance";
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
 import { getUsdToLocalRate, convertUsdToLocal } from "@/lib/fx";
 import { getTransactions } from "@/lib/stellar/transactions";
+import { readDistributionPublicKey } from "@/lib/sdp/distributionAccount";
 import type { DashboardProfile, DashboardBalanceData, DashboardStats } from "@/contexts/DashboardProfileContext";
 import type { TransactionRow } from "@/lib/stellar/transactions";
 
@@ -29,6 +30,8 @@ const EMPTY_BALANCE: DashboardBalanceData = {
   localFiatAmount: "0.00",
   localFiatCurrency: "USD",
   rateSource: "1 USDC = 1 USD",
+  distributionUsdc: "0",
+  sdpDistributionConfigured: false,
 };
 
 const EMPTY_STATS: DashboardStats = {
@@ -92,6 +95,9 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
   }
 
   let usdcBalance = "0";
+  let distributionUsdc = "0";
+  const distributionPk = readDistributionPublicKey();
+  const sdpDistributionConfigured = Boolean(distributionPk);
   let fx = { rate: 1, currency: "USD", source: "1 USDC = 1 USD" };
   let transactions: Awaited<ReturnType<typeof getTransactions>> = [];
   const disbursementHolder =
@@ -100,12 +106,13 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
       ? orgDisbursementContractId
       : null;
   try {
-    [usdcBalance, fx, transactions] = await Promise.all([
+    [usdcBalance, fx, transactions, distributionUsdc] = await Promise.all([
       publicKey.startsWith("C") ? getSorobanUsdcBalance(publicKey) : getUsdcBalance(publicKey),
       getUsdToLocalRate(),
       getTransactions(publicKey, 10, {
         additionalHolders: disbursementHolder ? [disbursementHolder] : undefined,
       }),
+      distributionPk ? getUsdcBalance(distributionPk) : Promise.resolve("0"),
     ]);
   } catch (e) {
     console.error("[getDashboardBootstrapData] Stellar fetch failed:", e);
@@ -123,6 +130,8 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
     rateSource: fx.source,
     localFiatAmount,
     localFiatCurrency: fx.currency,
+    distributionUsdc,
+    sdpDistributionConfigured,
   };
 
   const stats: DashboardStats = {

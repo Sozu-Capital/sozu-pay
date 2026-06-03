@@ -12,6 +12,8 @@ export type DisbursementAuditAction =
   | "invites_sent"
   | "payments_started"
   | "hotlink_committed"
+  | "campaign_paused"
+  | "campaign_resumed"
   | "recipient_added"
   | "recipient_removed"
   | "recipients_updated"

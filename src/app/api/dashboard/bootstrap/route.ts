@@ -11,6 +11,7 @@ import { getUsdcBalance } from "@/lib/stellar/balance";
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
 import { getUsdToLocalRate, convertUsdToLocal } from "@/lib/fx";
 import { getTransactions } from "@/lib/stellar/transactions";
+import { readDistributionPublicKey } from "@/lib/sdp/distributionAccount";
 
 /**
  * GET /api/dashboard/bootstrap
@@ -100,6 +101,8 @@ export async function GET() {
       localFiatAmount: "0.00",
       localFiatCurrency: "USD",
       rateSource: "1 USDC = 1 USD",
+      distributionUsdc: "0",
+      sdpDistributionConfigured: false,
     };
     return NextResponse.json({
       profile,
@@ -111,6 +114,9 @@ export async function GET() {
 
   // Fetch balance, FX, and recent transactions — profile must still load if Stellar fails.
   let usdcBalance = "0";
+  let distributionUsdc = "0";
+  const distributionPk = readDistributionPublicKey();
+  const sdpDistributionConfigured = Boolean(distributionPk);
   let fx = { rate: 1, currency: "USD", source: "1 USDC = 1 USD" };
   let transactions: Awaited<ReturnType<typeof getTransactions>> = [];
   const disbursementHolder =
@@ -119,12 +125,13 @@ export async function GET() {
       ? orgDisbursementContractId
       : null;
   try {
-    [usdcBalance, fx, transactions] = await Promise.all([
+    [usdcBalance, fx, transactions, distributionUsdc] = await Promise.all([
       publicKey.startsWith("C") ? getSorobanUsdcBalance(publicKey) : getUsdcBalance(publicKey),
       getUsdToLocalRate(),
       getTransactions(publicKey, 10, {
         additionalHolders: disbursementHolder ? [disbursementHolder] : undefined,
       }),
+      distributionPk ? getUsdcBalance(distributionPk) : Promise.resolve("0"),
     ]);
   } catch (e) {
     console.error("[api/dashboard/bootstrap] Stellar fetch failed:", e);
@@ -142,6 +149,8 @@ export async function GET() {
     rateSource: fx.source,
     localFiatAmount,
     localFiatCurrency: fx.currency,
+    distributionUsdc,
+    sdpDistributionConfigured,
   };
 
   const stats = {

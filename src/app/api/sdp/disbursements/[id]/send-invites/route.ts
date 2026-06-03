@@ -7,6 +7,7 @@ import {
   listAssets,
   retryReceiverWalletInvitation,
   ensureSozuCreditWallet,
+  startDisbursement,
 } from "@/lib/sdp/adminClient";
 import { sendSdpInviteEmail } from "@/lib/email/sdp-invite";
 import { getSdpEnv } from "@/lib/sdp/env";
@@ -18,9 +19,12 @@ import {
 } from "@/lib/sdp/receiverDisplay";
 import {
   actorLabelFromUser,
+  markHotlinkCommitted,
   markInvitesSent,
+  markPaymentsStarted,
   mergedUploadedVerificationsAsync,
 } from "@/lib/disbursements/store";
+import { formatSdpStartError } from "@/lib/sdp/validateDisbursementStart";
 import { getUserBySessionId } from "@/lib/db/users";
 
 const WALLET_BASE_URL =
@@ -104,8 +108,27 @@ export async function POST(
     ]);
 
     const uploadedByEmail = await mergedUploadedVerificationsAsync(id);
-    const registrationBlocked =
-      disbursement.status === "DRAFT" || disbursement.status === "READY";
+
+    // Sending invites opens registration — SDP requires batch STARTED (wallet DRAFT → READY).
+    let campaignStarted = disbursement.status.toUpperCase() === "STARTED";
+    if (disbursement.status === "DRAFT" || disbursement.status === "READY") {
+      try {
+        await startDisbursement(id);
+        campaignStarted = true;
+        const user = await getUserBySessionId(session.id);
+        const label = user ? actorLabelFromUser(user) : session.id;
+        markPaymentsStarted(id, { userId: session.id, label }, disbursement.name);
+        markHotlinkCommitted(id, { userId: session.id, label });
+      } catch (e) {
+        const raw = e instanceof Error ? e.message : String(e);
+        const formatted = formatSdpStartError(raw);
+        console.error("[send-invites] startDisbursement failed:", raw);
+        return NextResponse.json(
+          { error: formatted.error, code: formatted.code ?? "START_FAILED" },
+          { status: 400 }
+        );
+      }
+    }
 
     // Ensure credit.sozu.capital is registered in SDP before sending invites —
     // recipients need it for SEP-10 client_domain validation to succeed.
@@ -230,10 +253,7 @@ export async function POST(
       sent: sentCount,
       skipped: skippedCount,
       failed: failedCount,
-      registrationBlocked,
-      registrationNote: registrationBlocked
-        ? "Recipients cannot finish SozuCredit registration until this batch is STARTED (Enable Hotlink or Start payments with passkey). SDP keeps receiver wallets in DRAFT until then."
-        : undefined,
+      campaignStarted,
       results,
     });
   } catch (e) {

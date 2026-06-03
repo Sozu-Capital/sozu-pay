@@ -37,6 +37,9 @@ export type DashboardBalanceData = {
   localFiatAmount: string;
   localFiatCurrency: string;
   rateSource: string;
+  /** SDP distribution G wallet — batch payout pool */
+  distributionUsdc?: string;
+  sdpDistributionConfigured?: boolean;
 };
 
 export type DashboardStats = {

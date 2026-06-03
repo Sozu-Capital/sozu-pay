@@ -104,9 +104,6 @@ export function TreasuryDistributionDonut({
           ))}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-2">
-          <span className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            {t("donutTotal")}
-          </span>
           <span className="text-sm font-semibold text-gray-900 dark:text-white">{fmt(total)}</span>
         </div>
       </div>

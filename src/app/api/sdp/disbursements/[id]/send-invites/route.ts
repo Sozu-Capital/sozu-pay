@@ -25,6 +25,7 @@ import {
 import { formatSdpStartError, validateDisbursementFunds } from "@/lib/sdp/validateDisbursementStart";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationById } from "@/lib/db/organizations";
+import { requireDisbursementOrgAccess } from "@/lib/disbursements/org-scope";
 
 const WALLET_BASE_URL =
   process.env.SOZUCREDIT_URL ?? "https://credit.sozu.capital";
@@ -86,6 +87,9 @@ export async function POST(
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
+
+  const orgAccess = await requireDisbursementOrgAccess(id, auth.user.org_id!);
+  if (!orgAccess.ok) return orgAccess.response;
 
   const org = await getOrganizationById(auth.user.org_id!);
   let organizationName = org?.name?.trim() || "Your organization";

@@ -12,6 +12,7 @@ import { appendAuditEvent } from "@/lib/audit";
 import { actorLabelFromUser, markPaymentsStarted } from "@/lib/disbursements/store";
 import { logPasskeyEvent } from "@/lib/passkey/log";
 import { formatSdpStartError } from "@/lib/sdp/validateDisbursementStart";
+import { requireDisbursementOrgAccess } from "@/lib/disbursements/org-scope";
 
 /**
  * POST /api/sdp/disbursements/[id]/start
@@ -32,6 +33,10 @@ export async function POST(
   if (!auth.ok) return auth.response;
 
   const { id: disbursementId } = await params;
+
+  const orgAccess = await requireDisbursementOrgAccess(disbursementId, auth.user.org_id!);
+  if (!orgAccess.ok) return orgAccess.response;
+
   const body = await request.json().catch(() => ({}));
   const sessionId = typeof body.sessionId === "string" ? body.sessionId.trim() : "";
   const credentialId = typeof body.credentialId === "string" ? body.credentialId.trim() : "";

@@ -8,6 +8,7 @@ import {
 import { getUsdcBalance } from "@/lib/stellar/balance";
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
 import { readDistributionPublicKey } from "@/lib/sdp/distributionAccount";
+import { resolveOrgDistributionPublicKey } from "@/lib/sdp/org-distribution";
 import type { SdpDisbursement, SdpReceiver } from "@/lib/sdp/adminClient";
 import { receiverInviteWasSent } from "@/lib/sdp/receiverDisplay";
 
@@ -93,7 +94,7 @@ export async function validateDisbursementFunds(params: {
       ? treasuryBal + disbursementContractBal
       : Math.max(treasuryBal, disbursementContractBal);
 
-  const distributionPk = readDistributionPublicKey();
+  const distributionPk = resolveOrgDistributionPublicKey(params.org);
   let distributionBal: number | null = null;
   if (distributionPk) {
     distributionBal = parseFloat(await getUsdcBalance(distributionPk)) || 0;

@@ -12,7 +12,7 @@ import {
 } from "@/lib/stellar/distribution-transfer";
 import { resolveOrgTreasuryContractId } from "@/lib/stellar/org-treasury";
 import { formatSorobanPayoutError } from "@/lib/stellar/soroban-payout-errors";
-import { readDistributionPublicKey } from "@/lib/sdp/distributionAccount";
+import { resolveOrgDistributionPublicKey } from "@/lib/sdp/org-distribution";
 import { LOCALE_COOKIE, readServerLocaleCookie } from "@/lib/i18n/locale";
 
 type TransferDirection = "to_distribution" | "to_treasury";
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
 
   const locale = readServerLocaleCookie((await cookies()).get(LOCALE_COOKIE)?.value);
   const actorLabel = actorLabelFromUser(auth.user);
-  const distributionPk = readDistributionPublicKey();
+  const distributionPk = resolveOrgDistributionPublicKey(org) ?? "";
 
   try {
     if (direction === "to_distribution") {
@@ -108,7 +108,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No treasury contract.", code: "NO_TREASURY" }, { status: 400 });
     }
 
-    const txHash = await transferDistributionToTreasury({ amount, treasuryContractId });
+    const txHash = await transferDistributionToTreasury({
+      org,
+      amount,
+      treasuryContractId,
+    });
     appendAuditEvent(
       "distribution_to_treasury",
       `${actorLabel} swept ${amount} USDC from SDP distribution back to org treasury (${treasuryContractId.slice(0, 8)}…).`,

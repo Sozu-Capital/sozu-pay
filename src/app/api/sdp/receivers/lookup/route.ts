@@ -4,6 +4,10 @@ import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
 import { isSdpConfigured, sdpNotConfiguredMessage } from "@/lib/sdp/env";
 import { listDisbursements, listReceivers } from "@/lib/sdp/adminClient";
 import { receiverVerificationDob } from "@/lib/sdp/receiverDisplay";
+import {
+  filterDisbursementsForOrg,
+} from "@/lib/disbursements/org-scope";
+import { getAllDisbursementMetaAsync } from "@/lib/disbursements/store";
 
 /**
  * GET /api/sdp/receivers/lookup?email=user@example.com
@@ -31,7 +35,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const disbursements = await listDisbursements();
+    const [disbursements, meta] = await Promise.all([
+      listDisbursements(),
+      getAllDisbursementMetaAsync(),
+    ]);
+    const orgId = auth.user.org_id!;
+    const scoped = filterDisbursementsForOrg(disbursements, meta, orgId);
     const hits: Array<{
       disbursementId: string;
       disbursementName: string;
@@ -45,7 +54,7 @@ export async function GET(request: Request) {
       matchesCurrentTx?: boolean;
     }> = [];
 
-    for (const d of disbursements) {
+    for (const d of scoped) {
       const receivers = await listReceivers(d.id);
       for (const r of receivers) {
         if (r.email?.trim().toLowerCase() !== email) continue;

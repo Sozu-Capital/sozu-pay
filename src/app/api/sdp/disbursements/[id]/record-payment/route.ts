@@ -4,6 +4,7 @@ import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
 import { actorLabelFromUser, recordManualDisbursementPayment, maybeArchiveCompletedDisbursement } from "@/lib/disbursements/store";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getDisbursement } from "@/lib/sdp/adminClient";
+import { requireDisbursementOrgAccess } from "@/lib/disbursements/org-scope";
 
 /**
  * POST /api/sdp/disbursements/[id]/record-payment
@@ -20,6 +21,10 @@ export async function POST(
   if (!auth.ok) return auth.response;
 
   const { id: disbursementId } = await params;
+
+  const orgAccess = await requireDisbursementOrgAccess(disbursementId, auth.user.org_id!);
+  if (!orgAccess.ok) return orgAccess.response;
+
   const body = await request.json().catch(() => ({}));
   const paymentId = typeof body.paymentId === "string" ? body.paymentId.trim() : "";
   const txHash = typeof body.txHash === "string" ? body.txHash.trim() : "";

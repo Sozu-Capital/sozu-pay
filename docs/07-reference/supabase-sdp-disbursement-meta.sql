@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS sdp_disbursement_meta (
   manual_payments jsonb,
   archived_at timestamptz,
   archive_reason text,
+  org_id text,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -25,6 +26,8 @@ CREATE TABLE IF NOT EXISTS sdp_disbursement_meta (
 -- ALTER TABLE sdp_disbursement_meta ADD COLUMN IF NOT EXISTS manual_payments jsonb;
 -- ALTER TABLE sdp_disbursement_meta ADD COLUMN IF NOT EXISTS archived_at timestamptz;
 -- ALTER TABLE sdp_disbursement_meta ADD COLUMN IF NOT EXISTS archive_reason text;
+-- ALTER TABLE sdp_disbursement_meta ADD COLUMN IF NOT EXISTS org_id text;
+-- CREATE INDEX IF NOT EXISTS idx_sdp_disbursement_meta_org ON sdp_disbursement_meta (org_id);
 
 CREATE TABLE IF NOT EXISTS disbursement_signing_sessions (
   id uuid PRIMARY KEY,

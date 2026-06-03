@@ -18,6 +18,7 @@ type MetaRow = {
   manual_payments?: Record<string, ManualPaymentRecord> | null;
   archived_at?: string | null;
   archive_reason?: string | null;
+  org_id?: string | null;
 };
 
 function rowToMeta(row: MetaRow): DisbursementMeta {
@@ -41,6 +42,7 @@ function rowToMeta(row: MetaRow): DisbursementMeta {
       row.archive_reason === "deleted" || row.archive_reason === "completed"
         ? row.archive_reason
         : undefined,
+    orgId: row.org_id ?? undefined,
   };
 }
 
@@ -62,6 +64,7 @@ function metaToRow(meta: DisbursementMeta): MetaRow {
     manual_payments: meta.manualPayments ?? null,
     archived_at: meta.archivedAt ?? null,
     archive_reason: meta.archiveReason ?? null,
+    org_id: meta.orgId ?? null,
   };
 }
 

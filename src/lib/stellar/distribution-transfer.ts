@@ -27,6 +27,12 @@ import {
   readDistributionPublicKey,
   readDistributionSecret,
 } from "@/lib/sdp/distributionAccount";
+import {
+  isOrgDistributionConfigured,
+  isOrgDistributionSweepBackEnabled,
+  resolveOrgDistributionPublicKey,
+  resolveOrgDistributionSecret,
+} from "@/lib/sdp/org-distribution";
 import { PayoutFundsError } from "@/lib/stellar/soroban-payout-errors";
 
 function i128ScValFromAmount(amount: string): xdr.ScVal {
@@ -56,7 +62,7 @@ export type DistributionBalances = {
 export async function fetchDistributionBalances(org: Organization): Promise<DistributionBalances> {
   const treasuryContractId = resolveOrgTreasuryContractId(org);
   const disbursementContractId = resolveOrgDisbursementContractId(org);
-  const distributionPublicKey = readDistributionPublicKey() || null;
+  const distributionPublicKey = resolveOrgDistributionPublicKey(org);
 
   let treasuryUsdc = "0";
   let disbursementUsdc = "0";
@@ -88,7 +94,7 @@ export async function fetchDistributionBalances(org: Organization): Promise<Dist
     disbursementUsdc,
     distributionPublicKey,
     distributionUsdc,
-    sweepBackEnabled: Boolean(distributionPublicKey && readDistributionSecret()),
+    sweepBackEnabled: isOrgDistributionSweepBackEnabled(org),
   };
 }
 
@@ -110,7 +116,9 @@ export async function buildUnsignedTreasuryToDistributionTransfer(params: {
   distributionPublicKey: string;
   amount: string;
 }> {
-  const distribution = (params.distributionPublicKey ?? readDistributionPublicKey()).trim().toUpperCase();
+  const distributionRaw =
+    params.distributionPublicKey ?? resolveOrgDistributionPublicKey(params.org);
+  const distribution = (distributionRaw ?? "").trim().toUpperCase();
   if (!distribution.startsWith("G")) {
     throw new Error("SDP distribution public key is not configured or invalid.");
   }
@@ -139,21 +147,22 @@ export async function buildUnsignedTreasuryToDistributionTransfer(params: {
   };
 }
 
-/** Soroban SAC transfer: SDP distribution G → org treasury C (server-signed). */
+/** Soroban SAC transfer: org distribution G → org treasury C (server-signed). */
 export async function transferDistributionToTreasury(params: {
+  org: Organization;
   amount: string;
   treasuryContractId: string;
 }): Promise<string> {
-  const secret = readDistributionSecret();
+  const secret = resolveOrgDistributionSecret(params.org);
   if (!secret) {
     throw new Error(
-      "Distribution sweep-back is not configured. Set SDP_DISTRIBUTION_SEED on the server."
+      "Distribution sweep-back is not configured for this organization."
     );
   }
 
-  const distributionPk = readDistributionPublicKey();
+  const distributionPk = resolveOrgDistributionPublicKey(params.org);
   if (!distributionPk) {
-    throw new Error("SDP distribution public key is not configured.");
+    throw new Error("Organization distribution public key is not configured.");
   }
 
   const amountNum = parseFloat(params.amount);

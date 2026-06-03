@@ -23,6 +23,10 @@ import {
   isDisbursementArchived,
   overlayDisbursementStats,
 } from "@/lib/disbursements/mergeDisbursementStats";
+import {
+  filterDisbursementsForOrg,
+  filterMetaForOrg,
+} from "@/lib/disbursements/org-scope";
 import { getUserBySessionId } from "@/lib/db/users";
 import { verificationByEmailFromCsv } from "@/lib/disbursements/csv";
 import { normalizeDisbursementCsvText, findInvalidVerificationRows } from "@/lib/disbursements/normalizeVerification";
@@ -55,17 +59,21 @@ export async function GET() {
     );
 
     const wallets = await listWallets();
+    const orgId = auth.user.org_id!;
     let meta = await getAllDisbursementMetaAsync();
+    meta = filterMetaForOrg(meta, orgId);
 
-    for (const d of disbursements) {
+    const orgDisbursements = filterDisbursementsForOrg(disbursements, meta, orgId);
+
+    for (const d of orgDisbursements) {
       const overlaid = overlayDisbursementStats(d, meta[d.id]);
       if (overlaid.status === "COMPLETED" && !isDisbursementArchived(meta[d.id])) {
         archiveCompletedIfNeeded({ disbursement: overlaid });
       }
     }
-    meta = await getAllDisbursementMetaAsync();
+    meta = filterMetaForOrg(await getAllDisbursementMetaAsync(), orgId);
 
-    const activeDisbursements = disbursements
+    const activeDisbursements = orgDisbursements
       .filter((d) => !isDisbursementArchived(meta[d.id]))
       .map((d) => overlayDisbursementStats(d, meta[d.id]))
       .filter((d) => d.status !== "COMPLETED");
@@ -159,6 +167,7 @@ export async function POST(request: Request) {
     ensureDisbursementMeta(disbursement.id, {
       createdByUserId: session.id,
       createdByLabel: label,
+      orgId: auth.user.org_id!,
     });
     recordUploadedVerifications(
       disbursement.id,

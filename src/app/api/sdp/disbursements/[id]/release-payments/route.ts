@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
 import { listReceivers, retryFailedPayments } from "@/lib/sdp/adminClient";
+import { requireDisbursementOrgAccess } from "@/lib/disbursements/org-scope";
 
 /**
  * POST /api/sdp/disbursements/[id]/release-payments
@@ -18,6 +19,9 @@ export async function POST(
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
+
+  const orgAccess = await requireDisbursementOrgAccess(id, auth.user.org_id!);
+  if (!orgAccess.ok) return orgAccess.response;
 
   try {
     const receivers = await listReceivers(id);

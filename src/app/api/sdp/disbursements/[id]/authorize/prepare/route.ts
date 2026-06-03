@@ -10,6 +10,7 @@ import {
   getDisbursementMetaAsync,
   invitesSentAtFromAudit,
 } from "@/lib/disbursements/store";
+import { requireDisbursementOrgAccess } from "@/lib/disbursements/org-scope";
 
 /**
  * POST /api/sdp/disbursements/[id]/authorize/prepare
@@ -26,6 +27,9 @@ export async function POST(
   if (!auth.ok) return auth.response;
 
   const { id: disbursementId } = await params;
+
+  const orgAccess = await requireDisbursementOrgAccess(disbursementId, auth.user.org_id!);
+  if (!orgAccess.ok) return orgAccess.response;
 
   try {
     const org = await getOrganizationForUser(auth.user.org_id!);

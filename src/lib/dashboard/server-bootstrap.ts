@@ -10,7 +10,10 @@ import { getUsdcBalance } from "@/lib/stellar/balance";
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
 import { getUsdToLocalRate, convertUsdToLocal } from "@/lib/fx";
 import { getTransactions } from "@/lib/stellar/transactions";
-import { readDistributionPublicKey } from "@/lib/sdp/distributionAccount";
+import {
+  isOrgDistributionConfigured,
+  resolveOrgDistributionPublicKey,
+} from "@/lib/sdp/org-distribution";
 import type { DashboardProfile, DashboardBalanceData, DashboardStats } from "@/contexts/DashboardProfileContext";
 import type { TransactionRow } from "@/lib/stellar/transactions";
 
@@ -96,8 +99,8 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
 
   let usdcBalance = "0";
   let distributionUsdc = "0";
-  const distributionPk = readDistributionPublicKey();
-  const sdpDistributionConfigured = Boolean(distributionPk);
+  const distributionPk = org ? resolveOrgDistributionPublicKey(org) : null;
+  const sdpDistributionConfigured = org ? isOrgDistributionConfigured(org) : false;
   let fx = { rate: 1, currency: "USD", source: "1 USDC = 1 USD" };
   let transactions: Awaited<ReturnType<typeof getTransactions>> = [];
   const disbursementHolder =

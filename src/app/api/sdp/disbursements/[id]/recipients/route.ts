@@ -15,6 +15,7 @@ import { recipientsToCSV, type RecipientRow } from "@/lib/disbursements/csv";
 import { normalizeVerificationForSdp } from "@/lib/disbursements/normalizeVerification";
 import { getUserBySessionId } from "@/lib/db/users";
 import { recordUploadedVerifications } from "@/lib/disbursements/store";
+import { requireDisbursementOrgAccess } from "@/lib/disbursements/org-scope";
 
 const EDITABLE = new Set(["DRAFT", "READY"]);
 
@@ -72,6 +73,9 @@ export async function PATCH(
     userId: session.id,
     label: user ? actorLabelFromUser(user) : session.id,
   };
+
+  const orgAccess = await requireDisbursementOrgAccess(id, auth.user.org_id!);
+  if (!orgAccess.ok) return orgAccess.response;
 
   try {
     const disbursement = await getDisbursement(id);

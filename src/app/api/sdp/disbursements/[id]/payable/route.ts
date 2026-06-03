@@ -4,6 +4,7 @@ import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
 import { listReceivers } from "@/lib/sdp/adminClient";
 import { getDisbursementMetaAsync } from "@/lib/disbursements/store";
 import { listPayableDisbursementReceivers } from "@/lib/disbursements/payableReceivers";
+import { requireDisbursementOrgAccess } from "@/lib/disbursements/org-scope";
 
 /**
  * GET /api/sdp/disbursements/[id]/payable
@@ -20,6 +21,9 @@ export async function GET(
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
+
+  const orgAccess = await requireDisbursementOrgAccess(id, auth.user.org_id!);
+  if (!orgAccess.ok) return orgAccess.response;
 
   try {
     const [receivers, meta] = await Promise.all([

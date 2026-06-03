@@ -3,7 +3,7 @@ import { getSession } from "@/lib/auth/session";
 import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { fetchDistributionBalances } from "@/lib/stellar/distribution-transfer";
-import { isDistributionConfigured } from "@/lib/sdp/distributionAccount";
+import { isOrgDistributionConfigured } from "@/lib/sdp/org-distribution";
 
 /**
  * GET /api/treasury/distribution/balances
@@ -24,7 +24,7 @@ export async function GET() {
   try {
     const balances = await fetchDistributionBalances(org);
     return NextResponse.json({
-      configured: isDistributionConfigured(),
+      configured: isOrgDistributionConfigured(org),
       ...balances,
     });
   } catch (e) {

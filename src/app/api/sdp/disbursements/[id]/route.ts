@@ -18,6 +18,7 @@ import {
 } from "@/lib/disbursements/store";
 import { applyManualPaymentsToBeneficiaryRows } from "@/lib/disbursements/payableReceivers";
 import { overlayDisbursementStats } from "@/lib/disbursements/mergeDisbursementStats";
+import { requireDisbursementOrgAccess } from "@/lib/disbursements/org-scope";
 import { fetchBeneficiarySozuTags, upsertBeneficiarySozuTags } from "@/lib/db/beneficiary-sozu-tags";
 
 /**
@@ -39,6 +40,9 @@ export async function GET(
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
+
+  const orgAccess = await requireDisbursementOrgAccess(id, auth.user.org_id!);
+  if (!orgAccess.ok) return orgAccess.response;
 
   try {
     const [disbursement, receivers] = await Promise.all([
@@ -136,6 +140,9 @@ export async function DELETE(
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
+
+  const orgAccess = await requireDisbursementOrgAccess(id, auth.user.org_id!);
+  if (!orgAccess.ok) return orgAccess.response;
 
   try {
     const existing = await getDisbursement(id);

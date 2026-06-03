@@ -13,6 +13,7 @@ import {
 } from "@/lib/disbursements/store";
 import { getUserBySessionId } from "@/lib/db/users";
 import { formatSdpStartError } from "@/lib/sdp/validateDisbursementStart";
+import { requireDisbursementOrgAccess } from "@/lib/disbursements/org-scope";
 
 type CampaignStatus = "STARTED" | "PAUSED";
 
@@ -40,6 +41,9 @@ export async function PATCH(
       { status: 400 }
     );
   }
+
+  const orgAccess = await requireDisbursementOrgAccess(id, auth.user.org_id!);
+  if (!orgAccess.ok) return orgAccess.response;
 
   try {
     const disbursement = await getDisbursement(id);

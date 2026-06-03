@@ -8,6 +8,7 @@ import {
   invitesSentAtFromAudit,
 } from "@/lib/disbursements/store";
 import { getUserBySessionId } from "@/lib/db/users";
+import { requireDisbursementOrgAccess } from "@/lib/disbursements/org-scope";
 
 /**
  * PATCH /api/sdp/disbursements/[id]/auto-release
@@ -37,6 +38,9 @@ export async function PATCH(
       { status: 400 }
     );
   }
+
+  const orgAccess = await requireDisbursementOrgAccess(disbursementId, auth.user.org_id!);
+  if (!orgAccess.ok) return orgAccess.response;
 
   const meta = await getDisbursementMetaAsync(disbursementId);
   const invitesSentAt = meta?.invitesSentAt ?? invitesSentAtFromAudit(disbursementId);

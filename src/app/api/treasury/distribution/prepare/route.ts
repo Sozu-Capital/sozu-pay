@@ -7,10 +7,10 @@ import {
   fetchDistributionBalances,
 } from "@/lib/stellar/distribution-transfer";
 import {
-  isDistributionConfigured,
-  isDistributionSweepBackEnabled,
-  readDistributionPublicKey,
-} from "@/lib/sdp/distributionAccount";
+  isOrgDistributionConfigured,
+  isOrgDistributionSweepBackEnabled,
+  resolveOrgDistributionPublicKey,
+} from "@/lib/sdp/org-distribution";
 import { resolveOrgTreasuryContractId } from "@/lib/stellar/org-treasury";
 import { PayoutFundsError, formatPayoutFundsError } from "@/lib/stellar/soroban-payout-errors";
 import { cookies } from "next/headers";
@@ -34,10 +34,16 @@ export async function POST(request: NextRequest) {
   const auth = await requireDisbursementAuthorized(session.id);
   if (!auth.ok) return auth.response;
 
-  if (!isDistributionConfigured()) {
+  const org = await getOrganizationForUser(auth.user.org_id!);
+  if (!org) {
+    return NextResponse.json({ error: "Organization not found." }, { status: 404 });
+  }
+
+  if (!isOrgDistributionConfigured(org)) {
     return NextResponse.json(
       {
-        error: "SDP distribution account is not configured. Set SDP_DISTRIBUTION_PUBLIC_KEY on the server.",
+        error:
+          "Your organization does not have a distribution wallet yet. Complete org wallet setup first.",
         code: "DISTRIBUTION_NOT_CONFIGURED",
       },
       { status: 400 }
@@ -58,20 +64,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "amount must be a positive number.", code: "INVALID_AMOUNT" }, { status: 400 });
   }
 
-  const org = await getOrganizationForUser(auth.user.org_id!);
-  if (!org) {
-    return NextResponse.json({ error: "Organization not found." }, { status: 404 });
-  }
-
   const locale = readServerLocaleCookie((await cookies()).get(LOCALE_COOKIE)?.value);
 
   try {
     if (direction === "to_treasury") {
-      if (!isDistributionSweepBackEnabled()) {
+      if (!isOrgDistributionSweepBackEnabled(org)) {
         return NextResponse.json(
           {
             error:
-              "Sweep-back requires SDP_DISTRIBUTION_SEED on the server (matches SDP distribution public key).",
+              "Sweep-back is not configured for this organization's distribution wallet.",
             code: "SWEEP_BACK_NOT_CONFIGURED",
           },
           { status: 400 }
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
         direction,
         amount,
         requiresPasskey: true,
-        distributionPublicKey: readDistributionPublicKey(),
+        distributionPublicKey: resolveOrgDistributionPublicKey(org),
         treasuryContractId,
         distributionUsdc: balances.distributionUsdc,
       });

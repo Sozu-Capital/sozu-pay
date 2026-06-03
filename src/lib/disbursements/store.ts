@@ -57,6 +57,8 @@ export interface DisbursementMeta {
   manualPayments?: Record<string, ManualPaymentRecord>;
   archivedAt?: string;
   archiveReason?: "deleted" | "completed";
+  /** SozuPay organization that owns this batch (required for multi-tenant isolation). */
+  orgId?: string;
 }
 
 export interface ManualPaymentRecord {
@@ -81,6 +83,7 @@ export interface DisbursementHistoryRecord {
   created_at: string;
   archived_at: string;
   archive_reason: "deleted" | "completed";
+  org_id?: string;
   archived_by?: string;
   archived_by_label?: string;
 }
@@ -200,6 +203,7 @@ function mergeMeta(local: DisbursementMeta | undefined, remote: DisbursementMeta
     },
     archivedAt: local?.archivedAt ?? remote.archivedAt,
     archiveReason: local?.archiveReason ?? remote.archiveReason,
+    orgId: local?.orgId ?? remote.orgId,
   };
 }
 
@@ -357,15 +361,25 @@ export function getUploadedVerificationForEmail(
 
 export function ensureDisbursementMeta(
   id: string,
-  init?: Partial<Pick<DisbursementMeta, "createdByUserId" | "createdByLabel">>
+  init?: Partial<
+    Pick<DisbursementMeta, "createdByUserId" | "createdByLabel" | "orgId">
+  >
 ): DisbursementMeta {
   const existing = metaById.get(id);
-  if (existing) return existing;
+  if (existing) {
+    if (init?.orgId && !existing.orgId) {
+      existing.orgId = init.orgId;
+      persistStore();
+      persistMetaToSupabase(existing);
+    }
+    return existing;
+  }
   const meta: DisbursementMeta = {
     disbursementId: id,
     createdAt: new Date().toISOString(),
     createdByUserId: init?.createdByUserId,
     createdByLabel: init?.createdByLabel,
+    orgId: init?.orgId,
   };
   metaById.set(id, meta);
   persistStore();
@@ -581,6 +595,7 @@ export function archiveDeletedDisbursement(params: {
       created_at: disbursement.created_at,
       archived_at: meta.archivedAt,
       archive_reason: "deleted",
+      org_id: meta.orgId,
       archived_by: actor.userId,
       archived_by_label: actor.label,
     });
@@ -633,6 +648,7 @@ export function archiveCompletedIfNeeded(params: {
     created_at: disbursement.created_at,
     archived_at: meta.archivedAt,
     archive_reason: "completed",
+    org_id: meta.orgId,
   });
 
   appendDisbursementAudit(disbursement.id, {

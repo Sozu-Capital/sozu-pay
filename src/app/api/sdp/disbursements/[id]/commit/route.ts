@@ -19,6 +19,7 @@ import {
 } from "@/lib/disbursements/store";
 import { logPasskeyEvent } from "@/lib/passkey/log";
 import { formatSdpStartError } from "@/lib/sdp/validateDisbursementStart";
+import { requireDisbursementOrgAccess } from "@/lib/disbursements/org-scope";
 
 /**
  * POST /api/sdp/disbursements/[id]/commit
@@ -35,6 +36,10 @@ export async function POST(
   if (!auth.ok) return auth.response;
 
   const { id: disbursementId } = await params;
+
+  const orgAccess = await requireDisbursementOrgAccess(disbursementId, auth.user.org_id!);
+  if (!orgAccess.ok) return orgAccess.response;
+
   const meta = await getDisbursementMetaAsync(disbursementId);
   const invitesSentAt = meta?.invitesSentAt ?? invitesSentAtFromAudit(disbursementId);
   if (!invitesSentAt) {

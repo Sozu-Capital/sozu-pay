@@ -1,4 +1,5 @@
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
+import { findAuthPasskeyByCredentialId } from "@/lib/db/auth-passkeys";
 import { getWebauthnCredentialForUser } from "@/lib/db/webauthn-credentials";
 import { logPasskeyEvent } from "@/lib/passkey/log";
 import type { User } from "@/lib/db/users";
@@ -53,19 +54,22 @@ export async function verifyPasskeyAuthorization(params: {
     credentialId: params.credentialId,
   });
   if (!cred) {
-    logPasskeyEvent("warn", {
-      action: "verify_passkey",
-      userId: params.user.id,
-      disbursementId: params.disbursementId,
-      sessionId: params.sessionId,
-      reason: "credential_not_registered",
-      details: { credentialId: params.credentialId },
-    });
-    return {
-      ok: false,
-      error: "Passkey credential is not registered for your profile.",
-      code: "CREDENTIAL_NOT_REGISTERED",
-    };
+    const authPasskey = await findAuthPasskeyByCredentialId(params.credentialId);
+    if (!authPasskey || authPasskey.user_id !== params.user.id) {
+      logPasskeyEvent("warn", {
+        action: "verify_passkey",
+        userId: params.user.id,
+        disbursementId: params.disbursementId,
+        sessionId: params.sessionId,
+        reason: "credential_not_registered",
+        details: { credentialId: params.credentialId },
+      });
+      return {
+        ok: false,
+        error: "Passkey credential is not registered for your profile.",
+        code: "CREDENTIAL_NOT_REGISTERED",
+      };
+    }
   }
 
   logPasskeyEvent("info", {

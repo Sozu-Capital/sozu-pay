@@ -19,7 +19,7 @@ import {
 } from "@/lib/sdp/receiverDisplay";
 import {
   actorLabelFromUser,
-  markInvitesSent,
+  markInvitesSentAsync,
   mergedUploadedVerificationsAsync,
 } from "@/lib/disbursements/store";
 import { formatSdpStartError, validateDisbursementFunds } from "@/lib/sdp/validateDisbursementStart";
@@ -255,7 +255,7 @@ export async function POST(
 
     const user = await getUserBySessionId(session.id);
     const label = user ? actorLabelFromUser(user) : session.id;
-    markInvitesSent(id, { userId: session.id, label }, {
+    await markInvitesSentAsync(id, { userId: session.id, label }, {
       sent: sentCount,
       skipped: skippedCount,
       failed: failedCount,

@@ -24,6 +24,8 @@ import {
 } from "@/lib/disbursements/store";
 import {
   isDisbursementArchived,
+  isActiveDisbursementCampaign,
+  isDisbursementFullyPaid,
   overlayDisbursementStats,
 } from "@/lib/disbursements/mergeDisbursementStats";
 import {
@@ -31,7 +33,7 @@ import {
   filterMetaForOrg,
 } from "@/lib/disbursements/org-scope";
 import { getUserBySessionId } from "@/lib/db/users";
-import { recordUploadedVerifications } from "@/lib/disbursements/store";
+import { recordUploadedVerifications, repairDisbursementMetaOrgIds } from "@/lib/disbursements/store";
 
 function notConfigured() {
   return NextResponse.json({ error: sdpNotConfiguredMessage() }, { status: 503 });
@@ -62,22 +64,25 @@ export async function GET() {
     const wallets = await listWallets();
     const orgId = auth.user.org_id!;
     let meta = await getAllDisbursementMetaAsync();
+    meta = await repairDisbursementMetaOrgIds(meta, orgId);
     meta = filterMetaForOrg(meta, orgId);
 
     const orgDisbursements = filterDisbursementsForOrg(disbursements, meta, orgId);
 
     for (const d of orgDisbursements) {
       const overlaid = overlayDisbursementStats(d, meta[d.id]);
-      if (overlaid.status === "COMPLETED" && !isDisbursementArchived(meta[d.id])) {
+      if (
+        isDisbursementFullyPaid(overlaid, meta[d.id]) &&
+        !isDisbursementArchived(meta[d.id])
+      ) {
         archiveCompletedIfNeeded({ disbursement: overlaid });
       }
     }
     meta = filterMetaForOrg(await getAllDisbursementMetaAsync(), orgId);
 
     const activeDisbursements = orgDisbursements
-      .filter((d) => !isDisbursementArchived(meta[d.id]))
-      .map((d) => overlayDisbursementStats(d, meta[d.id]))
-      .filter((d) => d.status !== "COMPLETED");
+      .filter((d) => isActiveDisbursementCampaign(d, meta[d.id]))
+      .map((d) => overlayDisbursementStats(d, meta[d.id]));
 
     return NextResponse.json({
       disbursements: activeDisbursements,

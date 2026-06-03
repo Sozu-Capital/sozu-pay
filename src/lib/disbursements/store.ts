@@ -192,6 +192,51 @@ function persistMetaToSupabase(meta: DisbursementMeta): void {
     });
 }
 
+/** Load meta from memory/DB before mutating — avoids wiping orgId on cold starts. */
+export async function loadDisbursementMetaForUpdate(
+  disbursementId: string
+): Promise<DisbursementMeta> {
+  const loaded = await getDisbursementMetaAsync(disbursementId);
+  if (loaded) {
+    metaById.set(disbursementId, loaded);
+    return loaded;
+  }
+  return ensureDisbursementMeta(disbursementId);
+}
+
+function saveDisbursementMeta(meta: DisbursementMeta): void {
+  metaById.set(meta.disbursementId, meta);
+  persistStore();
+  persistMetaToSupabase(meta);
+}
+
+/** Re-attach orgId on legacy rows wiped by stale meta upserts. */
+export async function repairDisbursementMetaOrgIds(
+  metaById: Record<string, DisbursementMeta>,
+  orgId: string
+): Promise<Record<string, DisbursementMeta>> {
+  const { getUserById } = await import("@/lib/db/users");
+  const repaired: Record<string, DisbursementMeta> = { ...metaById };
+
+  for (const [disbursementId, meta] of Object.entries(metaById)) {
+    if (meta.orgId === orgId) continue;
+    if (meta.orgId && meta.orgId !== orgId) continue;
+    if (!meta.createdByUserId) continue;
+
+    const creatorId = Number(meta.createdByUserId);
+    if (!Number.isFinite(creatorId)) continue;
+
+    const creator = await getUserById(creatorId);
+    if (creator?.org_id !== orgId) continue;
+
+    const next = { ...meta, orgId };
+    repaired[disbursementId] = next;
+    saveDisbursementMeta(next);
+  }
+
+  return repaired;
+}
+
 function mergeMeta(local: DisbursementMeta | undefined, remote: DisbursementMeta): DisbursementMeta {
   return {
     ...(local ?? { disbursementId: remote.disbursementId, createdAt: remote.createdAt }),
@@ -412,7 +457,15 @@ export function markInvitesSent(
   actor: { userId: string; label: string },
   summary: { sent: number; skipped: number; failed: number }
 ): void {
-  const meta = ensureDisbursementMeta(disbursementId);
+  void markInvitesSentAsync(disbursementId, actor, summary);
+}
+
+export async function markInvitesSentAsync(
+  disbursementId: string,
+  actor: { userId: string; label: string },
+  summary: { sent: number; skipped: number; failed: number }
+): Promise<void> {
+  const meta = await loadDisbursementMetaForUpdate(disbursementId);
   meta.invitesSentAt = new Date().toISOString();
   meta.invitesSentBy = actor.userId;
   meta.invitesSentByLabel = actor.label;
@@ -427,10 +480,10 @@ export function markInvitesSent(
       failed: String(summary.failed),
     },
   });
-  persistMetaToSupabase(meta);
+  saveDisbursementMeta(meta);
 }
 
-export function recordManualDisbursementPayment(
+export async function recordManualDisbursementPaymentAsync(
   disbursementId: string,
   actor: { userId: string; label: string },
   payment: {
@@ -440,8 +493,8 @@ export function recordManualDisbursementPayment(
     recipientAddress: string;
     recipientLabel: string;
   }
-): void {
-  const meta = ensureDisbursementMeta(disbursementId);
+): Promise<void> {
+  const meta = await loadDisbursementMetaForUpdate(disbursementId);
   if (!meta.manualPayments) meta.manualPayments = {};
   meta.manualPayments[payment.paymentId] = {
     txHash: payment.txHash,
@@ -462,8 +515,21 @@ export function recordManualDisbursementPayment(
       recipientAddress: payment.recipientAddress,
     },
   });
-  persistStore();
-  persistMetaToSupabase(meta);
+  saveDisbursementMeta(meta);
+}
+
+export function recordManualDisbursementPayment(
+  disbursementId: string,
+  actor: { userId: string; label: string },
+  payment: {
+    paymentId: string;
+    txHash: string;
+    amount: string;
+    recipientAddress: string;
+    recipientLabel: string;
+  }
+): void {
+  void recordManualDisbursementPaymentAsync(disbursementId, actor, payment);
 }
 
 export function maybeArchiveCompletedDisbursement(
@@ -498,7 +564,14 @@ export function markHotlinkCommitted(
   disbursementId: string,
   actor: { userId: string; label: string }
 ): void {
-  const meta = ensureDisbursementMeta(disbursementId);
+  void markHotlinkCommittedAsync(disbursementId, actor);
+}
+
+export async function markHotlinkCommittedAsync(
+  disbursementId: string,
+  actor: { userId: string; label: string }
+): Promise<void> {
+  const meta = await loadDisbursementMetaForUpdate(disbursementId);
   meta.hotlinkAt = new Date().toISOString();
   meta.hotlinkBy = actor.userId;
   meta.hotlinkByLabel = actor.label;
@@ -508,14 +581,21 @@ export function markHotlinkCommitted(
     actorLabel: actor.label,
     message: "Auto pay enabled — SDP releases funds when beneficiaries finish registration",
   });
-  persistMetaToSupabase(meta);
+  saveDisbursementMeta(meta);
 }
 
 export function clearHotlinkCommitted(
   disbursementId: string,
   actor: { userId: string; label: string }
 ): void {
-  const meta = ensureDisbursementMeta(disbursementId);
+  void clearHotlinkCommittedAsync(disbursementId, actor);
+}
+
+export async function clearHotlinkCommittedAsync(
+  disbursementId: string,
+  actor: { userId: string; label: string }
+): Promise<void> {
+  const meta = await loadDisbursementMetaForUpdate(disbursementId);
   delete meta.hotlinkAt;
   delete meta.hotlinkBy;
   delete meta.hotlinkByLabel;
@@ -525,7 +605,7 @@ export function clearHotlinkCommitted(
     actorLabel: actor.label,
     message: "Auto pay disabled — use Distribuir to release payments manually",
   });
-  persistMetaToSupabase(meta);
+  saveDisbursementMeta(meta);
 }
 
 export function markPaymentsStarted(
@@ -533,7 +613,15 @@ export function markPaymentsStarted(
   actor: { userId: string; label: string },
   batchName: string
 ): void {
-  const meta = ensureDisbursementMeta(disbursementId);
+  void markPaymentsStartedAsync(disbursementId, actor, batchName);
+}
+
+export async function markPaymentsStartedAsync(
+  disbursementId: string,
+  actor: { userId: string; label: string },
+  batchName: string
+): Promise<void> {
+  const meta = await loadDisbursementMetaForUpdate(disbursementId);
   meta.paymentsStartedAt = new Date().toISOString();
   meta.paymentsStartedBy = actor.userId;
   meta.paymentsStartedByLabel = actor.label;
@@ -543,7 +631,7 @@ export function markPaymentsStarted(
     actorLabel: actor.label,
     message: `Payments started for batch "${batchName}"`,
   });
-  persistMetaToSupabase(meta);
+  saveDisbursementMeta(meta);
 }
 
 export function archiveDeletedDisbursement(params: {

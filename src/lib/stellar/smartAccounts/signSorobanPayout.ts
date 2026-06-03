@@ -6,6 +6,7 @@ import {
   signAuthEntryWithResolvedKeyData,
   smartAccountIdFromAuthEntry,
 } from "@/lib/stellar/smartAccounts/signSorobanWebAuthnAuth";
+import { connectSessionPasskeyWallet } from "@/lib/stellar/smartAccounts/sessionWallet";
 
 function isMissingSignerError(e: unknown): boolean {
   const msg = e instanceof Error ? e.message : String(e);
@@ -59,6 +60,7 @@ export async function signSorobanEnvelopeWithPasskey(params: {
 
     const connected = await params.kit.connectWallet({
       prompt: true,
+      contractId: key,
       credentialId: forcePrompt ? undefined : seedCredential ?? undefined,
     });
     const cred = connected?.credentialId?.trim();
@@ -181,9 +183,9 @@ export async function executePasskeySorobanPayout(params: {
     throw new Error(config.error ?? "Smart account config unavailable.");
   }
 
-  const connected = await params.kit.connectWallet({
+  const connected = await connectSessionPasskeyWallet(params.kit, {
     prompt: true,
-    credentialId: params.credentialId ?? undefined,
+    credentialId: params.credentialId,
   });
   if (!connected?.contractId) {
     throw new Error("Passkey wallet not connected.");

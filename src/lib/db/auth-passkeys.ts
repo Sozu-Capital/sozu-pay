@@ -56,7 +56,9 @@ export async function listAuthPasskeysForUser(userId: number): Promise<AuthPassk
   const { data } = await getSupabase()
     .from("auth_passkeys")
     .select("*")
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .order("last_used_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false });
   return (data as AuthPasskey[]) ?? [];
 }
 

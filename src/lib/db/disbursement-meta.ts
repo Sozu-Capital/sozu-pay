@@ -93,9 +93,43 @@ export async function fetchAllDisbursementMeta(): Promise<Record<string, Disburs
   return out;
 }
 
-/** Upsert full meta row (merge-friendly via read-modify-write in caller). */
+function mergeMetaForUpsert(
+  incoming: DisbursementMeta,
+  existing: DisbursementMeta | null
+): DisbursementMeta {
+  if (!existing) return incoming;
+  return {
+    ...existing,
+    ...incoming,
+    orgId: incoming.orgId ?? existing.orgId,
+    uploadedVerificationByEmail:
+      incoming.uploadedVerificationByEmail ?? existing.uploadedVerificationByEmail,
+    manualPayments: {
+      ...(existing.manualPayments ?? {}),
+      ...(incoming.manualPayments ?? {}),
+    },
+    archivedAt: incoming.archivedAt ?? existing.archivedAt,
+    archiveReason: incoming.archiveReason ?? existing.archiveReason,
+    invitesSentAt: incoming.invitesSentAt ?? existing.invitesSentAt,
+    invitesSentBy: incoming.invitesSentBy ?? existing.invitesSentBy,
+    invitesSentByLabel: incoming.invitesSentByLabel ?? existing.invitesSentByLabel,
+    hotlinkAt: incoming.hotlinkAt ?? existing.hotlinkAt,
+    hotlinkBy: incoming.hotlinkBy ?? existing.hotlinkBy,
+    hotlinkByLabel: incoming.hotlinkByLabel ?? existing.hotlinkByLabel,
+    paymentsStartedAt: incoming.paymentsStartedAt ?? existing.paymentsStartedAt,
+    paymentsStartedBy: incoming.paymentsStartedBy ?? existing.paymentsStartedBy,
+    paymentsStartedByLabel:
+      incoming.paymentsStartedByLabel ?? existing.paymentsStartedByLabel,
+    createdByUserId: incoming.createdByUserId ?? existing.createdByUserId,
+    createdByLabel: incoming.createdByLabel ?? existing.createdByLabel,
+  };
+}
+
+/** Upsert meta without wiping org_id or other fields when memory cache is stale. */
 export async function upsertDisbursementMeta(meta: DisbursementMeta): Promise<void> {
-  const row = metaToRow(meta);
+  const existing = await fetchDisbursementMeta(meta.disbursementId);
+  const merged = mergeMetaForUpsert(meta, existing);
+  const row = metaToRow(merged);
   const { error } = await getSupabase()
     .from("sdp_disbursement_meta")
     .upsert({ ...row, updated_at: new Date().toISOString() }, { onConflict: "disbursement_id" });

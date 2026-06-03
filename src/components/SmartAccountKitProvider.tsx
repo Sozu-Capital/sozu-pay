@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { SmartAccountKit, ConnectWalletResult, CreateWalletResult } from "smart-account-kit";
 import { getSmartAccountKit } from "@/lib/stellar/smartAccounts/client";
 import { linkMemberWalletWithLoginPasskey } from "@/lib/stellar/smartAccounts/linkMemberWallet";
+import { connectSessionPasskeyWallet, fetchSessionPasskeyWallet } from "@/lib/stellar/smartAccounts/sessionWallet";
 
 type SmartAccountContextValue = {
   ready: boolean;
@@ -49,7 +50,7 @@ export function SmartAccountKitProvider({ children }: { children: React.ReactNod
         const { kit } = await getSmartAccountKit();
         if (cancelled) return;
         setKit(kit);
-        const res = (await kit.connectWallet()) as ConnectWalletResult | null;
+        const res = await connectSessionPasskeyWallet(kit, { prompt: false });
         if (res?.contractId) {
           setConnected(true);
           setContractId(res.contractId);
@@ -75,7 +76,34 @@ export function SmartAccountKitProvider({ children }: { children: React.ReactNod
     }) => {
     if (!kit) throw new Error("Smart account kit not ready");
     setError(null);
-    const res = (await kit.connectWallet(opts)) as ConnectWalletResult | null;
+
+    // Onboarding: link/deploy before member contract is stored in DB.
+    if (opts?.credentialId && !opts?.contractId) {
+      const session = await fetchSessionPasskeyWallet();
+      if (!session?.memberContractId) {
+        const res = (await kit.connectWallet(opts)) as ConnectWalletResult | null;
+        if (res?.contractId) {
+          setConnected(true);
+          setContractId(res.contractId);
+          setCredentialId(res.credentialId ?? null);
+          return {
+            contractId: res.contractId,
+            credentialId: res.credentialId ?? null,
+            publicKey: res.credential?.publicKey ?? null,
+          };
+        }
+        setConnected(false);
+        setContractId(null);
+        setCredentialId(null);
+        return { contractId: null, credentialId: null, publicKey: null };
+      }
+    }
+
+    const res = await connectSessionPasskeyWallet(kit, {
+      prompt: opts?.prompt ?? false,
+      credentialId: opts?.credentialId,
+      contractId: opts?.contractId,
+    });
     if (res?.contractId) {
       setConnected(true);
       setContractId(res.contractId);
@@ -83,7 +111,7 @@ export function SmartAccountKitProvider({ children }: { children: React.ReactNod
       return {
         contractId: res.contractId,
         credentialId: res.credentialId ?? null,
-        publicKey: res.credential?.publicKey ?? null,
+        publicKey: res.publicKey ?? null,
       };
     }
     setConnected(false);

@@ -42,7 +42,13 @@ export function overlayDisbursementStats<T extends DisbursementListItem>(
   const successful = Math.max(sdpSuccess, manualCount);
   const disbursed = Math.max(sdpDisbursed, manualSum);
   const total = disbursement.total_payments;
-  const allPaid = total > 0 && successful >= total;
+  const totalAmount = parseFloat(disbursement.total_amount) || 0;
+  const sdpStatus = disbursement.status.toUpperCase();
+  const allPaid =
+    total > 0 &&
+    successful >= total &&
+    (sdpStatus === "COMPLETED" ||
+      (totalAmount > 0 && disbursed + 1e-9 >= totalAmount));
 
   let status = disbursement.status;
   if (allPaid) status = "COMPLETED";
@@ -74,8 +80,28 @@ export function isDisbursementFullyPaid(
   meta?: DisbursementMeta | null
 ): boolean {
   const overlaid = overlayDisbursementStats(disbursement, meta);
-  return (
-    overlaid.total_payments > 0 &&
-    overlaid.successful_payments >= overlaid.total_payments
-  );
+  return overlaid.status === "COMPLETED";
+}
+
+const LIVE_CAMPAIGN_STATUSES = new Set(["DRAFT", "READY", "STARTED", "PAUSED"]);
+
+/** Whether a batch should appear on the active Disbursements page (not History). */
+export function isActiveDisbursementCampaign(
+  disbursement: DisbursementListItem,
+  meta?: DisbursementMeta | null
+): boolean {
+  if (isDisbursementArchived(meta)) return false;
+
+  const overlaid = overlayDisbursementStats(disbursement, meta);
+  if (overlaid.status === "COMPLETED") return false;
+
+  const sdpStatus = disbursement.status.toUpperCase();
+  if (LIVE_CAMPAIGN_STATUSES.has(sdpStatus)) return true;
+  if (LIVE_CAMPAIGN_STATUSES.has(overlaid.status.toUpperCase())) return true;
+
+  const total = parseFloat(overlaid.total_amount) || 0;
+  const disbursed = parseFloat(overlaid.disbursed_amount) || 0;
+  if (total > 0 && disbursed + 1e-9 < total) return true;
+
+  return overlaid.successful_payments < overlaid.total_payments;
 }

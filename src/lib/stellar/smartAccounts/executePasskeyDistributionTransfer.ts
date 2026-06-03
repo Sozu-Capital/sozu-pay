@@ -2,6 +2,7 @@
 
 import type { SmartAccountKit } from "smart-account-kit";
 import { signSorobanEnvelopeWithPasskey } from "@/lib/stellar/smartAccounts/signSorobanPayout";
+import { connectSessionPasskeyWallet } from "@/lib/stellar/smartAccounts/sessionWallet";
 
 export type DistributionTransferDirection = "to_distribution" | "to_treasury";
 
@@ -29,9 +30,9 @@ export async function executePasskeyDistributionTransfer(params: {
     throw new Error(config.error ?? "Smart account config unavailable.");
   }
 
-  const connected = await params.kit.connectWallet({
+  const connected = await connectSessionPasskeyWallet(params.kit, {
     prompt: true,
-    credentialId: params.credentialId ?? undefined,
+    credentialId: params.credentialId,
   });
   if (!connected?.contractId || !connected.credentialId) {
     throw new Error("Passkey wallet not connected.");

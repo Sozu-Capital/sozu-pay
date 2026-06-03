@@ -3,15 +3,12 @@ import { getSession } from "@/lib/auth/session";
 import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
 import { listDisbursements } from "@/lib/sdp/adminClient";
 import {
-  archiveCompletedIfNeededAsync,
   getAllDisbursementMetaAsync,
   repairDisbursementMetaOrgIds,
 } from "@/lib/disbursements/store";
 import {
-  filterDisbursementsForOrg,
   getDisbursementHistoryForOrgFromSources,
 } from "@/lib/disbursements/org-scope";
-import { overlayDisbursementStats } from "@/lib/disbursements/mergeDisbursementStats";
 import { isSdpConfigured, sdpNotConfiguredMessage } from "@/lib/sdp/env";
 
 export const dynamic = "force-dynamic";
@@ -36,23 +33,10 @@ export async function GET() {
       getAllDisbursementMetaAsync(),
     ]);
     const meta = await repairDisbursementMetaOrgIds(rawMeta, orgId);
-    const orgDisbursements = filterDisbursementsForOrg(disbursements, meta, orgId);
-
-    for (const d of orgDisbursements) {
-      await archiveCompletedIfNeededAsync({
-        disbursement: overlayDisbursementStats(d, meta[d.id]),
-      });
-    }
-
-    const refreshedMeta = await repairDisbursementMetaOrgIds(
-      await getAllDisbursementMetaAsync(),
-      orgId
-    );
-
     const history = getDisbursementHistoryForOrgFromSources({
       orgId,
       disbursements,
-      metaById: refreshedMeta,
+      metaById: meta,
     });
 
     return NextResponse.json({ history });

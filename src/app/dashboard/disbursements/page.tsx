@@ -1464,7 +1464,7 @@ export default function DisbursementsPage() {
               d.status === "PAUSED");
           const showAutoReleaseToggle =
             isDisbursementAdmin && invitesSent && d.status !== "COMPLETED";
-          const showDelete = isDisbursementAdmin && d.status !== "COMPLETED";
+          const showDelete = isDisbursementAdmin;
 
           return (
           <div

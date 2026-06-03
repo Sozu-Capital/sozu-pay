@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
 import {
-  archiveCompletedIfNeededAsync,
   archiveDeletedDisbursementAsync,
   actorLabelFromUser,
   getDisbursementMetaAsync,
@@ -115,7 +114,6 @@ export async function GET(
     const overlaidDisbursement = overlayDisbursementStats(disbursement, meta ?? undefined, {
       paymentRows,
     });
-    await archiveCompletedIfNeededAsync({ disbursement: overlaidDisbursement });
 
     return NextResponse.json({
       disbursement: overlaidDisbursement,

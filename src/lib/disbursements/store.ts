@@ -736,7 +736,7 @@ export function archiveCompletedIfNeeded(params: {
   void archiveCompletedIfNeededAsync(params);
 }
 
-export async function archiveCompletedIfNeededAsync(params: {
+export async function archiveCompletedIfNeededAsync(_params: {
   disbursement: {
     id: string;
     name: string;
@@ -751,73 +751,7 @@ export async function archiveCompletedIfNeededAsync(params: {
     created_at: string;
   };
 }): Promise<void> {
-  const { disbursement } = params;
-  const meta = await loadDisbursementMetaForUpdate(disbursement.id);
-  const overlaid = overlayDisbursementStats(
-    {
-      ...disbursement,
-      asset: { code: disbursement.asset.code, issuer: disbursement.asset.issuer ?? "" },
-      wallet: { id: disbursement.wallet.id ?? "", name: disbursement.wallet.name },
-    },
-    meta
-  );
-
-  const fullyPaid = isDisbursementFullyPaid(overlaid, meta);
-  const total = overlaid.total_payments;
-  const terminalCount = overlaid.successful_payments + overlaid.failed_payments;
-  const allTerminal = total > 0 && terminalCount >= total;
-  const sdpCompleted = overlaid.status.toUpperCase() === "COMPLETED";
-
-  if (!fullyPaid && !sdpCompleted && !allTerminal) return;
-
-  const archiveReason: DisbursementHistoryRecord["archive_reason"] =
-    fullyPaid || sdpCompleted ? "completed" : "closed";
-
-  if (
-    history.some(
-      (h) => h.id === disbursement.id && h.archive_reason === archiveReason
-    )
-  ) {
-    return;
-  }
-
-  meta.archivedAt = meta.archivedAt ?? new Date().toISOString();
-  meta.archiveReason = archiveReason;
-  delete meta.hotlinkAt;
-  delete meta.hotlinkBy;
-  delete meta.hotlinkByLabel;
-
-  const snapshot: DisbursementHistoryRecord = {
-    id: disbursement.id,
-    name: disbursement.name,
-    status: fullyPaid || sdpCompleted ? "COMPLETED" : overlaid.status,
-    total_payments: overlaid.total_payments,
-    successful_payments: overlaid.successful_payments,
-    failed_payments: overlaid.failed_payments,
-    total_amount: overlaid.total_amount,
-    disbursed_amount: overlaid.disbursed_amount,
-    asset_code: disbursement.asset.code,
-    wallet_name: disbursement.wallet.name,
-    created_at: disbursement.created_at,
-    archived_at: meta.archivedAt,
-    archive_reason: archiveReason,
-    org_id: meta.orgId,
-  };
-  history.unshift(snapshot);
-  meta.archiveSnapshot = snapshot;
-
-  appendDisbursementAudit(disbursement.id, {
-    action: "campaign_completed",
-    actorUserId: "system",
-    actorLabel: "System",
-    message:
-      archiveReason === "completed"
-        ? `Batch "${disbursement.name}" completed — all beneficiaries paid`
-        : `Batch "${disbursement.name}" closed — ${overlaid.failed_payments} failed payment(s)`,
-  });
-
-  persistStore();
-  saveDisbursementMeta(meta);
+  // Completed batches stay on the active list until an admin archives them manually.
 }
 
 export function getDisbursementHistory(): DisbursementHistoryRecord[] {

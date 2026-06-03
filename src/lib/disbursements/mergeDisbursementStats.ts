@@ -83,15 +83,10 @@ export function overlayDisbursementStats<T extends DisbursementListItem>(
   const failed = Math.max(disbursement.failed_payments, rowStats.failed);
   const total = disbursement.total_payments;
   const totalAmount = parseFloat(disbursement.total_amount) || 0;
-  const sdpStatus = disbursement.status.toUpperCase();
   const allPaid =
     total > 0 &&
     successful >= total &&
-    failed === 0 &&
-    (sdpStatus === "COMPLETED" ||
-      successful >= total ||
-      totalAmount <= 0 ||
-      disbursed + 1e-9 >= totalAmount);
+    (totalAmount <= 0 || disbursed + 1e-9 >= totalAmount);
 
   let status = disbursement.status;
   if (allPaid) status = "COMPLETED";
@@ -139,7 +134,7 @@ export function isActiveDisbursementCampaign(
   if (isDisbursementArchived(meta)) return false;
 
   const overlaid = overlayDisbursementStats(disbursement, meta, options);
-  if (overlaid.status === "COMPLETED") return false;
+  if (overlaid.status === "COMPLETED") return true;
 
   const sdpStatus = disbursement.status.toUpperCase();
   if (LIVE_CAMPAIGN_STATUSES.has(sdpStatus)) return true;

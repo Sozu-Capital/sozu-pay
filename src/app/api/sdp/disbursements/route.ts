@@ -19,15 +19,12 @@ import { isSdpConfigured, sdpNotConfiguredMessage } from "@/lib/sdp/env";
 import {
   actorLabelFromUser,
   appendDisbursementAudit,
-  archiveCompletedIfNeededAsync,
   ensureDisbursementMeta,
   getAllDisbursementMetaAsync,
   repairDisbursementMetaOrgIds,
 } from "@/lib/disbursements/store";
 import {
-  isDisbursementArchived,
   isActiveDisbursementCampaign,
-  isDisbursementFullyPaid,
   overlayDisbursementStats,
 } from "@/lib/disbursements/mergeDisbursementStats";
 import {
@@ -73,21 +70,15 @@ export async function GET() {
 
     const enriched = await Promise.all(
       orgDisbursements.map(async (d) => {
-        const paymentRows = await fetchDisbursementPaymentRows(d.id, d.status);
+        const paymentRows = await fetchDisbursementPaymentRows(
+          d.id,
+          d.status,
+          meta[d.id]?.manualPayments ?? {}
+        );
         const overlaid = overlayDisbursementStats(d, meta[d.id], { paymentRows });
         return { d, paymentRows, overlaid };
       })
     );
-
-    for (const { overlaid } of enriched) {
-      if (
-        isDisbursementFullyPaid(overlaid, meta[overlaid.id]) &&
-        !isDisbursementArchived(meta[overlaid.id])
-      ) {
-        await archiveCompletedIfNeededAsync({ disbursement: overlaid });
-      }
-    }
-    meta = filterMetaForOrg(await getAllDisbursementMetaAsync(), orgId);
 
     const activeDisbursements = enriched
       .filter(({ overlaid, paymentRows }) =>

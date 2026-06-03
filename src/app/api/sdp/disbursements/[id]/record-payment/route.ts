@@ -4,13 +4,9 @@ import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
 import {
   actorLabelFromUser,
   recordManualDisbursementPaymentAsync,
-  archiveCompletedIfNeededAsync,
-  getDisbursementMetaAsync,
 } from "@/lib/disbursements/store";
 import { getUserBySessionId } from "@/lib/db/users";
-import { getDisbursement } from "@/lib/sdp/adminClient";
 import { requireDisbursementOrgAccess } from "@/lib/disbursements/org-scope";
-import { overlayDisbursementStats } from "@/lib/disbursements/mergeDisbursementStats";
 
 /**
  * POST /api/sdp/disbursements/[id]/record-payment
@@ -54,24 +50,6 @@ export async function POST(
     { userId: session.id, label },
     { paymentId, txHash, amount, recipientAddress, recipientLabel }
   );
-
-  try {
-    const [disbursement, meta] = await Promise.all([
-      getDisbursement(disbursementId),
-      getDisbursementMetaAsync(disbursementId),
-    ]);
-    const overlaid = overlayDisbursementStats(
-      {
-        ...disbursement,
-        asset: { code: disbursement.asset.code, issuer: disbursement.asset.issuer ?? "" },
-        wallet: { id: disbursement.wallet.id ?? "", name: disbursement.wallet.name },
-      },
-      meta ?? undefined
-    );
-    await archiveCompletedIfNeededAsync({ disbursement: overlaid });
-  } catch (e) {
-    console.warn("[record-payment] archive check failed:", e);
-  }
 
   return NextResponse.json({ ok: true, paymentId, txHash });
 }

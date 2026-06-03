@@ -19,13 +19,12 @@ import {
 } from "@/lib/sdp/receiverDisplay";
 import {
   actorLabelFromUser,
-  markHotlinkCommitted,
   markInvitesSent,
-  markPaymentsStarted,
   mergedUploadedVerificationsAsync,
 } from "@/lib/disbursements/store";
 import { formatSdpStartError } from "@/lib/sdp/validateDisbursementStart";
 import { getUserBySessionId } from "@/lib/db/users";
+import { getOrganizationById } from "@/lib/db/organizations";
 
 const WALLET_BASE_URL =
   process.env.SOZUCREDIT_URL ?? "https://credit.sozu.capital";
@@ -88,10 +87,13 @@ export async function POST(
 
   const { id } = await params;
 
-  let organizationName = "Your organization";
+  const org = await getOrganizationById(auth.user.org_id!);
+  let organizationName = org?.name?.trim() || "Your organization";
   try {
     const body = await request.json().catch(() => ({}));
-    if (body?.organizationName) organizationName = String(body.organizationName);
+    if (typeof body?.organizationName === "string" && body.organizationName.trim()) {
+      organizationName = body.organizationName.trim();
+    }
   } catch {
     // body optional
   }
@@ -115,10 +117,6 @@ export async function POST(
       try {
         await startDisbursement(id);
         campaignStarted = true;
-        const user = await getUserBySessionId(session.id);
-        const label = user ? actorLabelFromUser(user) : session.id;
-        markPaymentsStarted(id, { userId: session.id, label }, disbursement.name);
-        markHotlinkCommitted(id, { userId: session.id, label });
       } catch (e) {
         const raw = e instanceof Error ? e.message : String(e);
         const formatted = formatSdpStartError(raw);
@@ -207,9 +205,8 @@ export async function POST(
           toEmail: receiver.email,
           recipientName,
           organizationName,
-          campaignName: disbursement.wallet.name,
+          campaignName: disbursement.name,
           registrationUrl,
-          disbursementName: disbursement.name,
           amountUsdc: receiver.payment?.amount,
         });
         inviteSent = emailResult.sent;

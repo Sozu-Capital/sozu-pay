@@ -4,8 +4,10 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import {
-  DisbursementAuditButton,
-} from "@/components/disbursements/DisbursementAuditButton";
+  DisbursementAuthorizeModal,
+  type DisbursementAuthorizeResult,
+} from "@/components/DisbursementAuthorizeModal";
+import { DisbursementAuditButton } from "@/components/disbursements/DisbursementAuditButton";
 import { BeneficiaryFieldCell } from "@/components/disbursements/BeneficiaryFieldCell";
 import { EditDisbursementRecipients } from "@/components/disbursements/EditDisbursementRecipients";
 import { DistributionTreasuryPanel } from "@/components/disbursements/DistributionTreasuryPanel";
@@ -69,6 +71,11 @@ interface DisbursementMeta {
   paymentsStartedAt?: string;
   createdByLabel?: string;
 }
+
+const CARD_ACTION_BTN =
+  "px-3 py-1.5 rounded text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed";
+const AUTO_RELEASE_BTN =
+  "px-2 py-0.5 rounded text-[10px] font-medium leading-tight shrink-0 disabled:opacity-50 disabled:cursor-not-allowed";
 
 interface SdpReceiverRow {
   email?: string;
@@ -198,9 +205,13 @@ export default function DisbursementsPage() {
 
   // Actions
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [startingId, setStartingId] = useState<string | null>(null);
+  const [committingId, setCommittingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [authorizeDisbursementId, setAuthorizeDisbursementId] = useState<string | null>(null);
+  const [authorizeAction, setAuthorizeAction] = useState<"start" | "commit" | null>(null);
   const [fundingId, setFundingId] = useState<string | null>(null);
   const [releasingId, setReleasingId] = useState<string | null>(null);
   const [distributionUsdc, setDistributionUsdc] = useState<string>("0");
@@ -480,7 +491,84 @@ export default function DisbursementsPage() {
     }
   }
 
-  // ── Send invites (starts campaign + emails) ───────────────────────────────
+  // ── Distribuir / Auto liberación (passkey authorization) ───────────────────
+
+  function handleStart(id: string) {
+    setActionMsg(null);
+    setAuthorizeAction("start");
+    setAuthorizeDisbursementId(id);
+  }
+
+  function handleAutoRelease(id: string, name: string) {
+    if (!window.confirm(t("autoReleaseConfirm", { name }))) return;
+    setActionMsg(null);
+    setAuthorizeAction("commit");
+    setAuthorizeDisbursementId(id);
+  }
+
+  async function completeStart(id: string, auth: DisbursementAuthorizeResult) {
+    setStartingId(id);
+    try {
+      const res = await fetch(`/api/sdp/disbursements/${id}/start`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: auth.sessionId,
+          credentialId: auth.credentialId,
+          contractId: auth.contractId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setActionMsg(data.error ? `Error: ${data.error}` : `Error: ${res.status}`);
+        setAuthorizeDisbursementId(null);
+        setAuthorizeAction(null);
+        return;
+      }
+      setAuthorizeDisbursementId(null);
+      setAuthorizeAction(null);
+      setActionMsg(t("disbursementStarted"));
+      await fetchList();
+      if (selectedId === id) await refreshDetail(id);
+    } catch (e) {
+      setActionMsg(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setStartingId(null);
+    }
+  }
+
+  async function completeAutoRelease(id: string, auth: DisbursementAuthorizeResult) {
+    setCommittingId(id);
+    try {
+      const res = await fetch(`/api/sdp/disbursements/${id}/commit`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: auth.sessionId,
+          credentialId: auth.credentialId,
+          contractId: auth.contractId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setActionMsg(data.error ? `Error: ${data.error}` : `Error: ${res.status}`);
+        setAuthorizeDisbursementId(null);
+        setAuthorizeAction(null);
+        return;
+      }
+      setAuthorizeDisbursementId(null);
+      setAuthorizeAction(null);
+      setActionMsg(t("autoReleaseSuccess"));
+      await fetchList();
+      if (selectedId === id) await refreshDetail(id);
+    } catch (e) {
+      setActionMsg(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setCommittingId(null);
+    }
+  }
 
   async function handleToggleCampaign(id: string, currentStatus: string) {
     const next = currentStatus === "STARTED" ? "PAUSED" : "STARTED";
@@ -575,10 +663,11 @@ export default function DisbursementsPage() {
     setSendingId(id);
     setActionMsg(null);
     try {
+      const orgName = profile?.org_name?.trim();
       const res = await fetch(`/api/sdp/disbursements/${id}/send-invites`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ organizationName: "Sozu" }),
+        body: JSON.stringify(orgName ? { organizationName: orgName } : {}),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -1145,6 +1234,7 @@ export default function DisbursementsPage() {
               ? (detail as { meta?: DisbursementMeta | null }).meta
               : null;
           const invitesSent = Boolean(meta?.invitesSentAt ?? detailMeta?.invitesSentAt);
+          const hotlinkActive = Boolean(meta?.hotlinkAt ?? detailMeta?.hotlinkAt);
           const canEdit = DELETABLE_DISBURSEMENT_STATUSES.has(d.status);
           const batchRemaining = batchRemainingUsdc(d);
           const batchFunded =
@@ -1159,6 +1249,12 @@ export default function DisbursementsPage() {
                     p.lifecycle_state === "live" &&
                     p.payment_status.toUpperCase() !== "SUCCESS"
                 )));
+          const showDistribuir =
+            isDisbursementAdmin &&
+            invitesSent &&
+            (d.status === "DRAFT" || d.status === "READY" || d.status === "STARTED");
+          const showAutoRelease =
+            isDisbursementAdmin && invitesSent && !hotlinkActive && showDistribuir;
 
           return (
           <div
@@ -1180,6 +1276,7 @@ export default function DisbursementsPage() {
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     {d.total_payments} {t("payments")} · {d.asset.code} · {d.wallet.name}
                     {invitesSent ? ` · ${t("campaignLive")}` : null}
+                    {hotlinkActive ? ` · ${t("autoReleaseActive")}` : null}
                     {isDisbursementAdmin && batchRemaining > 0 ? (
                       batchFunded ? ` · ${t("batchFunded")}` : ` · ${t("batchNeedsFunding")}`
                     ) : null}
@@ -1260,6 +1357,27 @@ export default function DisbursementsPage() {
                 <span className="text-sm font-semibold text-gray-900 dark:text-white hidden sm:inline">
                   {d.total_amount} {d.asset.code}
                 </span>
+                {hotlinkActive ? (
+                  <span
+                    className={`${AUTO_RELEASE_BTN} border border-amber-300/60 dark:border-amber-700/60 text-amber-700 dark:text-amber-300 bg-amber-50/80 dark:bg-amber-950/30`}
+                    title={t("autoReleaseActiveHint")}
+                  >
+                    {t("autoReleaseActive")}
+                  </span>
+                ) : showAutoRelease ? (
+                  <button
+                    type="button"
+                    title={t("autoReleaseHint")}
+                    disabled={committingId === d.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleAutoRelease(d.id, d.name);
+                    }}
+                    className={`${AUTO_RELEASE_BTN} border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800`}
+                  >
+                    {committingId === d.id ? t("autoReleaseCommitting") : t("autoRelease")}
+                  </button>
+                ) : null}
                 <svg
                   className={`w-4 h-4 text-gray-400 transition-transform ${
                     selectedId === d.id ? "rotate-180" : ""
@@ -1291,7 +1409,7 @@ export default function DisbursementsPage() {
                       type="button"
                       onClick={() => void handleSendInvites(d.id)}
                       disabled={sendingId === d.id}
-                      className="px-3 py-1.5 rounded bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-60"
+                      className={`${CARD_ACTION_BTN} bg-indigo-600 text-white hover:bg-indigo-700`}
                     >
                       {sendingId === d.id ? t("sending") : t("sendInvites")}
                     </button>
@@ -1301,12 +1419,28 @@ export default function DisbursementsPage() {
                       type="button"
                       onClick={() => void handleFundBatch(d.id, batchRemaining)}
                       disabled={fundingId === d.id || !kitReady || !distributionConfigured}
-                      title={!distributionConfigured ? t("distributionTreasury.notConfigured") : undefined}
-                      className="px-3 py-1.5 rounded bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={
+                        !distributionConfigured
+                          ? t("distributionTreasury.notConfigured")
+                          : t("fundBatchHint", {
+                              amount: formatBatchAmount(batchRemaining),
+                              asset: d.asset.code,
+                            })
+                      }
+                      className={`${CARD_ACTION_BTN} bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40`}
                     >
-                      {fundingId === d.id
-                        ? t("fundBatchSigning")
-                        : t("fundBatch", { amount: formatBatchAmount(batchRemaining), asset: d.asset.code })}
+                      {fundingId === d.id ? t("fundBatchSigning") : t("fundBatch")}
+                    </button>
+                  )}
+                  {showDistribuir && (
+                    <button
+                      type="button"
+                      onClick={() => handleStart(d.id)}
+                      disabled={startingId === d.id}
+                      title={!invitesSent ? t("startPaymentsDisabledHint") : undefined}
+                      className={`${CARD_ACTION_BTN} bg-green-600 text-white hover:bg-green-700 disabled:opacity-40`}
+                    >
+                      {startingId === d.id ? t("starting") : t("startPayments")}
                     </button>
                   )}
                   {showRelease && (
@@ -1314,7 +1448,7 @@ export default function DisbursementsPage() {
                       type="button"
                       onClick={() => void handleReleasePayments(d.id)}
                       disabled={releasingId === d.id}
-                      className="px-3 py-1.5 rounded bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-60"
+                      className={`${CARD_ACTION_BTN} bg-teal-600 text-white hover:bg-teal-700`}
                     >
                       {releasingId === d.id ? t("releasePaymentsRunning") : t("releasePayments")}
                     </button>
@@ -1523,6 +1657,22 @@ export default function DisbursementsPage() {
           {t("viewHistory")}
         </Link>
       </div>
+
+      {authorizeDisbursementId && authorizeAction && (
+        <DisbursementAuthorizeModal
+          open
+          disbursementId={authorizeDisbursementId}
+          onClose={() => {
+            setAuthorizeDisbursementId(null);
+            setAuthorizeAction(null);
+          }}
+          onAuthorized={(auth) =>
+            authorizeAction === "commit"
+              ? completeAutoRelease(authorizeDisbursementId, auth)
+              : completeStart(authorizeDisbursementId, auth)
+          }
+        />
+      )}
     </div>
   );
 }

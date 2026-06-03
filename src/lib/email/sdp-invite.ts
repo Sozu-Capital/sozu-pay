@@ -29,10 +29,8 @@ export interface SdpInviteEmailParams {
   /** Beneficiary display name from batch CSV */
   recipientName?: string;
   organizationName: string;
-  /** SDP wallet / campaign name */
+  /** Distribution campaign / batch name */
   campaignName?: string;
-  /** Disbursement batch name */
-  disbursementName: string;
   registrationUrl: string;
   amountUsdc?: string;
 }
@@ -66,14 +64,14 @@ function buildPlainText(params: SdpInviteEmailParams): string {
     : "";
 
   const campaignLine = params.campaignName?.trim()
-    ? `Campaña: ${params.campaignName.trim()}\n`
+    ? `Campaña de distribución: ${params.campaignName.trim()}\n`
     : "";
 
   return `${greet}
 
 ${org} te envió un pago.${amountLine}
-${campaignLine}Lote: ${params.disbursementName}
-
+Organización: ${org}
+${campaignLine}
 Para recibirlo, registrá tu billetera con este enlace:
 
 ${params.registrationUrl}
@@ -95,10 +93,10 @@ function buildHtml(params: SdpInviteEmailParams): string {
     : "";
 
   const metaRows: string[] = [];
+  metaRows.push(metaRow("Organización", params.organizationName.trim()));
   if (params.campaignName?.trim()) {
-    metaRows.push(metaRow("Campaña", params.campaignName.trim()));
+    metaRows.push(metaRow("Campaña de distribución", params.campaignName.trim()));
   }
-  metaRows.push(metaRow("Lote", params.disbursementName));
 
   const metaBlock =
     metaRows.length > 0

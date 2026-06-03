@@ -786,6 +786,14 @@ export default function DisbursementsPage() {
         amount: formatBatchAmount(amount),
       });
       setActionMsg(t("fundBatchSuccess", { amount: result.amount, hash: result.stellarTxHash.slice(0, 12) }));
+      const startRes = await fetch(`/api/sdp/disbursements/${id}/start-campaign`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!startRes.ok) {
+        const startData = await startRes.json().catch(() => ({}));
+        console.warn("[fund-batch] start-campaign:", startData.error ?? startRes.status);
+      }
       const balRes = await fetch("/api/treasury/distribution/balances", { credentials: "include" });
       if (balRes.ok) {
         const bal = (await balRes.json()) as {
@@ -821,16 +829,12 @@ export default function DisbursementsPage() {
         setActionMsg(`Error: ${data.error ?? res.status}`);
         return;
       }
-      const inviteSummary = data.campaignStarted
-        ? t("invitesSentAndStarted", { sent: data.sent, skipped: data.skipped, failed: data.failed })
-        : t("invitesSent", { sent: data.sent, skipped: data.skipped, failed: data.failed });
-      const startNote =
-        data.startWarningCode === "SDP_DISTRIBUTION_UNDERFUNDED"
-          ? t("sdpStartSkippedUseDistribuir")
-          : typeof data.startWarning === "string" && data.startWarning.trim()
-            ? data.startWarning.trim()
-            : null;
-      setActionMsg(startNote ? `${inviteSummary} · ${startNote}` : inviteSummary);
+      const inviteSummary = t("invitesSent", {
+        sent: data.sent,
+        skipped: data.skipped,
+        failed: data.failed,
+      });
+      setActionMsg(inviteSummary);
       await fetchList();
       if (selectedId === id) await refreshDetail(id);
     } catch (e) {

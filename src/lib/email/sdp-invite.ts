@@ -3,26 +3,14 @@
  * Mirrors the pattern used in credit-notifications.ts.
  */
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
+import { escHtml, SOZU_EMAIL_THEME } from "@/lib/email/sozu-email-theme";
+
 const EMAIL_FROM =
   process.env.SDP_INVITE_EMAIL_FROM ??
   process.env.CREDIT_EMAIL_FROM ??
   "Sozu Credit <invites@resend.dev>";
 
-/** Sozu black + orange card tokens (matches SozuCredit SDP / wallet UI). */
-const EMAIL_THEME = {
-  pageBg: "#0a0a0a",
-  cardBg: "#111111",
-  cardBorder: "rgba(251, 146, 60, 0.35)",
-  cardRadius: "16px",
-  textPrimary: "#fef3e7",
-  textMuted: "rgba(254, 243, 231, 0.65)",
-  textDim: "rgba(254, 243, 231, 0.45)",
-  orange: "#f97316",
-  orangeSoft: "rgba(249, 115, 22, 0.15)",
-  orangeBorder: "rgba(251, 146, 60, 0.35)",
-  orangeText: "#fdba74",
-} as const;
+const EMAIL_THEME = SOZU_EMAIL_THEME;
 
 export interface SdpInviteEmailParams {
   toEmail: string;
@@ -172,12 +160,11 @@ function metaRow(label: string, value: string): string {
 
 /**
  * Sends a single recipient invite email with the SDP registration link.
- * Does NOT deduplicate — callers should track sent status in their own table
- * or the SDP messages API if needed.
  */
 export async function sendSdpInviteEmail(
   params: SdpInviteEmailParams
 ): Promise<SdpInviteEmailResult> {
+  const RESEND_API_KEY = process.env.RESEND_API_KEY;
   if (!RESEND_API_KEY) {
     console.warn("[sdp-invite] RESEND_API_KEY not set; skipping invite email");
     return { sent: false, skipped: true, error: "no_resend_key" };
@@ -217,12 +204,4 @@ export async function sendSdpInviteEmail(
       error: e instanceof Error ? e.message : String(e),
     };
   }
-}
-
-function escHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }

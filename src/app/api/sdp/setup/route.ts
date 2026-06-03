@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { listAssets, ensureSozuCreditWallet, listWallets } from "@/lib/sdp/adminClient";
 import { isSdpConfigured, sdpNotConfiguredMessage } from "@/lib/sdp/env";
+import { ensureSdpOrgMessagingForExternalInvites } from "@/lib/sdp/org-messaging";
 
 async function runSetup() {
+  await ensureSdpOrgMessagingForExternalInvites();
   const assets = await listAssets();
   const walletId = await ensureSozuCreditWallet(
     assets.map((a) => ({ code: a.code, issuer: a.issuer }))

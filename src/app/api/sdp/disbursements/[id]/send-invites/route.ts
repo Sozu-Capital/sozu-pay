@@ -5,9 +5,7 @@ import {
   getDisbursement,
   listReceivers,
   listAssets,
-  retryReceiverWalletInvitation,
   ensureSozuCreditWallet,
-  startDisbursement,
 } from "@/lib/sdp/adminClient";
 import { sendSdpInviteEmail } from "@/lib/email/sdp-invite";
 import { getSdpEnv } from "@/lib/sdp/env";
@@ -22,7 +20,8 @@ import {
   markInvitesSentAsync,
   mergedUploadedVerificationsAsync,
 } from "@/lib/disbursements/store";
-import { formatSdpStartError, validateDisbursementFunds } from "@/lib/sdp/validateDisbursementStart";
+import { validateDisbursementFunds } from "@/lib/sdp/validateDisbursementStart";
+import { ensureSdpOrgMessagingForExternalInvites } from "@/lib/sdp/org-messaging";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationById } from "@/lib/db/organizations";
 import { requireDisbursementOrgAccess } from "@/lib/disbursements/org-scope";
@@ -127,22 +126,8 @@ export async function POST(
       );
     }
 
-    // Best-effort START so SDP moves receiver wallets toward READY; Soroban payouts do not need SDP TSS funded.
-    let campaignStarted = disbursement.status.toUpperCase() === "STARTED";
-    let startWarning: string | undefined;
-    let startWarningCode: string | undefined;
-    if (disbursement.status === "DRAFT" || disbursement.status === "READY") {
-      try {
-        await startDisbursement(id);
-        campaignStarted = true;
-      } catch (e) {
-        const raw = e instanceof Error ? e.message : String(e);
-        const formatted = formatSdpStartError(raw);
-        startWarningCode = formatted.code;
-        startWarning = formatted.error;
-        console.warn("[send-invites] startDisbursement failed (continuing with invites):", raw);
-      }
-    }
+    // Branded invites go through Resend only — disable SDP's plain Railway /r/… emails.
+    await ensureSdpOrgMessagingForExternalInvites(organizationName);
 
     // Ensure credit.sozu.capital is registered in SDP before sending invites —
     // recipients need it for SEP-10 client_domain validation to succeed.
@@ -164,7 +149,6 @@ export async function POST(
       if (!email) continue;
 
       const wallet = receiver.receiver_wallet;
-      const walletId = wallet?.id;
 
       if (wallet?.status === "REGISTERED") {
         results.push({ email, inviteSent: false, sdpTriggered: false, skipped: true });
@@ -172,10 +156,9 @@ export async function POST(
       }
 
       let inviteSent = false;
-      let sdpTriggered = false;
       let error: string | undefined;
 
-      // Step 1 — send signed deep link via Resend (primary channel).
+      // Signed deep link via Resend (Sozu-branded — not SDP Railway /r/… emails).
       if (receiver.email) {
         let registrationUrl = walletInviteUrl;
 
@@ -231,22 +214,7 @@ export async function POST(
         }
       }
 
-      // Step 2 — SDP message channel only as fallback when Resend did not send.
-      // SDP's built-in templates are English; avoid duplicate emails when Spanish Resend succeeded.
-      if (walletId && !inviteSent) {
-        try {
-          await retryReceiverWalletInvitation(receiver.id, walletId);
-          sdpTriggered = true;
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          console.warn(
-            `[send-invites] SDP RetryInvitation failed for receiver ${receiver.id}:`,
-            msg
-          );
-        }
-      }
-
-      results.push({ email, inviteSent, sdpTriggered, skipped: false, error });
+      results.push({ email, inviteSent, sdpTriggered: false, skipped: false, error });
     }
 
     const sentCount = results.filter((r) => r.inviteSent).length;
@@ -266,9 +234,6 @@ export async function POST(
       sent: sentCount,
       skipped: skippedCount,
       failed: failedCount,
-      campaignStarted,
-      startWarning,
-      startWarningCode,
       results,
     });
   } catch (e) {

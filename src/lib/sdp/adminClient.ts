@@ -374,3 +374,26 @@ export async function retryFailedPayments(paymentIds: string[]): Promise<void> {
     body: JSON.stringify({ payment_ids: paymentIds }),
   });
 }
+
+export interface SdpOrganizationSettings {
+  id: string;
+  name: string;
+  receiver_invitations_disabled?: boolean | null;
+  receiver_invitation_resend_interval_days?: number | null;
+  otp_message_template?: string;
+}
+
+/** Tenant organization settings (invitation + OTP templates). */
+export async function getSdpOrganization(): Promise<SdpOrganizationSettings> {
+  return sdpFetch<SdpOrganizationSettings>("/organization");
+}
+
+export async function patchSdpOrganization(
+  body: Record<string, unknown>
+): Promise<SdpOrganizationSettings> {
+  return sdpFetch<SdpOrganizationSettings>("/organization", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}

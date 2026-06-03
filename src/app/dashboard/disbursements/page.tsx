@@ -262,6 +262,7 @@ export default function DisbursementsPage() {
   const [fundingId, setFundingId] = useState<string | null>(null);
   const [togglingAutoId, setTogglingAutoId] = useState<string | null>(null);
   const [distributionUsdc, setDistributionUsdc] = useState<string>("0");
+  const [orgCombinedUsdc, setOrgCombinedUsdc] = useState<string>("0");
   const [distributionConfigured, setDistributionConfigured] = useState(false);
 
   // ── Fetch list ────────────────────────────────────────────────────────────
@@ -787,8 +788,13 @@ export default function DisbursementsPage() {
       setActionMsg(t("fundBatchSuccess", { amount: result.amount, hash: result.stellarTxHash.slice(0, 12) }));
       const balRes = await fetch("/api/treasury/distribution/balances", { credentials: "include" });
       if (balRes.ok) {
-        const bal = (await balRes.json()) as { distributionUsdc?: string; configured?: boolean };
+        const bal = (await balRes.json()) as {
+          distributionUsdc?: string;
+          orgCombinedUsdc?: string;
+          configured?: boolean;
+        };
         if (bal.distributionUsdc) setDistributionUsdc(bal.distributionUsdc);
+        if (bal.orgCombinedUsdc) setOrgCombinedUsdc(bal.orgCombinedUsdc);
         if (bal.configured != null) setDistributionConfigured(bal.configured);
       }
       await fetchList();
@@ -816,9 +822,11 @@ export default function DisbursementsPage() {
         return;
       }
       setActionMsg(
-        data.campaignStarted
-          ? t("invitesSentAndStarted", { sent: data.sent, skipped: data.skipped, failed: data.failed })
-          : t("invitesSent", { sent: data.sent, skipped: data.skipped, failed: data.failed })
+        data.startWarning
+          ? `${data.campaignStarted ? t("invitesSentAndStarted", { sent: data.sent, skipped: data.skipped, failed: data.failed }) : t("invitesSent", { sent: data.sent, skipped: data.skipped, failed: data.failed })} · ${data.startWarning}`
+          : data.campaignStarted
+            ? t("invitesSentAndStarted", { sent: data.sent, skipped: data.skipped, failed: data.failed })
+            : t("invitesSent", { sent: data.sent, skipped: data.skipped, failed: data.failed })
       );
       await fetchList();
       if (selectedId === id) await refreshDetail(id);
@@ -908,6 +916,7 @@ export default function DisbursementsPage() {
         <DistributionTreasuryPanel
           onBalancesChange={(b) => {
             setDistributionUsdc(b.distributionUsdc);
+            setOrgCombinedUsdc(b.orgCombinedUsdc);
             setDistributionConfigured(b.configured);
           }}
         />
@@ -1426,9 +1435,7 @@ export default function DisbursementsPage() {
           const canEdit = DELETABLE_DISBURSEMENT_STATUSES.has(d.status);
           const batchRemaining = batchRemainingUsdc(d, meta);
           const batchFunded =
-            batchRemaining <= 0 ||
-            !distributionConfigured ||
-            parseFloat(distributionUsdc) >= batchRemaining;
+            batchRemaining <= 0 || parseFloat(orgCombinedUsdc) >= batchRemaining;
           const hasOutstandingPayments =
             d.status !== "COMPLETED" &&
             (d.successful_payments < d.total_payments ||

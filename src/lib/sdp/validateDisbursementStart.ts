@@ -5,10 +5,7 @@ import {
   resolveOrgDisbursementContractId,
   resolveOrgTreasuryContractId,
 } from "@/lib/stellar/org-treasury";
-import { getUsdcBalance } from "@/lib/stellar/balance";
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
-import { readDistributionPublicKey } from "@/lib/sdp/distributionAccount";
-import { resolveOrgDistributionPublicKey } from "@/lib/sdp/org-distribution";
 import type { SdpDisbursement, SdpReceiver } from "@/lib/sdp/adminClient";
 import { receiverInviteWasSent } from "@/lib/sdp/receiverDisplay";
 
@@ -65,7 +62,7 @@ export function validateInvitesSentForStart(params: {
   };
 }
 
-/** Check org Soroban treasury and SDP distribution account before passkey. */
+/** Check org Soroban treasury balance before passkey Soroban payouts. */
 export async function validateDisbursementFunds(params: {
   org: Organization;
   disbursement: SdpDisbursement;
@@ -75,6 +72,15 @@ export async function validateDisbursementFunds(params: {
 
   const treasuryId = resolveOrgTreasuryContractId(params.org);
   const disbursementContractId = resolveOrgDisbursementContractId(params.org);
+
+  if (!treasuryId && !disbursementContractId) {
+    return {
+      ok: false,
+      code: "NO_ORG_TREASURY",
+      error:
+        "This organization has no Soroban treasury configured. Set up your org smart wallet before sending batch payments.",
+    };
+  }
 
   let treasuryBal = 0;
   let disbursementContractBal = 0;
@@ -94,50 +100,13 @@ export async function validateDisbursementFunds(params: {
       ? treasuryBal + disbursementContractBal
       : Math.max(treasuryBal, disbursementContractBal);
 
-  const distributionPk = resolveOrgDistributionPublicKey(params.org);
-  let distributionBal: number | null = null;
-  if (distributionPk) {
-    distributionBal = parseFloat(await getUsdcBalance(distributionPk)) || 0;
-  }
-
-  if (distributionBal != null && distributionBal + 1e-9 < required) {
-    if (orgCombined + 1e-9 >= required) {
-      return {
-        ok: false,
-        code: "SDP_DISTRIBUTION_UNDERFUNDED",
-        error:
-          `Your org smart account holds ${orgCombined.toFixed(2)} USDC, but SDP's distribution account ` +
-          `(${distributionPk}) only has ${distributionBal.toFixed(2)} USDC. SDP requires at least ${required.toFixed(2)} USDC ` +
-          `in the distribution wallet before this batch can start. Use "Fund distribution" on this page, then retry Hotlink or Start payments.`,
-        details: {
-          required,
-          orgBalance: orgCombined,
-          distributionBalance: distributionBal,
-        },
-      };
-    }
-
-    return {
-      ok: false,
-      code: "INSUFFICIENT_FUNDS",
-      error:
-        `Insufficient USDC to start this batch (needs ${required.toFixed(2)} USDC). ` +
-        `Org smart account: ${orgCombined.toFixed(2)} USDC. SDP distribution: ${distributionBal.toFixed(2)} USDC.`,
-      details: {
-        required,
-        orgBalance: orgCombined,
-        distributionBalance: distributionBal,
-      },
-    };
-  }
-
   if (orgCombined + 1e-9 < required) {
     return {
       ok: false,
       code: "INSUFFICIENT_ORG_BALANCE",
       error:
-        `Org treasury has ${orgCombined.toFixed(2)} USDC but this batch requires ${required.toFixed(2)} USDC. ` +
-        `Deposit USDC to your org smart account before starting payments.`,
+        `Org smart account has ${orgCombined.toFixed(2)} USDC but this batch requires ${required.toFixed(2)} USDC. ` +
+        `Deposit USDC to your org smart account, then use Distribuir to pay registered beneficiaries.`,
       details: { required, orgBalance: orgCombined },
     };
   }
@@ -167,21 +136,19 @@ export function formatSdpStartError(raw: string): { code: string; error: string 
   const text = raw.trim();
   if (/insufficient.*balance|409.*balance/i.test(text)) {
     const amountMatch = text.match(/at least ([\d.]+)/i);
-    const distMatch = text.match(/distribution account \(([^)]+)\)/i);
     const required = amountMatch?.[1] ?? "?";
-    const dist = distMatch?.[1]?.replace(/^stellar:/i, "") ?? "SDP distribution account";
     return {
       code: "SDP_DISTRIBUTION_UNDERFUNDED",
       error:
-        `SDP distribution account (${dist}) does not have enough USDC for this batch (needs at least ${required} USDC). ` +
-        `Use "Fund distribution" on the Disbursements page, then open a new passkey authorization and retry.`,
+        `SDP could not start this batch automatically (needs at least ${required} USDC in its distribution account). ` +
+        `Invites were still sent — use Distribuir to pay from your org smart account once beneficiaries register.`,
     };
   }
   if (/not ready to be started/i.test(text)) {
     return {
       code: "ALREADY_STARTED",
       error:
-        "This batch is already started. Use Distribuir to authorize payout release — SDP processes registered beneficiaries automatically when the distribution wallet is funded.",
+        "This batch is already started. Use Distribuir to pay registered beneficiaries from your org smart account.",
     };
   }
   if (/409/.test(text)) {

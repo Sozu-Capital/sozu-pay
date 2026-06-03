@@ -23,8 +23,6 @@ import type { Organization } from "@/lib/db/organizations";
 import { resolvePaymentRecipient } from "@/lib/payment/resolve-recipient";
 import { isValidStellarReceiveAddress } from "@/lib/payment/stellar-address";
 
-const LARGE_PAYOUT_THRESHOLD = 1000;
-
 /** Derive signer public key for audit log. */
 function getSignerPublicKey(signerSecretKey: string | undefined, org: Organization | null): string | undefined {
   if (signerSecretKey) return Keypair.fromSecret(signerSecretKey).publicKey();
@@ -172,11 +170,9 @@ export async function POST(request: NextRequest) {
       user?.admin_level === "super_admin" || user?.admin_level === "admin";
 
     const body = await request.json().catch(() => ({}));
-    const twoFactorVerified = body.twoFactorVerified === true;
 
     if (Array.isArray(body.payouts) && body.payouts.length > 0) {
     const results: { payout: ReturnType<typeof createPayout> }[] = [];
-    let requires2FA = false;
     const normalized: Awaited<ReturnType<typeof normalizeSingle>>[] = [];
     for (const item of body.payouts as SinglePayoutInput[]) {
       const n = await normalizeSingle(session.id, item);
@@ -186,7 +182,6 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      if (parseFloat(n.amount) >= LARGE_PAYOUT_THRESHOLD) requires2FA = true;
       normalized.push(n);
     }
     const hasStellarInBatch = normalized.some((n) => n != null && n.type === "to_stellar");
@@ -242,12 +237,6 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-    if (requires2FA && !twoFactorVerified) {
-      return NextResponse.json(
-        { error: "2FA required for large payout(s)", required: true },
-        { status: 403 }
-      );
-    }
     const batchSignerWallet = hasStellarInBatch ? getSignerPublicKey(stellarSignerSecretKey, batchOrg) : undefined;
     for (const n of normalized) {
       if (!n) continue;
@@ -297,14 +286,6 @@ export async function POST(request: NextRequest) {
   }
 
   const amount = typeof body.amount === "string" ? body.amount : "0";
-  const numAmount = parseFloat(amount) || 0;
-  const requires2FA = numAmount >= LARGE_PAYOUT_THRESHOLD;
-  if (requires2FA && !twoFactorVerified) {
-    return NextResponse.json(
-      { error: "2FA required for large payout", required: true },
-      { status: 403 }
-    );
-  }
 
   if (body.toStellar === true && typeof body.destination === "string") {
     if (!canStellarPayout) {

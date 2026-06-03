@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getDisbursement, listReceivers, retryFailedPayments, startDisbursement } from "@/lib/sdp/adminClient";
+import { getDisbursement, listReceivers, retryFailedPayments } from "@/lib/sdp/adminClient";
 
 export type DistributePaymentsResult = {
   started: boolean;
@@ -11,7 +11,10 @@ export type DistributePaymentsResult = {
   total: number;
 };
 
-/** Start batch if needed, then retry FAILED payments. Pending READY payments are picked up by SDP TSS. */
+/**
+ * Retry FAILED SDP payments when batch is already STARTED.
+ * Passkey Soroban payouts (Distribuir) do not use SDP TSS or the Railway distribution account.
+ */
 export async function distributeDisbursementPayments(
   disbursementId: string
 ): Promise<DistributePaymentsResult> {
@@ -21,15 +24,8 @@ export async function distributeDisbursementPayments(
   ]);
 
   const current = disbursement.status.toUpperCase();
-  let started = false;
-  let alreadyStarted = false;
-
-  if (current === "DRAFT" || current === "READY" || current === "PAUSED") {
-    await startDisbursement(disbursementId);
-    started = true;
-  } else if (current === "STARTED") {
-    alreadyStarted = true;
-  } else {
+  const alreadyStarted = current === "STARTED";
+  if (current !== "STARTED" && current !== "DRAFT" && current !== "READY" && current !== "PAUSED") {
     throw new Error(`Cannot distribute payments while batch status is ${current}.`);
   }
 
@@ -54,7 +50,7 @@ export async function distributeDisbursementPayments(
   }
 
   return {
-    started,
+    started: false,
     alreadyStarted,
     retried: failedIds.length,
     registeredPending,

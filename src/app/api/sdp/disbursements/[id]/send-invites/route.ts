@@ -127,8 +127,9 @@ export async function POST(
       );
     }
 
-    // Sending invites opens registration — SDP requires batch STARTED (wallet DRAFT → READY).
+    // Best-effort START so SDP moves receiver wallets toward READY; Soroban payouts do not need SDP TSS funded.
     let campaignStarted = disbursement.status.toUpperCase() === "STARTED";
+    let startWarning: string | undefined;
     if (disbursement.status === "DRAFT" || disbursement.status === "READY") {
       try {
         await startDisbursement(id);
@@ -136,11 +137,8 @@ export async function POST(
       } catch (e) {
         const raw = e instanceof Error ? e.message : String(e);
         const formatted = formatSdpStartError(raw);
-        console.error("[send-invites] startDisbursement failed:", raw);
-        return NextResponse.json(
-          { error: formatted.error, code: formatted.code ?? "START_FAILED" },
-          { status: 400 }
-        );
+        startWarning = formatted.error;
+        console.warn("[send-invites] startDisbursement failed (continuing with invites):", raw);
       }
     }
 
@@ -267,6 +265,7 @@ export async function POST(
       skipped: skippedCount,
       failed: failedCount,
       campaignStarted,
+      startWarning,
       results,
     });
   } catch (e) {

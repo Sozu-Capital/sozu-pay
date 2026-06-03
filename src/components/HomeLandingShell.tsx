@@ -6,6 +6,7 @@ import { HomeSplineBackground } from "@/components/HomeSplineBackground";
 import { HomeLandingNav } from "@/components/HomeLandingNav";
 import { HomePageIntro } from "@/components/HomePageIntro";
 import { HomeLandingFooter } from "@/components/HomeLandingFooter";
+import { ScfCommunityFundToast } from "@/components/ScfCommunityFundToast";
 import { HomeAuthUiProvider } from "@/components/HomeAuthUiContext";
 
 type HomeLandingShellProps = {
@@ -27,6 +28,7 @@ export function HomeLandingShell({ introCta, status, footerExtra }: HomeLandingS
             </div>
             <HomeLandingFooter>{footerExtra}</HomeLandingFooter>
           </div>
+          <ScfCommunityFundToast />
         </div>
       </HomeAuthUiProvider>
     </HomeLandingTransitionProvider>

@@ -7,6 +7,7 @@ import {
   DisbursementAuthorizeModal,
   type DisbursementAuthorizeResult,
 } from "@/components/DisbursementAuthorizeModal";
+import PayoutStatusModal, { type PayoutModalSuccess } from "@/components/PayoutStatusModal";
 import { DisbursementAuditButton } from "@/components/disbursements/DisbursementAuditButton";
 import { BeneficiaryFieldCell } from "@/components/disbursements/BeneficiaryFieldCell";
 import { EditDisbursementRecipients } from "@/components/disbursements/EditDisbursementRecipients";
@@ -16,6 +17,7 @@ import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 import { recipientsToCSV, parseDisbursementCsvText } from "@/lib/disbursements/csv";
 import { normalizeVerificationForSdp } from "@/lib/disbursements/normalizeVerification";
 import { executePasskeyDistributionTransfer } from "@/lib/stellar/smartAccounts/executePasskeyDistributionTransfer";
+import { executePasskeySorobanPayout } from "@/lib/stellar/smartAccounts/signSorobanPayout";
 import type { BeneficiaryLifecycleState } from "@/lib/sdp/receiverDisplay";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -74,6 +76,21 @@ interface DisbursementMeta {
 
 const CARD_ACTION_BTN =
   "px-3 py-1.5 rounded text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed";
+
+interface PayableDisbursementItem {
+  paymentId: string;
+  amount: string;
+  recipientAddress: string;
+  recipientLabel: string;
+  receiverEmail?: string;
+}
+
+interface DistribuirContext {
+  disbursementId: string;
+  batchName: string;
+  items: PayableDisbursementItem[];
+  totalAmount: string;
+}
 
 interface SdpReceiverRow {
   email?: string;
@@ -158,7 +175,7 @@ function formatSozuTag(tag: string | null): string {
 export default function DisbursementsPage() {
   const t = useTranslations("disbursementsPage");
   const { profile } = useDashboardProfile() ?? { profile: null };
-  const { ready: kitReady, kit } = useSmartAccountKitContext();
+  const { ready: kitReady, kit, credentialId } = useSmartAccountKitContext();
   const isDisbursementAdmin =
     profile?.can_manage_disbursements === true ||
     profile?.admin_level === "admin" ||
@@ -203,13 +220,19 @@ export default function DisbursementsPage() {
 
   // Actions
   const [sendingId, setSendingId] = useState<string | null>(null);
-  const [startingId, setStartingId] = useState<string | null>(null);
+  const [distributingId, setDistributingId] = useState<string | null>(null);
   const [committingId, setCommittingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
-  const [authorizeDisbursementId, setAuthorizeDisbursementId] = useState<string | null>(null);
-  const [authorizeAction, setAuthorizeAction] = useState<"start" | "commit" | null>(null);
+  const [autoReleaseAuthorizeId, setAutoReleaseAuthorizeId] = useState<string | null>(null);
+  const [distribuirContext, setDistribuirContext] = useState<DistribuirContext | null>(null);
+  const [payoutModalOpen, setPayoutModalOpen] = useState(false);
+  const [payoutModalStatus, setPayoutModalStatus] = useState<
+    "confirm" | "submitting" | "success" | "failed"
+  >("confirm");
+  const [payoutModalSuccess, setPayoutModalSuccess] = useState<PayoutModalSuccess | null>(null);
+  const [payoutModalError, setPayoutModalError] = useState<string | null>(null);
   const [fundingId, setFundingId] = useState<string | null>(null);
   const [togglingAutoId, setTogglingAutoId] = useState<string | null>(null);
   const [distributionUsdc, setDistributionUsdc] = useState<string>("0");
@@ -489,22 +512,122 @@ export default function DisbursementsPage() {
     }
   }
 
-  // ── Distribuir / Auto liberación (passkey authorization) ───────────────────
+  // ── Distribuir (passkey Soroban payout) / Auto liberación ─────────────────
 
-  function handleStart(id: string) {
+  async function beginDistribuir(disbursementId: string, batchName: string) {
+    if (!kitReady || !kit) {
+      setActionMsg(t("distributionTreasury.kitNotReady"));
+      return;
+    }
+
+    setDistributingId(disbursementId);
     setActionMsg(null);
-    setAuthorizeAction("start");
-    setAuthorizeDisbursementId(id);
+    setPayoutModalError(null);
+    try {
+      const res = await fetch(`/api/sdp/disbursements/${disbursementId}/payable`, {
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setActionMsg(data.error ? `Error: ${data.error}` : `Error: ${res.status}`);
+        return;
+      }
+      const items = (data.payable ?? []) as PayableDisbursementItem[];
+      if (items.length === 0) {
+        setActionMsg(t("distributeNothingPayable"));
+        return;
+      }
+      setDistribuirContext({
+        disbursementId,
+        batchName,
+        items,
+        totalAmount: String(data.totalAmount ?? items[0]?.amount ?? "0"),
+      });
+      setPayoutModalStatus("confirm");
+      setPayoutModalSuccess(null);
+      setPayoutModalOpen(true);
+    } catch (e) {
+      setActionMsg(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setDistributingId(null);
+    }
   }
 
-  function handleAutoReleaseToggle(id: string, name: string, currentlyActive: boolean) {
+  async function confirmDistribuir() {
+    if (!distribuirContext || !kit) return;
+
+    setPayoutModalStatus("submitting");
+    setPayoutModalError(null);
+    const { disbursementId, items } = distribuirContext;
+    const txHashes: string[] = [];
+
+    try {
+      for (const item of items) {
+        const payoutId = `sdp-${disbursementId}-${item.paymentId}`;
+        const result = await executePasskeySorobanPayout({
+          kit,
+          credentialId,
+          payoutId,
+          recipientAddress: item.recipientAddress,
+          amount: item.amount,
+          recipientLabel: item.recipientLabel,
+        });
+
+        const recordRes = await fetch(`/api/sdp/disbursements/${disbursementId}/record-payment`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            paymentId: item.paymentId,
+            txHash: result.stellarTxHash,
+            amount: item.amount,
+            recipientAddress: item.recipientAddress,
+            recipientLabel: item.recipientLabel,
+          }),
+        });
+        if (!recordRes.ok) {
+          const recordData = await recordRes.json().catch(() => ({}));
+          throw new Error(recordData.error ?? "Failed to record payment.");
+        }
+        txHashes.push(result.stellarTxHash);
+      }
+
+      const successPayload: PayoutModalSuccess =
+        items.length === 1
+          ? {
+              amount: items[0]!.amount,
+              recipientLabel: items[0]!.recipientLabel,
+              destination: items[0]!.recipientAddress,
+              stellarTxHash: txHashes[0],
+            }
+          : {
+              amount: distribuirContext.totalAmount,
+              batchCount: items.length,
+              stellarTxHash: txHashes[txHashes.length - 1],
+            };
+
+      setPayoutModalStatus("success");
+      setPayoutModalSuccess(successPayload);
+      setActionMsg(
+        items.length === 1
+          ? t("distributePaidOne", { hash: txHashes[0]!.slice(0, 12) })
+          : t("distributePaidMany", { count: items.length })
+      );
+      await fetchList();
+      if (selectedId === disbursementId) await refreshDetail(disbursementId);
+    } catch (e) {
+      setPayoutModalStatus("failed");
+      setPayoutModalError(e instanceof Error ? e.message : t("distributeFailed"));
+    }
+  }
+
+  function handleAutoReleaseToggle(id: string, currentlyActive: boolean) {
     if (currentlyActive) {
       void disableAutoRelease(id);
       return;
     }
     setActionMsg(null);
-    setAuthorizeAction("commit");
-    setAuthorizeDisbursementId(id);
+    setAutoReleaseAuthorizeId(id);
   }
 
   async function disableAutoRelease(id: string) {
@@ -532,46 +655,6 @@ export default function DisbursementsPage() {
     }
   }
 
-  async function completeStart(id: string, auth: DisbursementAuthorizeResult) {
-    setStartingId(id);
-    try {
-      const res = await fetch(`/api/sdp/disbursements/${id}/start`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: auth.sessionId,
-          credentialId: auth.credentialId,
-          contractId: auth.contractId,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setActionMsg(data.error ? `Error: ${data.error}` : `Error: ${res.status}`);
-        setAuthorizeDisbursementId(null);
-        setAuthorizeAction(null);
-        return;
-      }
-      setAuthorizeDisbursementId(null);
-      setAuthorizeAction(null);
-      if (typeof data.retried === "number" && data.retried > 0) {
-        setActionMsg(t("distributeRetried", { count: data.retried }));
-      } else if (typeof data.registeredPending === "number" && data.registeredPending > 0) {
-        setActionMsg(t("distributePending", { count: data.registeredPending }));
-      } else if (data.started) {
-        setActionMsg(t("disbursementStarted"));
-      } else {
-        setActionMsg(t("distributeComplete"));
-      }
-      await fetchList();
-      if (selectedId === id) await refreshDetail(id);
-    } catch (e) {
-      setActionMsg(e instanceof Error ? e.message : "Network error");
-    } finally {
-      setStartingId(null);
-    }
-  }
-
   async function completeAutoRelease(id: string, auth: DisbursementAuthorizeResult) {
     setCommittingId(id);
     try {
@@ -588,12 +671,10 @@ export default function DisbursementsPage() {
       const data = await res.json();
       if (!res.ok) {
         setActionMsg(data.error ? `Error: ${data.error}` : `Error: ${res.status}`);
-        setAuthorizeDisbursementId(null);
-        setAuthorizeAction(null);
+        setAutoReleaseAuthorizeId(null);
         return;
       }
-      setAuthorizeDisbursementId(null);
-      setAuthorizeAction(null);
+      setAutoReleaseAuthorizeId(null);
       setActionMsg(t("autoReleaseSuccess"));
       await fetchList();
       if (selectedId === id) await refreshDetail(id);
@@ -1385,7 +1466,7 @@ export default function DisbursementsPage() {
                         committingId === d.id ||
                         (!hotlinkActive && !batchFunded && batchRemaining > 0)
                       }
-                      onClick={() => handleAutoReleaseToggle(d.id, d.name, hotlinkActive)}
+                      onClick={() => handleAutoReleaseToggle(d.id, hotlinkActive)}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/50 disabled:opacity-40 ${
                         hotlinkActive
                           ? "bg-amber-500"
@@ -1457,21 +1538,15 @@ export default function DisbursementsPage() {
                   {showDistribuir && (
                     <button
                       type="button"
-                      onClick={() => handleStart(d.id)}
-                      disabled={startingId === d.id || (!batchFunded && batchRemaining > 0)}
-                      title={
-                        !batchFunded && batchRemaining > 0
-                          ? t("fundBatchHint", {
-                              amount: formatBatchAmount(batchRemaining),
-                              asset: d.asset.code,
-                            })
-                          : !invitesSent
-                            ? t("startPaymentsDisabledHint")
-                            : undefined
-                      }
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void beginDistribuir(d.id, d.name);
+                      }}
+                      disabled={distributingId === d.id || !kitReady || payoutModalOpen}
+                      title={!invitesSent ? t("startPaymentsDisabledHint") : undefined}
                       className={`${CARD_ACTION_BTN} bg-green-600 text-white hover:bg-green-700 disabled:opacity-40`}
                     >
-                      {startingId === d.id ? t("starting") : t("startPayments")}
+                      {distributingId === d.id ? t("starting") : t("startPayments")}
                     </button>
                   )}
                   {canEdit && detail?.disbursement.id === d.id && detail.receivers && (
@@ -1679,19 +1754,44 @@ export default function DisbursementsPage() {
         </Link>
       </div>
 
-      {authorizeDisbursementId && authorizeAction && (
+      <PayoutStatusModal
+        open={payoutModalOpen}
+        onClose={() => {
+          setPayoutModalOpen(false);
+          setDistribuirContext(null);
+          setPayoutModalSuccess(null);
+          setPayoutModalError(null);
+          setPayoutModalStatus("confirm");
+        }}
+        status={payoutModalStatus}
+        userName={profile?.username ?? undefined}
+        payoutSummary={
+          distribuirContext
+            ? distribuirContext.items.length === 1
+              ? {
+                  amount: distribuirContext.items[0]!.amount,
+                  recipientLabel: distribuirContext.items[0]!.recipientLabel,
+                  destination: distribuirContext.items[0]!.recipientAddress,
+                }
+              : { amount: distribuirContext.totalAmount }
+            : undefined
+        }
+        batchCount={
+          distribuirContext && distribuirContext.items.length > 1
+            ? distribuirContext.items.length
+            : undefined
+        }
+        successData={payoutModalSuccess}
+        errorMessage={payoutModalError}
+        onConfirm={payoutModalStatus === "confirm" ? () => void confirmDistribuir() : undefined}
+      />
+
+      {autoReleaseAuthorizeId && (
         <DisbursementAuthorizeModal
           open
-          disbursementId={authorizeDisbursementId}
-          onClose={() => {
-            setAuthorizeDisbursementId(null);
-            setAuthorizeAction(null);
-          }}
-          onAuthorized={(auth) =>
-            authorizeAction === "commit"
-              ? completeAutoRelease(authorizeDisbursementId, auth)
-              : completeStart(authorizeDisbursementId, auth)
-          }
+          disbursementId={autoReleaseAuthorizeId}
+          onClose={() => setAutoReleaseAuthorizeId(null)}
+          onAuthorized={(auth) => completeAutoRelease(autoReleaseAuthorizeId, auth)}
         />
       )}
     </div>

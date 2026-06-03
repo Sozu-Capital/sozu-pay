@@ -30,7 +30,11 @@
     "somethingWentWrong": "Something went wrong",
     "homeHeadline": "Distribute funds in minutes.",
     "homeSubheaderLead": "Subsidies, microloans, and economic aid without spreadsheets, cash, or manual reconciliation.",
-    "homeSubheaderDetail": "SozuPay simplifies distribution, tracking, and fund reporting from a single platform.",
+    "homeSubheaderDetail": "Invite beneficiaries, sign each payout with your passkey, and export audit-ready reports — all on Stellar USDC.",
+    "homeFeaturesLabel": "Platform highlights",
+    "homeFeaturePasskey": "Passkey payouts",
+    "homeFeatureUsdc": "USDC on Stellar",
+    "homeFeatureAudit": "Audit trail",
     "homeCta": "Log in",
     "homeExplore": "SozuPay"
   },
@@ -967,7 +971,7 @@
     "lifecycle": {
       "draft": "Draft",
       "live": "Live",
-      "sent": "Sent"
+      "sent": "Paid"
     },
     "paymentFailed": "failed",
     "noPayments": "No payments yet. Add recipients manually or upload a CSV.",
@@ -976,6 +980,10 @@
     "distributeComplete": "Distribution authorized. SDP will process pending payments from the distribution account.",
     "distributePending": "Distribution authorized. {count} registered beneficiary(ies) with pending payments — SDP sends automatically when the distribution wallet is funded.",
     "distributeRetried": "Retried {count} failed payment(s). SDP will submit Stellar transfers shortly.",
+    "distributeNothingPayable": "No registered beneficiaries with pending payments. Send invites and wait for registration.",
+    "distributePaidOne": "Payment sent ({hash}…).",
+    "distributePaidMany": "{count} payments sent successfully.",
+    "distributeFailed": "Could not complete payment. Check disbursement contract balance and try again.",
     "invitesSent": "Invites sent: {sent} sent, {skipped} skipped (already registered), {failed} failed.",
     "deleteBatch": "Delete batch",
     "deleting": "Deleting…",
@@ -1058,6 +1066,8 @@
       "successToDistribution": "Sent {amount} USDC to SDP distribution (tx {hash}…).",
       "successToTreasury": "Swept {amount} USDC back to org treasury (tx {hash}…).",
       "sweepBackDisabledHint": "Sweep-back requires SDP_DISTRIBUTION_SEED on the server (matches the distribution public key).",
+      "noDistributionBalance": "No USDC in the distribution wallet to return.",
+      "sweepAvailable": "{amount} USDC in distribution wallet",
       "donutTotal": "Total USDC"
     },
     "fundBatch": "Fund",

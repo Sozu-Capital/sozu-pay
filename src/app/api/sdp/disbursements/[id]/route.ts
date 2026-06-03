@@ -15,6 +15,7 @@ import {
   mergedUploadedVerificationsAsync,
   syncPaymentAuditEvents,
 } from "@/lib/disbursements/store";
+import { applyManualPaymentsToBeneficiaryRows } from "@/lib/disbursements/payableReceivers";
 import { fetchBeneficiarySozuTags, upsertBeneficiarySozuTags } from "@/lib/db/beneficiary-sozu-tags";
 
 /**
@@ -82,14 +83,17 @@ export async function GET(
     const meta = await getDisbursementMetaAsync(id);
     const uploadedVerificationByEmail = await mergedUploadedVerificationsAsync(id);
 
-    const payments = receivers.map((r) =>
-      mapReceiverToBeneficiaryRow(
-        r,
-        tagByAddress,
-        hintsByEmail,
-        uploadedVerificationByEmail,
-        mergedSozuTags
-      )
+    const payments = applyManualPaymentsToBeneficiaryRows(
+      receivers.map((r) =>
+        mapReceiverToBeneficiaryRow(
+          r,
+          tagByAddress,
+          hintsByEmail,
+          uploadedVerificationByEmail,
+          mergedSozuTags
+        )
+      ),
+      meta?.manualPayments ?? {}
     );
 
     syncPaymentAuditEvents(

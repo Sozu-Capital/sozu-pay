@@ -51,6 +51,16 @@ export interface DisbursementMeta {
   paymentsStartedAt?: string;
   paymentsStartedBy?: string;
   paymentsStartedByLabel?: string;
+  /** Passkey Soroban payouts recorded locally when SDP TSS has not updated yet. */
+  manualPayments?: Record<string, ManualPaymentRecord>;
+}
+
+export interface ManualPaymentRecord {
+  txHash: string;
+  amount: string;
+  recipientAddress: string;
+  paidAt: string;
+  paidByLabel?: string;
 }
 
 export interface DisbursementHistoryRecord {
@@ -172,6 +182,10 @@ function mergeMeta(local: DisbursementMeta | undefined, remote: DisbursementMeta
     ...(local ?? { disbursementId: remote.disbursementId, createdAt: remote.createdAt }),
     ...remote,
     uploadedVerificationByEmail: local?.uploadedVerificationByEmail ?? remote.uploadedVerificationByEmail,
+    manualPayments: {
+      ...(remote.manualPayments ?? {}),
+      ...(local?.manualPayments ?? {}),
+    },
   };
 }
 
@@ -385,6 +399,42 @@ export function markInvitesSent(
       failed: String(summary.failed),
     },
   });
+  persistMetaToSupabase(meta);
+}
+
+export function recordManualDisbursementPayment(
+  disbursementId: string,
+  actor: { userId: string; label: string },
+  payment: {
+    paymentId: string;
+    txHash: string;
+    amount: string;
+    recipientAddress: string;
+    recipientLabel: string;
+  }
+): void {
+  const meta = ensureDisbursementMeta(disbursementId);
+  if (!meta.manualPayments) meta.manualPayments = {};
+  meta.manualPayments[payment.paymentId] = {
+    txHash: payment.txHash,
+    amount: payment.amount,
+    recipientAddress: payment.recipientAddress,
+    paidAt: new Date().toISOString(),
+    paidByLabel: actor.label,
+  };
+  appendDisbursementAudit(disbursementId, {
+    action: "payment_success",
+    actorUserId: actor.userId,
+    actorLabel: actor.label,
+    message: `Manual payout ${payment.amount} USDC to ${payment.recipientLabel}`,
+    metadata: {
+      paymentId: payment.paymentId,
+      txHash: payment.txHash,
+      amount: payment.amount,
+      recipientAddress: payment.recipientAddress,
+    },
+  });
+  persistStore();
   persistMetaToSupabase(meta);
 }
 

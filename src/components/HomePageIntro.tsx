@@ -33,6 +33,16 @@ export function HomePageIntro({ cta, status }: HomePageIntroProps) {
             {t("homeSubheaderDetail")}
           </p>
         </div>
+        <ul className="mt-5 flex flex-wrap gap-2" aria-label={t("homeFeaturesLabel")}>
+          {[t("homeFeaturePasskey"), t("homeFeatureUsdc"), t("homeFeatureAudit")].map((label) => (
+            <li
+              key={label}
+              className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.12em] text-white/70 backdrop-blur-sm"
+            >
+              {label}
+            </li>
+          ))}
+        </ul>
       </div>
       {cta ? (
         <div

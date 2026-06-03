@@ -30,7 +30,11 @@
     "somethingWentWrong": "Algo salió mal",
     "homeHeadline": "Distribuye fondos en minutos.",
     "homeSubheaderLead": "Subsidios, microcréditos y ayudas económicas sin planillas, efectivo ni conciliaciones manuales.",
-    "homeSubheaderDetail": "SozuPay simplifica la distribución, seguimiento y rendición de fondos desde una sola plataforma.",
+    "homeSubheaderDetail": "Invitá beneficiarios, firmá cada pago con passkey y exportá reportes listos para auditoría — todo en USDC sobre Stellar.",
+    "homeFeaturesLabel": "Características",
+    "homeFeaturePasskey": "Pagos con passkey",
+    "homeFeatureUsdc": "USDC en Stellar",
+    "homeFeatureAudit": "Trazabilidad",
     "homeCta": "Ingresar",
     "homeExplore": "SozuPay"
   },
@@ -1036,7 +1040,7 @@
     "lifecycle": {
       "draft": "Borrador",
       "live": "Activo",
-      "sent": "Enviado"
+      "sent": "Pagado"
     },
     "paymentFailed": "fallido",
     "noPayments": "Sin pagos aún. Agregá destinatarios manualmente o subí un CSV.",
@@ -1045,6 +1049,10 @@
     "distributeComplete": "Distribución autorizada. SDP procesará los pagos pendientes en la cuenta de distribución.",
     "distributePending": "Distribución autorizada. {count} beneficiario(s) registrado(s) con pagos pendientes — SDP los enviará automáticamente si la cuenta de distribución está financiada.",
     "distributeRetried": "Se reintentaron {count} pago(s) fallido(s). SDP enviará las transferencias en breve.",
+    "distributeNothingPayable": "No hay beneficiarios registrados con pagos pendientes. Enviá invitaciones y esperá que se registren.",
+    "distributePaidOne": "Pago enviado ({hash}…).",
+    "distributePaidMany": "{count} pagos enviados correctamente.",
+    "distributeFailed": "No se pudo completar el pago. Verificá el saldo del contrato de desembolso e intentá de nuevo.",
     "invitesSent": "Invitaciones enviadas: {sent} enviadas, {skipped} omitidas (ya registradas), {failed} fallidas.",
     "deleteBatch": "Eliminar lote",
     "deleting": "Eliminando…",
@@ -1125,7 +1133,9 @@
       "transferFailed": "La transferencia falló.",
       "successToDistribution": "Enviaste {amount} USDC a distribución SDP (tx {hash}…).",
       "successToTreasury": "Retiraste {amount} USDC de distribución SDP a la tesorería org (tx {hash}…).",
-      "sweepBackDisabledHint": "El retorno a tesorería requiere SDP_DISTRIBUTION_SEED en el servidor (debe coincidir con la clave pública de distribución)."
+      "sweepBackDisabledHint": "El retorno a tesorería requiere SDP_DISTRIBUTION_SEED en el servidor (debe coincidir con la clave pública de distribución).",
+      "noDistributionBalance": "No hay USDC en la billetera de distribución para retirar.",
+      "sweepAvailable": "{amount} USDC en billetera de distribución"
     },
     "fundBatch": "Financiar",
     "fundBatchSigning": "Firmando…",

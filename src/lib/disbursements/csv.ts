@@ -12,6 +12,19 @@ export interface RecipientRow {
   verification?: string;
 }
 
+/** Emails that appear more than once in a draft recipient list (case-insensitive). */
+export function findDuplicateEmailsInRecipients(recipients: RecipientRow[]): string[] {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const r of recipients) {
+    const email = r.email.trim().toLowerCase();
+    if (!email) continue;
+    if (seen.has(email)) duplicates.add(email);
+    else seen.add(email);
+  }
+  return [...duplicates];
+}
+
 /** Slug for SDP CSV `id` column from a full legal name. */
 export function slugifyLegalName(name: string): string {
   return name

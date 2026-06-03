@@ -4,13 +4,16 @@ import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
 
 export const dynamic = "force-dynamic";
 import {
-  createDisbursement,
   listDisbursements,
-  uploadInstructions,
   listWallets,
   listAssets,
   ensureSozuCreditWallet,
 } from "@/lib/sdp/adminClient";
+import {
+  PublishBatchError,
+  publishDisbursementBatchToSdp,
+  verificationByEmailFromCsv,
+} from "@/lib/disbursements/publishBatch";
 import { isSdpConfigured, sdpNotConfiguredMessage } from "@/lib/sdp/env";
 import {
   actorLabelFromUser,
@@ -28,8 +31,6 @@ import {
   filterMetaForOrg,
 } from "@/lib/disbursements/org-scope";
 import { getUserBySessionId } from "@/lib/db/users";
-import { verificationByEmailFromCsv } from "@/lib/disbursements/csv";
-import { normalizeDisbursementCsvText, findInvalidVerificationRows } from "@/lib/disbursements/normalizeVerification";
 import { recordUploadedVerifications } from "@/lib/disbursements/store";
 
 function notConfigured() {
@@ -139,29 +140,29 @@ export async function POST(request: Request) {
       );
     }
 
-    const disbursement = await createDisbursement({
-      name,
-      walletId,
-      assetId: asset.id,
-      registrationContactType: "EMAIL",
-    });
-
-    const rawCsv = Buffer.from(await file.arrayBuffer()).toString("utf-8");
-    const normalizedCsv = normalizeDisbursementCsvText(rawCsv);
-    const invalidRows = findInvalidVerificationRows(normalizedCsv);
-    if (invalidRows.length > 0) {
-      return NextResponse.json(
-        {
-          error:
-            "Each CSV row needs a verification date (YYYY-MM-DD) in the verification column. " +
-            `Missing or invalid on row(s): ${invalidRows.join(", ")}.`,
-        },
-        { status: 400 }
-      );
-    }
     const fileName = file instanceof File ? file.name : "disbursement.csv";
-    await uploadInstructions(disbursement.id, Buffer.from(normalizedCsv, "utf-8"), fileName);
+    const csvBuffer = Buffer.from(await file.arrayBuffer());
 
+    let published;
+    try {
+      published = await publishDisbursementBatchToSdp({
+        name,
+        walletId,
+        assetId: asset.id,
+        csvBuffer,
+        fileName,
+      });
+    } catch (e) {
+      if (e instanceof PublishBatchError) {
+        return NextResponse.json(
+          { error: e.message, code: e.code },
+          { status: e.status }
+        );
+      }
+      throw e;
+    }
+
+    const { disbursement, normalizedCsv } = published;
     const user = await getUserBySessionId(session.id);
     const label = user ? actorLabelFromUser(user) : session.id;
     ensureDisbursementMeta(disbursement.id, {
@@ -178,7 +179,7 @@ export async function POST(request: Request) {
       action: "created",
       actorUserId: session.id,
       actorLabel: label,
-      message: `Batch "${name}" created with ${disbursement.total_payments} recipient(s)`,
+      message: `Batch "${name}" published with ${disbursement.total_payments} recipient(s)`,
       metadata: {
         totalPayments: String(disbursement.total_payments),
         uploadedVerifications: JSON.stringify(uploadedByEmail),

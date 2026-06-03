@@ -14,7 +14,7 @@ import { EditDisbursementRecipients } from "@/components/disbursements/EditDisbu
 import { DistributionTreasuryPanel } from "@/components/disbursements/DistributionTreasuryPanel";
 import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
-import { recipientsToCSV, parseDisbursementCsvText } from "@/lib/disbursements/csv";
+import { recipientsToCSV, parseDisbursementCsvText, findDuplicateEmailsInRecipients } from "@/lib/disbursements/csv";
 import { normalizeVerificationForSdp } from "@/lib/disbursements/normalizeVerification";
 import { executePasskeyDistributionTransfer } from "@/lib/stellar/smartAccounts/executePasskeyDistributionTransfer";
 import { executePasskeySorobanPayout } from "@/lib/stellar/smartAccounts/signSorobanPayout";
@@ -333,6 +333,13 @@ export default function DisbursementsPage() {
   function handleAddRecipient() {
     const { name, email } = recipientForm;
     if (!name.trim() || !email.trim()) return;
+    const normalizedEmail = email.trim().toLowerCase();
+    if (
+      draftRecipients.some((r) => r.email.trim().toLowerCase() === normalizedEmail)
+    ) {
+      setCreateError(t("errorDuplicateEmail", { email: email.trim() }));
+      return;
+    }
     const normalized = normalizeVerificationForSdp(recipientForm.verification);
     if (!normalized) {
       setCreateError(
@@ -445,6 +452,15 @@ export default function DisbursementsPage() {
       });
       if (missingVerification) {
         setCreateError(t("errorMissingVerification"));
+        return null;
+      }
+      const duplicateEmails = findDuplicateEmailsInRecipients(draftRecipients);
+      if (duplicateEmails.length > 0) {
+        setCreateError(
+          duplicateEmails.length === 1
+            ? t("errorDuplicateEmail", { email: duplicateEmails[0]! })
+            : t("errorDuplicateEmails", { emails: duplicateEmails.join(", ") })
+        );
         return null;
       }
       const csvString = recipientsToCSV(
@@ -854,6 +870,9 @@ export default function DisbursementsPage() {
           <h2 className="text-base font-semibold text-gray-900 dark:text-white">
             {t("createTitle")}
           </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 -mt-4">
+            {t("draftHint")}
+          </p>
 
           {listError && (
             <p className="text-sm text-amber-700 dark:text-amber-400">
@@ -1245,7 +1264,7 @@ export default function DisbursementsPage() {
                 disabled={creating}
                 className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-60"
               >
-                {creating ? t("creating") : t("createBatch")}
+                {creating ? t("publishing") : t("publishBatch")}
               </button>
               <button
                 type="button"

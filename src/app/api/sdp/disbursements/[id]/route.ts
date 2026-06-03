@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
 import {
-  archiveDeletedDisbursement,
+  archiveDeletedDisbursementAsync,
   actorLabelFromUser,
 } from "@/lib/disbursements/store";
 import { getUserBySessionId } from "@/lib/db/users";
@@ -161,7 +161,7 @@ export async function DELETE(
       }
     }
 
-    archiveDeletedDisbursement({
+    await archiveDeletedDisbursementAsync({
       disbursement: existing,
       actor: { userId: session.id, label },
       sdpDeleted,

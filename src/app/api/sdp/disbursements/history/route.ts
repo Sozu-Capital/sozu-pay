@@ -3,19 +3,20 @@ import { getSession } from "@/lib/auth/session";
 import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
 import { listDisbursements } from "@/lib/sdp/adminClient";
 import {
-  archiveCompletedIfNeeded,
+  archiveCompletedIfNeededAsync,
   getAllDisbursementMetaAsync,
+  repairDisbursementMetaOrgIds,
 } from "@/lib/disbursements/store";
 import {
   filterDisbursementsForOrg,
-  getDisbursementHistoryForOrg,
+  getDisbursementHistoryForOrgFromSources,
 } from "@/lib/disbursements/org-scope";
 import { overlayDisbursementStats } from "@/lib/disbursements/mergeDisbursementStats";
 import { isSdpConfigured, sdpNotConfiguredMessage } from "@/lib/sdp/env";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/sdp/disbursements/history — archived deleted/completed batches for current org */
+/** GET /api/sdp/disbursements/history — archived deleted/completed/closed batches for current org */
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -25,24 +26,39 @@ export async function GET() {
 
   const orgId = auth.user.org_id!;
 
-  if (isSdpConfigured()) {
-    try {
-      const [disbursements, meta] = await Promise.all([
-        listDisbursements(),
-        getAllDisbursementMetaAsync(),
-      ]);
-      const orgDisbursements = filterDisbursementsForOrg(disbursements, meta, orgId);
-      for (const d of orgDisbursements) {
-        archiveCompletedIfNeeded({
-          disbursement: overlayDisbursementStats(d, meta[d.id]),
-        });
-      }
-    } catch (e) {
-      console.warn("[api/sdp/disbursements/history] SDP list failed:", e);
-    }
-  } else {
+  if (!isSdpConfigured()) {
     return NextResponse.json({ error: sdpNotConfiguredMessage() }, { status: 503 });
   }
 
-  return NextResponse.json({ history: getDisbursementHistoryForOrg(orgId) });
+  try {
+    const [disbursements, rawMeta] = await Promise.all([
+      listDisbursements(),
+      getAllDisbursementMetaAsync(),
+    ]);
+    const meta = await repairDisbursementMetaOrgIds(rawMeta, orgId);
+    const orgDisbursements = filterDisbursementsForOrg(disbursements, meta, orgId);
+
+    for (const d of orgDisbursements) {
+      await archiveCompletedIfNeededAsync({
+        disbursement: overlayDisbursementStats(d, meta[d.id]),
+      });
+    }
+
+    const refreshedMeta = await repairDisbursementMetaOrgIds(
+      await getAllDisbursementMetaAsync(),
+      orgId
+    );
+
+    const history = getDisbursementHistoryForOrgFromSources({
+      orgId,
+      disbursements,
+      metaById: refreshedMeta,
+    });
+
+    return NextResponse.json({ history });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[api/sdp/disbursements/history GET]", msg);
+    return NextResponse.json({ error: msg }, { status: 502 });
+  }
 }

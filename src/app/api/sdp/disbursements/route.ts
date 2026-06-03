@@ -18,9 +18,10 @@ import { isSdpConfigured, sdpNotConfiguredMessage } from "@/lib/sdp/env";
 import {
   actorLabelFromUser,
   appendDisbursementAudit,
-  archiveCompletedIfNeeded,
+  archiveCompletedIfNeededAsync,
   ensureDisbursementMeta,
   getAllDisbursementMetaAsync,
+  repairDisbursementMetaOrgIds,
 } from "@/lib/disbursements/store";
 import {
   isDisbursementArchived,
@@ -33,7 +34,7 @@ import {
   filterMetaForOrg,
 } from "@/lib/disbursements/org-scope";
 import { getUserBySessionId } from "@/lib/db/users";
-import { recordUploadedVerifications, repairDisbursementMetaOrgIds } from "@/lib/disbursements/store";
+import { recordUploadedVerifications } from "@/lib/disbursements/store";
 
 function notConfigured() {
   return NextResponse.json({ error: sdpNotConfiguredMessage() }, { status: 503 });
@@ -75,7 +76,7 @@ export async function GET() {
         isDisbursementFullyPaid(overlaid, meta[d.id]) &&
         !isDisbursementArchived(meta[d.id])
       ) {
-        archiveCompletedIfNeeded({ disbursement: overlaid });
+        await archiveCompletedIfNeededAsync({ disbursement: overlaid });
       }
     }
     meta = filterMetaForOrg(await getAllDisbursementMetaAsync(), orgId);

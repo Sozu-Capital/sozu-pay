@@ -1,5 +1,5 @@
 import { getSupabase } from "@/lib/supabase/server";
-import type { DisbursementMeta, ManualPaymentRecord } from "@/lib/disbursements/store";
+import type { DisbursementMeta, ManualPaymentRecord, DisbursementHistoryRecord } from "@/lib/disbursements/store";
 
 type MetaRow = {
   disbursement_id: string;
@@ -19,6 +19,7 @@ type MetaRow = {
   archived_at?: string | null;
   archive_reason?: string | null;
   org_id?: string | null;
+  archive_snapshot?: DisbursementHistoryRecord | null;
 };
 
 function rowToMeta(row: MetaRow): DisbursementMeta {
@@ -39,10 +40,13 @@ function rowToMeta(row: MetaRow): DisbursementMeta {
     manualPayments: row.manual_payments ?? undefined,
     archivedAt: row.archived_at ?? undefined,
     archiveReason:
-      row.archive_reason === "deleted" || row.archive_reason === "completed"
+      row.archive_reason === "deleted" ||
+      row.archive_reason === "completed" ||
+      row.archive_reason === "closed"
         ? row.archive_reason
         : undefined,
     orgId: row.org_id ?? undefined,
+    archiveSnapshot: row.archive_snapshot ?? undefined,
   };
 }
 
@@ -65,6 +69,7 @@ function metaToRow(meta: DisbursementMeta): MetaRow {
     archived_at: meta.archivedAt ?? null,
     archive_reason: meta.archiveReason ?? null,
     org_id: meta.orgId ?? null,
+    archive_snapshot: meta.archiveSnapshot ?? null,
   };
 }
 
@@ -110,6 +115,7 @@ function mergeMetaForUpsert(
     },
     archivedAt: incoming.archivedAt ?? existing.archivedAt,
     archiveReason: incoming.archiveReason ?? existing.archiveReason,
+    archiveSnapshot: incoming.archiveSnapshot ?? existing.archiveSnapshot,
     invitesSentAt: incoming.invitesSentAt ?? existing.invitesSentAt,
     invitesSentBy: incoming.invitesSentBy ?? existing.invitesSentBy,
     invitesSentByLabel: incoming.invitesSentByLabel ?? existing.invitesSentByLabel,

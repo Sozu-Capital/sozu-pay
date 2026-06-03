@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   DisbursementAuthorizeModal,
@@ -162,6 +163,7 @@ function formatSozuTag(tag: string | null): string {
 
 export default function DisbursementsPage() {
   const t = useTranslations("disbursementsPage");
+  const searchParams = useSearchParams();
   const { profile } = useDashboardProfile() ?? { profile: null };
   const { ready: kitReady, kit, credentialId } = useSmartAccountKitContext();
   const isDisbursementAdmin =
@@ -266,6 +268,16 @@ export default function DisbursementsPage() {
   useEffect(() => {
     fetchList();
   }, [fetchList]);
+
+  useEffect(() => {
+    const openId = searchParams.get("id")?.trim();
+    if (openId) setSelectedId(openId);
+  }, [searchParams]);
+
+  const archivedBatchOpen =
+    Boolean(selectedId) &&
+    !disbursements.some((d) => d.id === selectedId) &&
+    detail?.disbursement.id === selectedId;
 
   // ── Fetch detail ──────────────────────────────────────────────────────────
 
@@ -1313,9 +1325,57 @@ export default function DisbursementsPage() {
             </p>
           </div>
         )}
-        {!listLoading && !listError && disbursements.length === 0 && (
+        {!listLoading && !listError && disbursements.length === 0 && !archivedBatchOpen && (
           <p className="text-sm text-gray-500 dark:text-gray-400">{t("empty")}</p>
         )}
+
+        {archivedBatchOpen && detail?.disbursement ? (
+          <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-950/20 px-5 py-4 space-y-3">
+            <p className="text-sm text-amber-800 dark:text-amber-300">{t("archivedCampaignBanner")}</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="font-medium text-gray-900 dark:text-white">{detail.disbursement.name}</p>
+                  <DisbursementAuditButton
+                    disbursementId={detail.disbursement.id}
+                    disbursementName={detail.disbursement.name}
+                  />
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {detail.disbursement.total_payments} {t("payments")} · {detail.disbursement.status}
+                </p>
+              </div>
+              <Link
+                href="/dashboard/disbursements/history"
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                {t("viewHistory")}
+              </Link>
+            </div>
+            {detail.payments.length > 0 ? (
+              <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50 dark:bg-gray-800/60 text-left text-xs text-gray-500">
+                    <tr>
+                      <th className="px-3 py-2">{t("colRecipient")}</th>
+                      <th className="px-3 py-2">{t("colAmount")}</th>
+                      <th className="px-3 py-2">{t("colStatus")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detail.payments.map((p) => (
+                      <tr key={p.id} className="border-t border-gray-200 dark:border-gray-700">
+                        <td className="px-3 py-2">{p.beneficiary_name || p.receiver.email || "—"}</td>
+                        <td className="px-3 py-2">{p.amount}</td>
+                        <td className="px-3 py-2">{p.payment_status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {disbursements.map((d) => {
           const meta = metaById[d.id];

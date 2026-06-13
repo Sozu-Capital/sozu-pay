@@ -5,7 +5,7 @@ import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getWithdrawalForOrg } from "@/lib/db/withdrawal-requests";
 import { prepareOffRampUsdcRelease } from "@/lib/stellar/off-ramp-release";
 import { resolveOrgDisbursementContractId } from "@/lib/stellar/org-treasury";
-import { formatSorobanPayoutError, PayoutFundsError } from "@/lib/stellar/soroban-payout-errors";
+import { formatPayoutFundsError, PayoutFundsError } from "@/lib/stellar/soroban-payout-errors";
 import { cookies } from "next/headers";
 import { LOCALE_COOKIE, readServerLocaleCookie } from "@/lib/i18n/locale";
 
@@ -67,7 +67,7 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
   } catch (e) {
     if (e instanceof PayoutFundsError) {
       return NextResponse.json(
-        { error: formatSorobanPayoutError(e, locale), code: e.code },
+        { error: formatPayoutFundsError(e, locale), code: e.code },
         { status: 400 },
       );
     }

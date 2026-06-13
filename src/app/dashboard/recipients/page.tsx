@@ -52,7 +52,6 @@ export default function RecipientsPage() {
   const [pendingPayoutBody, setPendingPayoutBody] = useState<Record<string, unknown> | null>(null);
   const [payoutWalletAddress, setPayoutWalletAddress] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [phone, setPhone] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [payoutSuccess, setPayoutSuccess] = useState<{ amount: string; stellarTxHash?: string; recipientLabel?: string } | null>(null);

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { resolveCheckoutSuccessRedirect } from "@/lib/ramp/resolve-checkout-redirect";
 
 export default function StubRampCheckoutPage() {
   const sp = useSearchParams();
@@ -17,13 +18,8 @@ export default function StubRampCheckoutPage() {
   }, [sp]);
 
   const goBack = () => {
-    if (!data.redirect) return;
-    try {
-      const url = decodeURIComponent(data.redirect);
-      window.location.href = url;
-    } catch {
-      window.location.href = "/dashboard/checkout";
-    }
+    const target = resolveCheckoutSuccessRedirect(data.redirect, data.ref || undefined);
+    window.location.href = target;
   };
 
   const simulateCompleted = async () => {

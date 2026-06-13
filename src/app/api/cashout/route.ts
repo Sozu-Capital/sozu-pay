@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
-import { getUsdcBalance } from "@/lib/stellar/balance";
+import { getOrgTreasuryUsdcBalance } from "@/lib/org-receive-address";
 import { rampProvider } from "@/lib/ramp/provider";
-import { createWithdrawalRequest, listWithdrawalRequestsForOrg } from "@/lib/db/withdrawal-requests";
+import { createWithdrawalRequest, getActivePendingWithdrawalForOrg, listWithdrawalRequestsForOrg } from "@/lib/db/withdrawal-requests";
 
 /**
  * GET /api/cashout – list recent withdrawal requests for the authenticated org.
@@ -51,13 +51,23 @@ export async function POST(request: NextRequest) {
   if (!orgId) return NextResponse.json({ error: "No organization" }, { status: 403 });
 
   const org = await getOrganizationForUser(orgId);
-  const sourceAddress = org?.stellar_disbursement_public_key ?? null;
+  if (!org) {
+    return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+  }
+
+  const { address: sourceAddress, balance: balanceUsdc } = await getOrgTreasuryUsdcBalance(org);
   if (!sourceAddress) {
     return NextResponse.json({ error: "Organization has no Stellar wallet" }, { status: 422 });
   }
 
-  // Balance check
-  const balanceUsdc = await getUsdcBalance(sourceAddress);
+  const activePending = await getActivePendingWithdrawalForOrg(orgId);
+  if (activePending) {
+    return NextResponse.json(
+      { error: "Cancel your pending withdrawal before requesting a new one", code: "pending_exists" },
+      { status: 409 },
+    );
+  }
+
   if (parseFloat(balanceUsdc) < amount) {
     return NextResponse.json(
       { error: `Insufficient balance. Available: ${balanceUsdc} USDC` },

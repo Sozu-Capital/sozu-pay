@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { CheckoutPreviewCard } from "@/components/CheckoutPreviewCard";
 
 type Session = {
   id: string;
@@ -9,18 +10,33 @@ type Session = {
   amountUsd: string;
   reference: string | null;
   createdAt: string;
+  paymentMethod?: string | null;
+  allowDebit?: boolean;
+  allowCredit?: boolean;
+  allowBankTransfer?: boolean;
 };
 
 export default function CheckoutPage() {
   const t = useTranslations("checkoutPage");
   const [amountUsd, setAmountUsd] = useState("");
   const [reference, setReference] = useState("");
+  const [allowDebit, setAllowDebit] = useState(true);
+  const [allowCredit, setAllowCredit] = useState(true);
+  const [allowBankTransfer, setAllowBankTransfer] = useState(true);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ checkoutUrl: string; id: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editAmount, setEditAmount] = useState("");
+  const [editReference, setEditReference] = useState("");
+  const [editAllowDebit, setEditAllowDebit] = useState(true);
+  const [editAllowCredit, setEditAllowCredit] = useState(true);
+  const [editAllowBankTransfer, setEditAllowBankTransfer] = useState(true);
+  const [editBusy, setEditBusy] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadSessions = useCallback(() => {
     setLoadingSessions(true);
@@ -46,7 +62,13 @@ export default function CheckoutPage() {
       const res = await fetch("/api/checkout/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amountUsd: amountUsd.trim(), reference: reference.trim() || undefined }),
+        body: JSON.stringify({ 
+          amountUsd: amountUsd.trim(), 
+          reference: reference.trim() || undefined,
+          allowDebit,
+          allowCredit,
+          allowBankTransfer,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -56,9 +78,66 @@ export default function CheckoutPage() {
       setResult({ checkoutUrl: data.checkoutUrl, id: data.id });
       setAmountUsd("");
       setReference("");
+      setAllowDebit(true);
+      setAllowCredit(true);
+      setAllowBankTransfer(true);
       loadSessions();
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleEdit = (session: Session) => {
+    setEditingId(session.id);
+    setEditAmount(session.amountUsd);
+    setEditReference(session.reference ?? "");
+    setEditAllowDebit(session.allowDebit ?? true);
+    setEditAllowCredit(session.allowCredit ?? true);
+    setEditAllowBankTransfer(session.allowBankTransfer ?? true);
+  };
+
+  const handleSaveEdit = async (id: string) => {
+    const amount = parseFloat(editAmount);
+    if (!isFinite(amount) || amount <= 0) {
+      setError(t("invalidAmount"));
+      return;
+    }
+    setEditBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/checkout/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amountUsd: editAmount.trim(),
+          reference: editReference.trim() || undefined,
+          allowDebit: editAllowDebit,
+          allowCredit: editAllowCredit,
+          allowBankTransfer: editAllowBankTransfer,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError((data.error as string) ?? "Update failed");
+        return;
+      }
+      setEditingId(null);
+      loadSessions();
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm(t("confirmDelete") ?? "Delete this payment link?")) return;
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/checkout/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        loadSessions();
+      }
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -79,61 +158,114 @@ export default function CheckoutPage() {
         ? "text-red-600 dark:text-red-400"
         : "text-amber-600 dark:text-amber-400";
 
+  const baseUrl =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-5xl">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t("title")}</h1>
       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("subtitle")}</p>
 
-      {/* Create form */}
-      <form
-        onSubmit={handleCreate}
-        className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6 space-y-4"
-      >
-        <h2 className="font-semibold text-gray-900 dark:text-white">{t("newLink")}</h2>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {t("amountLabel")}
-          </label>
-          <div className="flex items-center gap-2">
-            <span className="text-gray-500 dark:text-gray-400 font-medium">$</span>
-            <input
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={amountUsd}
-              onChange={(e) => setAmountUsd(e.target.value)}
-              placeholder="0.00"
-              className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-            <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">USD</span>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {t("referenceLabel")}
-          </label>
-          <input
-            type="text"
-            value={reference}
-            onChange={(e) => setReference(e.target.value)}
-            placeholder={t("referencePlaceholder")}
-            className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-
-        <button
-          type="submit"
-          disabled={busy}
-          className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold py-2.5 text-sm transition-colors"
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Create form */}
+        <form
+          onSubmit={handleCreate}
+          className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6 space-y-4"
         >
-          {busy ? t("creating") : t("createButton")}
-        </button>
-      </form>
+          <h2 className="font-semibold text-gray-900 dark:text-white">{t("newLink")}</h2>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t("amountLabel")}
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500 dark:text-gray-400 font-medium">$</span>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={amountUsd}
+                onChange={(e) => setAmountUsd(e.target.value)}
+                placeholder="0.00"
+                className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+              <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">USD</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t("referenceLabel")}
+            </label>
+            <input
+              type="text"
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              placeholder={t("referencePlaceholder")}
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Payment methods
+            </label>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={allowDebit}
+                  onChange={(e) => setAllowDebit(e.target.checked)}
+                  className="rounded border-gray-300 text-blue-600"
+                />
+                <span className="text-gray-700 dark:text-gray-300">Debit card</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={allowCredit}
+                  onChange={(e) => setAllowCredit(e.target.checked)}
+                  className="rounded border-gray-300 text-blue-600"
+                />
+                <span className="text-gray-700 dark:text-gray-300">Credit card</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={allowBankTransfer}
+                  onChange={(e) => setAllowBankTransfer(e.target.checked)}
+                  className="rounded border-gray-300 text-blue-600"
+                />
+                <span className="text-gray-700 dark:text-gray-300">Bank transfer</span>
+              </label>
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold py-2.5 text-sm transition-colors"
+          >
+            {busy ? t("creating") : t("createButton")}
+          </button>
+        </form>
+
+        {/* Preview */}
+        {amountUsd && (
+          <CheckoutPreviewCard
+            amountUsd={amountUsd || "0.00"}
+            reference={reference}
+            allowDebit={allowDebit}
+            allowCredit={allowCredit}
+            allowBankTransfer={allowBankTransfer}
+          />
+        )}
+      </div>
 
       {/* Created link */}
       {result && (
@@ -161,31 +293,124 @@ export default function CheckoutPage() {
         ) : sessions.length === 0 ? (
           <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">{t("noHistory")}</p>
         ) : (
-          <div className="mt-3 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 dark:bg-gray-800/50">
-                <tr>
-                  <th className="text-left p-3 font-medium">{t("colDate")}</th>
-                  <th className="text-left p-3 font-medium">{t("colAmount")}</th>
-                  <th className="text-left p-3 font-medium">{t("colRef")}</th>
-                  <th className="text-left p-3 font-medium">{t("colStatus")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sessions.map((s) => (
-                  <tr key={s.id} className="border-t border-gray-200 dark:border-gray-700">
-                    <td className="p-3 text-gray-600 dark:text-gray-400">
-                      {new Date(s.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="p-3 font-medium">${s.amountUsd}</td>
-                    <td className="p-3 text-gray-600 dark:text-gray-400">{s.reference ?? "—"}</td>
-                    <td className={`p-3 font-medium capitalize ${statusColor(s.status)}`}>
-                      {s.status}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-3 space-y-2">
+            {sessions.map((s) => (
+              <div 
+                key={s.id} 
+                className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-4"
+              >
+                {editingId === s.id ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500 dark:text-gray-400 text-sm">$</span>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={editAmount}
+                        onChange={(e) => setEditAmount(e.target.value)}
+                        className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                      />
+                      <span className="text-sm text-gray-500">USD</span>
+                    </div>
+                    <input
+                      type="text"
+                      value={editReference}
+                      onChange={(e) => setEditReference(e.target.value)}
+                      placeholder="Reference"
+                      className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                    />
+                    <div className="space-y-1">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={editAllowDebit}
+                          onChange={(e) => setEditAllowDebit(e.target.checked)}
+                          className="rounded border-gray-300"
+                        />
+                        <span className="text-gray-700 dark:text-gray-300">Debit card</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={editAllowCredit}
+                          onChange={(e) => setEditAllowCredit(e.target.checked)}
+                          className="rounded border-gray-300"
+                        />
+                        <span className="text-gray-700 dark:text-gray-300">Credit card</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={editAllowBankTransfer}
+                          onChange={(e) => setEditAllowBankTransfer(e.target.checked)}
+                          className="rounded border-gray-300"
+                        />
+                        <span className="text-gray-700 dark:text-gray-300">Bank transfer</span>
+                      </label>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleSaveEdit(s.id)}
+                        disabled={editBusy}
+                        className="rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 text-sm font-medium"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        disabled={editBusy}
+                        className="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-medium text-gray-900 dark:text-white">${s.amountUsd}</span>
+                        {s.reference && (
+                          <span className="text-sm text-gray-600 dark:text-gray-400">{s.reference}</span>
+                        )}
+                        <span className={`text-sm font-medium capitalize ${statusColor(s.status)}`}>
+                          {s.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {new Date(s.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => copyLink(`${baseUrl}/checkout/${s.id}`)}
+                        className="rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700"
+                      >
+                        Copy link
+                      </button>
+                      {s.status === "pending" && (
+                        <>
+                          <button
+                            onClick={() => handleEdit(s)}
+                            className="rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(s.id)}
+                            disabled={deletingId === s.id}
+                            className="rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 px-3 py-1.5 text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </section>

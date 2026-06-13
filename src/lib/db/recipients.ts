@@ -8,6 +8,11 @@ export interface DbRecipient {
   stellar_address: string | null;
   phone: string | null;
   date_of_birth: string | null;
+  bank_holder: string | null;
+  bank_country: string | null;
+  bank_currency: string | null;
+  bank_account_number: string | null;
+  bank_routing_code: string | null;
   created_at: string;
 }
 
@@ -19,6 +24,11 @@ export interface Recipient {
   stellarAddress?: string;
   phone?: string;
   dateOfBirth?: string;
+  bankHolder?: string;
+  bankCountry?: string;
+  bankCurrency?: string;
+  bankAccountNumber?: string;
+  bankRoutingCode?: string;
   createdAt: string;
 }
 
@@ -31,6 +41,11 @@ function toRecipient(row: DbRecipient): Recipient {
     stellarAddress: row.stellar_address ?? undefined,
     phone: row.phone ?? undefined,
     dateOfBirth: row.date_of_birth ?? undefined,
+    bankHolder: row.bank_holder ?? undefined,
+    bankCountry: row.bank_country ?? undefined,
+    bankCurrency: row.bank_currency ?? undefined,
+    bankAccountNumber: row.bank_account_number ?? undefined,
+    bankRoutingCode: row.bank_routing_code ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -41,7 +56,12 @@ export async function createRecipientDb(
   bankAccountId: string,
   stellarAddress?: string,
   phone?: string,
-  dateOfBirth?: string
+  dateOfBirth?: string,
+  bankHolder?: string,
+  bankCountry?: string,
+  bankCurrency?: string,
+  bankAccountNumber?: string,
+  bankRoutingCode?: string
 ): Promise<Recipient> {
   const payload: Record<string, unknown> = {
     owner_id: ownerId,
@@ -50,6 +70,11 @@ export async function createRecipientDb(
     stellar_address: stellarAddress ?? null,
     phone: phone?.trim() || null,
     date_of_birth: dateOfBirth?.trim() || null,
+    bank_holder: bankHolder?.trim() || null,
+    bank_country: bankCountry?.trim() || null,
+    bank_currency: bankCurrency?.trim() || null,
+    bank_account_number: bankAccountNumber?.trim() || null,
+    bank_routing_code: bankRoutingCode?.trim() || null,
   };
   const { data, error } = await getSupabase()
     .from("recipients")
@@ -91,7 +116,7 @@ export async function listRecipientsDb(ownerId: string): Promise<Recipient[]> {
 export async function updateRecipientDb(
   id: string,
   ownerId: string,
-  updates: Partial<Pick<Recipient, "name" | "bankAccountId" | "stellarAddress" | "phone" | "dateOfBirth">>
+  updates: Partial<Pick<Recipient, "name" | "bankAccountId" | "stellarAddress" | "phone" | "dateOfBirth" | "bankHolder" | "bankCountry" | "bankCurrency" | "bankAccountNumber" | "bankRoutingCode">>
 ): Promise<Recipient | null> {
   const payload: Record<string, unknown> = {};
   if (updates.name !== undefined) payload.name = updates.name;
@@ -102,6 +127,16 @@ export async function updateRecipientDb(
   if (updates.phone !== undefined) payload.phone = updates.phone?.trim() || null;
   if (updates.dateOfBirth !== undefined)
     payload.date_of_birth = updates.dateOfBirth?.trim() || null;
+  if (updates.bankHolder !== undefined)
+    payload.bank_holder = updates.bankHolder?.trim() || null;
+  if (updates.bankCountry !== undefined)
+    payload.bank_country = updates.bankCountry?.trim() || null;
+  if (updates.bankCurrency !== undefined)
+    payload.bank_currency = updates.bankCurrency?.trim() || null;
+  if (updates.bankAccountNumber !== undefined)
+    payload.bank_account_number = updates.bankAccountNumber?.trim() || null;
+  if (updates.bankRoutingCode !== undefined)
+    payload.bank_routing_code = updates.bankRoutingCode?.trim() || null;
 
   if (Object.keys(payload).length === 0) {
     return getRecipientDb(id, ownerId);

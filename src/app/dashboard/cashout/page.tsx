@@ -1,14 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { CashoutReleasePanel } from "@/components/CashoutReleasePanel";
 
 type Withdrawal = {
   id: string;
   status: string;
   amount_usd: string;
   bank_account_holder: string;
+  bank_country: string;
+  bank_account_number: string;
+  bank_currency: string | null;
   estimated_arrival: string | null;
+  fiat_sent_at: string | null;
   created_at: string;
 };
 
@@ -21,15 +26,15 @@ export default function CashOutPage() {
   const [loadingBalance, setLoadingBalance] = useState(true);
   const [loadingHistory, setLoadingHistory] = useState(true);
 
-  // Form state
   const [amountUsd, setAmountUsd] = useState("");
   const [bankAccountHolder, setBankAccountHolder] = useState("");
-  const [bankCountry, setBankCountry] = useState("");
+  const [bankCountry, setBankCountry] = useState("CL");
   const [bankAccountNumber, setBankAccountNumber] = useState("");
   const [bankRoutingCode, setBankRoutingCode] = useState("");
-  const [bankCurrency, setBankCurrency] = useState("");
+  const [bankCurrency, setBankCurrency] = useState("CLP");
 
   const [busy, setBusy] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,10 +59,24 @@ export default function CashOutPage() {
     loadHistory();
   }, [loadBalance, loadHistory]);
 
+  const activeWithdrawal = useMemo(
+    () => withdrawals.find((w) => w.status === "pending" || w.status === "processing") ?? null,
+    [withdrawals],
+  );
+
+  const activePending = activeWithdrawal?.status === "pending" ? activeWithdrawal : null;
+  const awaitingRelease = activeWithdrawal?.status === "processing" ? activeWithdrawal : null;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+
+    if (activeWithdrawal) {
+      setError(t("pendingBlocksNew"));
+      return;
+    }
+
     const amount = parseFloat(amountUsd);
     if (!isFinite(amount) || amount <= 0) {
       setError(t("invalidAmount"));
@@ -67,6 +86,7 @@ export default function CashOutPage() {
       setError(t("bankRequired"));
       return;
     }
+
     setBusy(true);
     try {
       const res = await fetch("/api/cashout", {
@@ -83,20 +103,15 @@ export default function CashOutPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError((data.error as string) ?? t("withdrawFailed"));
+        setError(
+          data.code === "pending_exists"
+            ? t("pendingBlocksNew")
+            : ((data.error as string) ?? t("withdrawFailed")),
+        );
         return;
       }
-      setSuccess(
-        data.estimatedArrival
-          ? t("withdrawQueued", { eta: new Date(data.estimatedArrival as string).toLocaleString() })
-          : t("withdrawQueuedNoEta"),
-      );
+      setSuccess(t("withdrawQueuedNoEta"));
       setAmountUsd("");
-      setBankAccountHolder("");
-      setBankCountry("");
-      setBankAccountNumber("");
-      setBankRoutingCode("");
-      setBankCurrency("");
       loadBalance();
       loadHistory();
     } finally {
@@ -104,11 +119,29 @@ export default function CashOutPage() {
     }
   };
 
+  const handleCancel = async (id: string) => {
+    setCancellingId(id);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch(`/api/cashout/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError((data.error as string) ?? t("cancelFailed"));
+        return;
+      }
+      setSuccess(t("cancelSuccess"));
+      loadHistory();
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
   const statusColor = (s: string) =>
     s === "completed"
       ? "text-emerald-600 dark:text-emerald-400"
-      : s === "failed"
-        ? "text-red-600 dark:text-red-400"
+      : s === "failed" || s === "cancelled"
+        ? "text-gray-500 dark:text-gray-400"
         : "text-amber-600 dark:text-amber-400";
 
   return (
@@ -116,7 +149,6 @@ export default function CashOutPage() {
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t("title")}</h1>
       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("subtitle")}</p>
 
-      {/* Balance */}
       <div className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-5 flex items-center justify-between">
         <div>
           <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
@@ -125,12 +157,45 @@ export default function CashOutPage() {
           {loadingBalance ? (
             <div className="mt-1 h-7 w-28 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
           ) : (
-            <p className="mt-1 text-2xl font-bold">${balance?.available ?? "0.00"} <span className="text-base font-normal text-gray-500">USD</span></p>
+            <p className="mt-1 text-2xl font-bold">
+              ${balance?.available ?? "0.00"}{" "}
+              <span className="text-base font-normal text-gray-500">USDC</span>
+            </p>
           )}
         </div>
       </div>
 
-      {/* Withdrawal form */}
+      {activePending && (
+        <div className="mt-6 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-5">
+          <p className="font-semibold text-amber-900 dark:text-amber-100">{t("pendingOpsTitle")}</p>
+          <p className="mt-1 text-sm text-amber-800 dark:text-amber-200">{t("pendingOpsBody")}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+            <span className="font-medium">${activePending.amount_usd} USDC</span>
+            <span className="text-amber-700 dark:text-amber-300">{activePending.bank_account_holder}</span>
+            <button
+              type="button"
+              disabled={cancellingId === activePending.id}
+              onClick={() => handleCancel(activePending.id)}
+              className="rounded-lg border border-amber-400 dark:border-amber-600 px-3 py-1.5 text-sm font-medium hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50"
+            >
+              {cancellingId === activePending.id ? t("cancelling") : t("cancelRequest")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {awaitingRelease && (
+        <CashoutReleasePanel
+          withdrawalId={awaitingRelease.id}
+          amountUsd={awaitingRelease.amount_usd}
+          fiatSentAt={awaitingRelease.fiat_sent_at}
+          onReleased={() => {
+            loadBalance();
+            loadHistory();
+          }}
+        />
+      )}
+
       <form
         onSubmit={handleSubmit}
         className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6 space-y-4"
@@ -148,10 +213,11 @@ export default function CashOutPage() {
               value={amountUsd}
               onChange={(e) => setAmountUsd(e.target.value)}
               placeholder="0.00"
-              className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+              disabled={!!activeWithdrawal}
+              className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-60"
               required
             />
-            <span className="text-sm text-gray-500">USD</span>
+            <span className="text-sm text-gray-500">USDC</span>
           </div>
         </div>
 
@@ -163,7 +229,8 @@ export default function CashOutPage() {
               value={bankAccountHolder}
               onChange={(e) => setBankAccountHolder(e.target.value)}
               placeholder={t("holderPlaceholder")}
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+              disabled={!!activeWithdrawal}
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-60"
               required
             />
           </div>
@@ -174,8 +241,9 @@ export default function CashOutPage() {
               maxLength={2}
               value={bankCountry}
               onChange={(e) => setBankCountry(e.target.value)}
-              placeholder="US"
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500 uppercase"
+              placeholder="CL"
+              disabled={!!activeWithdrawal}
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500 uppercase disabled:opacity-60"
               required
             />
           </div>
@@ -186,8 +254,9 @@ export default function CashOutPage() {
               maxLength={3}
               value={bankCurrency}
               onChange={(e) => setBankCurrency(e.target.value)}
-              placeholder="USD"
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500 uppercase"
+              placeholder="CLP"
+              disabled={!!activeWithdrawal}
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500 uppercase disabled:opacity-60"
             />
           </div>
           <div className="col-span-2">
@@ -197,7 +266,8 @@ export default function CashOutPage() {
               value={bankAccountNumber}
               onChange={(e) => setBankAccountNumber(e.target.value)}
               placeholder={t("accountNumberPlaceholder")}
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+              disabled={!!activeWithdrawal}
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-60"
               required
             />
           </div>
@@ -208,7 +278,8 @@ export default function CashOutPage() {
               value={bankRoutingCode}
               onChange={(e) => setBankRoutingCode(e.target.value)}
               placeholder={t("routingPlaceholder")}
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+              disabled={!!activeWithdrawal}
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-60"
             />
           </div>
         </div>
@@ -218,7 +289,7 @@ export default function CashOutPage() {
 
         <button
           type="submit"
-          disabled={busy}
+          disabled={busy || !!activeWithdrawal}
           className="w-full rounded-lg bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white font-semibold py-2.5 text-sm transition-colors"
         >
           {busy ? t("submitting") : t("submitButton")}
@@ -227,7 +298,6 @@ export default function CashOutPage() {
         <p className="text-xs text-gray-400 dark:text-gray-500 text-center">{t("hint")}</p>
       </form>
 
-      {/* History */}
       <section className="mt-8">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t("historyTitle")}</h2>
         {loadingHistory ? (
@@ -258,12 +328,7 @@ export default function CashOutPage() {
                     <td className="p-3 font-medium">${w.amount_usd}</td>
                     <td className="p-3 text-gray-600 dark:text-gray-400">{w.bank_account_holder}</td>
                     <td className={`p-3 font-medium capitalize ${statusColor(w.status)}`}>
-                      {w.status}
-                      {w.estimated_arrival && w.status === "pending" && (
-                        <span className="block text-xs font-normal text-gray-400 dark:text-gray-500">
-                          {t("eta")}: {new Date(w.estimated_arrival).toLocaleString()}
-                        </span>
-                      )}
+                      {w.status === "cancelled" ? t("statusCancelled") : w.status}
                     </td>
                   </tr>
                 ))}

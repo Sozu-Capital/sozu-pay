@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
-import { useSignOut } from "@/lib/auth/useSignOut";
 
 type Org = { id: string; name: string };
 
@@ -17,7 +16,6 @@ export default function OrganizationsPage() {
   const [loading, setLoading] = useState(true);
   const [selectingId, setSelectingId] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const { signOut, signingOut } = useSignOut();
 
   useEffect(() => {
     fetch("/api/profile/organizations", {
@@ -114,17 +112,7 @@ export default function OrganizationsPage() {
           </div>
 
           {!hasOrgs && (
-            <div className="mt-4 space-y-3">
-              <p className="text-sm text-gray-400">{t("noOrgHint")}</p>
-              <button
-                type="button"
-                onClick={() => signOut()}
-                disabled={signingOut}
-                className="w-full rounded-md border border-white/20 bg-white/5 py-2.5 px-4 text-sm font-medium text-white hover:bg-white/10 disabled:opacity-50"
-              >
-                {signingOut ? t("signingOut") : t("logOut")}
-              </button>
-            </div>
+            <p className="mt-4 text-sm text-gray-400">{t("noOrgHint")}</p>
           )}
         </div>
       </main>

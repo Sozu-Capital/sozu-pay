@@ -13,9 +13,10 @@ type HomeLandingShellProps = {
   introCta?: ReactNode;
   status?: ReactNode;
   footerExtra?: ReactNode;
+  namespace?: string;
 };
 
-export function HomeLandingShell({ introCta, status, footerExtra }: HomeLandingShellProps) {
+export function HomeLandingShell({ introCta, status, footerExtra, namespace = "login" }: HomeLandingShellProps) {
   return (
     <HomeLandingTransitionProvider>
       <HomeAuthUiProvider>
@@ -24,7 +25,7 @@ export function HomeLandingShell({ introCta, status, footerExtra }: HomeLandingS
           <div className="pointer-events-none relative z-20 flex min-h-[100dvh] min-h-screen flex-1 flex-col">
             <HomeLandingNav />
             <div className="flex flex-1 flex-col justify-center px-6 md:px-10 lg:px-12 lg:pb-8">
-              <HomePageIntro cta={introCta} status={status} />
+              <HomePageIntro cta={introCta} status={status} namespace={namespace} />
             </div>
             <HomeLandingFooter>{footerExtra}</HomeLandingFooter>
           </div>

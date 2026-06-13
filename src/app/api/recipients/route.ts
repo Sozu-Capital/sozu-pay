@@ -23,6 +23,11 @@ export async function POST(request: NextRequest) {
   const stellarAddress = typeof body.stellarAddress === "string" ? body.stellarAddress.trim() : undefined;
   const phone = typeof body.phone === "string" ? body.phone.trim() : undefined;
   const dateOfBirth = typeof body.dateOfBirth === "string" ? body.dateOfBirth.trim() : undefined;
+  const bankHolder = typeof body.bankHolder === "string" ? body.bankHolder.trim() : undefined;
+  const bankCountry = typeof body.bankCountry === "string" ? body.bankCountry.trim() : undefined;
+  const bankCurrency = typeof body.bankCurrency === "string" ? body.bankCurrency.trim() : undefined;
+  const bankAccountNumber = typeof body.bankAccountNumber === "string" ? body.bankAccountNumber.trim() : undefined;
+  const bankRoutingCode = typeof body.bankRoutingCode === "string" ? body.bankRoutingCode.trim() : undefined;
 
   if (!name) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -45,7 +50,12 @@ export async function POST(request: NextRequest) {
     bankAccountId,
     stellarAddress,
     phone,
-    dateOfBirth
+    dateOfBirth,
+    bankHolder,
+    bankCountry,
+    bankCurrency,
+    bankAccountNumber,
+    bankRoutingCode
   );
   return NextResponse.json({ recipient });
 }

@@ -2,7 +2,8 @@ import "server-only";
 
 import type { Organization } from "@/lib/db/organizations";
 import { getHorizon } from "@/lib/stellar/server";
-import { getUsdcIssuer } from "@/lib/stellar/balance";
+import { getUsdcBalance, getUsdcIssuer } from "@/lib/stellar/balance";
+import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
 import { resolveOrgTreasuryContractId } from "@/lib/stellar/org-treasury";
 import { getSupabase } from "@/lib/supabase/server";
 
@@ -32,6 +33,21 @@ export function resolveOrgReceiveAddress(org: Organization): {
   const tagReceiveAddress = sorobanC ?? classicG;
   const dashboardBalanceAddress = sorobanC ?? classicG;
   return { classicG, sorobanC, tagReceiveAddress, dashboardBalanceAddress };
+}
+
+/** Same address + balance logic as GET /api/balance (Soroban treasury when configured). */
+export async function getOrgTreasuryUsdcBalance(org: Organization): Promise<{
+  address: string | null;
+  balance: string;
+}> {
+  const { dashboardBalanceAddress } = resolveOrgReceiveAddress(org);
+  if (!dashboardBalanceAddress) {
+    return { address: null, balance: "0" };
+  }
+  const balance = dashboardBalanceAddress.startsWith("C")
+    ? await getSorobanUsdcBalance(dashboardBalanceAddress)
+    : await getUsdcBalance(dashboardBalanceAddress);
+  return { address: dashboardBalanceAddress, balance };
 }
 
 export async function getStellarWalletRowForAuthUser(

@@ -2,9 +2,14 @@
 
 import { useCallback, useState } from "react";
 
-/** Clears app session, then navigates to `/?fresh=1`. */
-export function useSignOut() {
+type SignOutOptions = {
+  getLandingUrl?: () => string;
+};
+
+/** Clears app session, then navigates via `getLandingUrl` or `/?fresh=1`. */
+export function useSignOut(options?: SignOutOptions) {
   const [signingOut, setSigningOut] = useState(false);
+  const getLandingUrl = options?.getLandingUrl;
 
   const signOut = useCallback(async () => {
     if (signingOut) return;
@@ -15,11 +20,11 @@ export function useSignOut() {
       } catch {
         // continue
       }
-      window.location.href = "/?fresh=1";
+      window.location.href = getLandingUrl?.() ?? "/?fresh=1";
     } catch {
       setSigningOut(false);
     }
-  }, [signingOut]);
+  }, [signingOut, getLandingUrl]);
 
   return { signOut, signingOut };
 }

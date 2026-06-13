@@ -4,6 +4,7 @@ import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { resolveOrgReceiveAddress } from "@/lib/org-receive-address";
 import { createCheckoutSession } from "@/lib/db/checkout-sessions";
+import { syncLiveCheckoutForOrg } from "@/lib/db/merchant-qr-points";
 import { rampProvider } from "@/lib/ramp/provider";
 
 /**
@@ -23,6 +24,9 @@ export async function POST(request: NextRequest) {
     body.paymentMethod === "card" || body.paymentMethod === "bank_transfer"
       ? body.paymentMethod
       : undefined;
+  const allowDebit = typeof body.allowDebit === "boolean" ? body.allowDebit : true;
+  const allowCredit = typeof body.allowCredit === "boolean" ? body.allowCredit : true;
+  const allowBankTransfer = typeof body.allowBankTransfer === "boolean" ? body.allowBankTransfer : true;
 
   if (!amountUsd || isNaN(parseFloat(amountUsd)) || parseFloat(amountUsd) <= 0) {
     return NextResponse.json({ error: "amountUsd must be a positive number" }, { status: 400 });
@@ -74,11 +78,17 @@ export async function POST(request: NextRequest) {
       providerSessionId: depositSession.sessionId,
       providerUrl: depositSession.url,
       providerExpiresAt: depositSession.expiresAt,
+      paymentMethod,
+      allowDebit,
+      allowCredit,
+      allowBankTransfer,
     });
   } catch (err) {
     console.error("[checkout/create] DB persist error:", err);
     // Return the URL anyway so the merchant can still share it; a background job or next call can reconcile
   }
+
+  await syncLiveCheckoutForOrg(orgId, id);
 
   const checkoutUrl = `${baseUrl}/checkout/${id}`;
 

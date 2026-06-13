@@ -26,6 +26,28 @@ export default function StubRampCheckoutPage() {
     }
   };
 
+  const simulateCompleted = async () => {
+    setBusy(true);
+    try {
+      if (data.session) {
+        await fetch("/api/webhooks/ramp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "deposit.completed",
+            session_id: data.session,
+            external_ref: data.ref || undefined,
+            amount_usd: data.amount || undefined,
+            occurred_at: new Date().toISOString(),
+          }),
+        });
+      }
+    } catch {
+      // still redirect — ops can reconcile manually
+    }
+    goBack();
+  };
+
   return (
     <main className="min-h-screen flex items-center justify-center p-6 bg-gray-50 dark:bg-gray-950">
       <div className="w-full max-w-lg rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 shadow-sm">
@@ -61,10 +83,7 @@ export default function StubRampCheckoutPage() {
           <button
             type="button"
             disabled={busy}
-            onClick={() => {
-              setBusy(true);
-              goBack();
-            }}
+            onClick={simulateCompleted}
             className="flex-1 rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 text-sm font-medium disabled:opacity-60"
           >
             Simulate completed deposit

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth/session-constants";
+import { SIGNUP_INTENT_COOKIE } from "@/lib/auth/signup-intent";
 
 const usePasskeyAuth = true;
 
@@ -34,9 +35,24 @@ function homeUrl(request: NextRequest, extra?: Record<string, string>): URL {
   return url;
 }
 
+function withMerchantSignupIntent(response: NextResponse): NextResponse {
+  response.cookies.set(SIGNUP_INTENT_COOKIE, "merchant", {
+    path: "/",
+    sameSite: "lax",
+    maxAge: 60 * 30,
+  });
+  return response;
+}
+
 export function middleware(request: NextRequest) {
   const session = request.cookies.get(SESSION_COOKIE)?.value;
   const pathname = request.nextUrl.pathname;
+
+  if (pathname === "/merchant") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/merchants";
+    return NextResponse.redirect(url);
+  }
 
   if (pathname === "/login" || pathname.startsWith("/login/")) {
     const url = request.nextUrl.clone();
@@ -45,7 +61,9 @@ export function middleware(request: NextRequest) {
   }
 
   const isHome = pathname === "/";
+  const isMerchants = pathname === "/merchants";
   const isFreshHome = isHome && request.nextUrl.searchParams.get("fresh") === "1";
+  const isFreshMerchants = isMerchants && request.nextUrl.searchParams.get("fresh") === "1";
   const returnTo = request.nextUrl.searchParams.get("returnTo");
 
   const isAuthApi =
@@ -66,6 +84,13 @@ export function middleware(request: NextRequest) {
   }
 
   if (isHome && session && !isFreshHome) {
+    if (returnTo && returnTo.startsWith("/")) {
+      return NextResponse.redirect(new URL(returnTo, request.url));
+    }
+    return NextResponse.redirect(new URL("/onboarding/organizations", request.url));
+  }
+
+  if (isMerchants && session && !isFreshMerchants) {
     if (returnTo && returnTo.startsWith("/")) {
       return NextResponse.redirect(new URL(returnTo, request.url));
     }
@@ -94,12 +119,18 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(homeUrl(request, { sdpInvite: "1" }));
   }
 
+  if (isMerchants) {
+    return withMerchantSignupIntent(NextResponse.next());
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
   matcher: [
     "/",
+    "/merchant",
+    "/merchants",
     "/dashboard/:path*",
     "/onboarding/:path*",
     "/auth/success",

@@ -15,6 +15,7 @@ import {
   type OrgSetupStepKey,
 } from "@/components/onboarding/OrgCreateSetupProgress";
 import { OrgFundPaymentModal } from "@/components/onboarding/OrgFundPaymentModal";
+import { getClientSignupIntent, clearClientSignupIntent } from "@/lib/auth/signup-intent";
 
 type TaxEntityType = "private_company" | "ngo";
 type InviteRole = "member" | "admin" | "guardian" | "treasury_manager";
@@ -56,9 +57,15 @@ export default function CreateOrganizationPage() {
   } = useSmartAccountKitContext();
   const [fundModalOpen, setFundModalOpen] = useState(false);
 
+  // Check signup intent on mount (cookie + sessionStorage from /merchants)
+  const signupIntent = useMemo(() => getClientSignupIntent(), []);
+  const isMerchantIntent = signupIntent === "merchant";
+
   const [orgName, setOrgName] = useState("");
   const [taxOpen, setTaxOpen] = useState(false);
-  const [taxEntityType, setTaxEntityType] = useState<TaxEntityType>("ngo");
+  const [taxEntityType, setTaxEntityType] = useState<TaxEntityType>(
+    isMerchantIntent ? "private_company" : "ngo"
+  );
   const [taxLegalName, setTaxLegalName] = useState("");
   const [taxId, setTaxId] = useState("");
   const [taxAddress, setTaxAddress] = useState("");
@@ -95,7 +102,7 @@ export default function CreateOrganizationPage() {
   }, [invitesText]);
 
   useEffect(() => {
-    const defaultName = t("defaultOrgName");
+    const defaultName = isMerchantIntent ? t("defaultOrgNameMerchant") : t("defaultOrgName");
     setOrgName((prev) => {
       const name = prev || defaultName;
       if (!orgTagEditedRef.current) {
@@ -103,7 +110,7 @@ export default function CreateOrganizationPage() {
       }
       return name;
     });
-  }, [t]);
+  }, [t, isMerchantIntent]);
 
   function handleOrgNameChange(value: string) {
     setOrgName(value);
@@ -239,17 +246,34 @@ export default function CreateOrganizationPage() {
           name: orgName,
           guardianThreshold,
           invites,
-          ...(taxOpen && {
-            tax: {
-              entityType: taxEntityType,
-              legalName: taxLegalName.trim() || undefined,
-              taxId: taxId.trim() || undefined,
-              registeredAddress: taxAddress.trim() || undefined,
-              city: taxCity.trim() || undefined,
-              state: taxState.trim() || undefined,
-              country: taxCountry.trim() || undefined,
-            },
-          }),
+          ...(isMerchantIntent
+            ? {
+                type: "store",
+                ...(taxOpen && {
+                  tax: {
+                    entityType: "private_company",
+                    legalName: taxLegalName.trim() || undefined,
+                    taxId: taxId.trim() || undefined,
+                    registeredAddress: taxAddress.trim() || undefined,
+                    city: taxCity.trim() || undefined,
+                    state: taxState.trim() || undefined,
+                    country: taxCountry.trim() || undefined,
+                  },
+                }),
+              }
+            : {
+                ...(taxOpen && {
+                  tax: {
+                    entityType: taxEntityType,
+                    legalName: taxLegalName.trim() || undefined,
+                    taxId: taxId.trim() || undefined,
+                    registeredAddress: taxAddress.trim() || undefined,
+                    city: taxCity.trim() || undefined,
+                    state: taxState.trim() || undefined,
+                    country: taxCountry.trim() || undefined,
+                  },
+                }),
+              }),
         }),
       });
       const orgData = await orgRes.json().catch(() => ({}));
@@ -327,6 +351,46 @@ export default function CreateOrganizationPage() {
   }
 
   if (step === "done") {
+    function finishMerchantOnboarding(path: string) {
+      clearClientSignupIntent();
+      router.replace(path);
+    }
+
+    if (isMerchantIntent) {
+      return (
+        <DarkGradientBg>
+          <main className="min-h-screen flex flex-col items-center justify-center p-4 dark text-white">
+            <div className="w-full max-w-md rounded-xl border border-white/10 bg-black/40 backdrop-blur-sm p-6 shadow-xl">
+              <h1 className="text-xl font-semibold text-white">{t("doneTitleMerchant")}</h1>
+              <p className="mt-2 text-sm text-gray-300">{t("doneBodyMerchant")}</p>
+              {orgSozuTag && (
+                <div className="mt-4 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3">
+                  <p className="text-xs text-emerald-200">{t("orgSozuTagReadyMerchant")}</p>
+                  <p className="mt-1 font-mono text-sm text-white">${orgSozuTag}</p>
+                </div>
+              )}
+              <div className="mt-6 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => finishMerchantOnboarding("/dashboard")}
+                  className="w-full rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium hover:opacity-90 transition-opacity"
+                >
+                  {t("getStartedCta")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => finishMerchantOnboarding("/dashboard/profile")}
+                  className="w-full rounded-md border border-white/20 bg-white/5 py-2.5 px-4 text-sm font-medium text-white hover:bg-white/10"
+                >
+                  {t("viewAccountCta")}
+                </button>
+              </div>
+            </div>
+          </main>
+        </DarkGradientBg>
+      );
+    }
+
     return (
       <DarkGradientBg>
         <OrgFundPaymentModal
@@ -389,7 +453,7 @@ export default function CreateOrganizationPage() {
           <OrgCreateSetupProgress
             currentStep={stepKey}
             stepLabels={setupStepLabels}
-            title={t("busyTitle")}
+            title={isMerchantIntent ? t("busyTitleMerchant") : t("busyTitle")}
             subtitle={label}
             hint={t("busyHint")}
             spinner={
@@ -408,8 +472,12 @@ export default function CreateOrganizationPage() {
     <DarkGradientBg>
       <main className="min-h-screen flex flex-col items-center justify-center p-4 dark text-white">
         <div className="w-full max-w-md rounded-xl border border-white/10 bg-black/40 backdrop-blur-sm p-6 shadow-xl">
-          <h1 className="text-xl font-semibold text-white">{t("title")}</h1>
-          <p className="mt-2 text-sm text-gray-300">{t("subtitle")}</p>
+          <h1 className="text-xl font-semibold text-white">
+            {isMerchantIntent ? t("titleMerchant") : t("title")}
+          </h1>
+          <p className="mt-2 text-sm text-gray-300">
+            {isMerchantIntent ? t("subtitleMerchant") : t("subtitle")}
+          </p>
 
           {(error || kitError) && (
             <p className="mt-3 text-sm text-red-400">{error || kitError}</p>
@@ -444,7 +512,7 @@ export default function CreateOrganizationPage() {
             </div>
 
             <p className="pt-2 text-[11px] font-medium uppercase tracking-wider text-gray-500">
-              {t("sectionOrganization")}
+              {isMerchantIntent ? t("sectionBusiness") : t("sectionOrganization")}
             </p>
 
             <div>
@@ -452,7 +520,7 @@ export default function CreateOrganizationPage() {
               <input
                 value={orgName}
                 onChange={(e) => handleOrgNameChange(e.target.value)}
-                placeholder={t("orgNamePlaceholder")}
+                placeholder={isMerchantIntent ? t("orgNamePlaceholderMerchant") : t("orgNamePlaceholder")}
                 className="mt-1 w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20"
               />
             </div>
@@ -464,7 +532,7 @@ export default function CreateOrganizationPage() {
                 <input
                   value={orgSozuTagInput.replace(/^\$+/, "")}
                   onChange={(e) => handleOrgTagChange(e.target.value)}
-                  placeholder={t("orgSozuTagPlaceholder")}
+                  placeholder={isMerchantIntent ? t("orgSozuTagPlaceholderMerchant") : t("orgSozuTagPlaceholder")}
                   autoComplete="off"
                   spellCheck={false}
                   className="w-full bg-transparent px-2 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none"
@@ -495,34 +563,40 @@ export default function CreateOrganizationPage() {
               </button>
               {taxOpen ? (
                 <div className="space-y-3 border-t border-white/10 px-3 py-3">
-                  <p className="text-[11px] text-gray-500">{t("taxSectionHint")}</p>
-                  <div>
-                    <p className="text-xs font-medium text-gray-300">{t("taxEntityLabel")}</p>
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setTaxEntityType("private_company")}
-                        className={`rounded-md border py-2.5 px-2 text-left text-xs font-medium transition-colors ${
-                          taxEntityType === "private_company"
-                            ? "border-white/30 bg-white/10 text-white"
-                            : "border-white/15 bg-white/5 text-gray-300 hover:bg-white/10"
-                        }`}
-                      >
-                        {t("taxEntityPrivateCompany")}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setTaxEntityType("ngo")}
-                        className={`rounded-md border py-2.5 px-2 text-left text-xs font-medium transition-colors ${
-                          taxEntityType === "ngo"
-                            ? "border-white/30 bg-white/10 text-white"
-                            : "border-white/15 bg-white/5 text-gray-300 hover:bg-white/10"
-                        }`}
-                      >
-                        {t("taxEntityNgo")}
-                      </button>
+                  <p className="text-[11px] text-gray-500">
+                    {isMerchantIntent ? t("taxSectionHintMerchant") : t("taxSectionHint")}
+                  </p>
+                  {!isMerchantIntent ? (
+                    <div>
+                      <p className="text-xs font-medium text-gray-300">{t("taxEntityLabel")}</p>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setTaxEntityType("private_company")}
+                          className={`rounded-md border py-2.5 px-2 text-left text-xs font-medium transition-colors ${
+                            taxEntityType === "private_company"
+                              ? "border-white/30 bg-white/10 text-white"
+                              : "border-white/15 bg-white/5 text-gray-300 hover:bg-white/10"
+                          }`}
+                        >
+                          {t("taxEntityPrivateCompany")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTaxEntityType("ngo")}
+                          className={`rounded-md border py-2.5 px-2 text-left text-xs font-medium transition-colors ${
+                            taxEntityType === "ngo"
+                              ? "border-white/30 bg-white/10 text-white"
+                              : "border-white/15 bg-white/5 text-gray-300 hover:bg-white/10"
+                          }`}
+                        >
+                          {t("taxEntityNgo")}
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <p className="text-xs text-gray-400">{t("taxEntityPrivateCompany")}</p>
+                  )}
                   <div>
                     <label className="text-xs font-medium text-gray-300">{t("taxLegalNameLabel")}</label>
                     <input
@@ -586,7 +660,7 @@ export default function CreateOrganizationPage() {
             </div>
 
             <p className="pt-1 text-[11px] font-medium uppercase tracking-wider text-gray-500">
-              {t("sectionMembers")}
+              {isMerchantIntent ? t("sectionTeamMerchant") : t("sectionMembers")}
             </p>
 
             <div>
@@ -622,7 +696,7 @@ export default function CreateOrganizationPage() {
               disabled={!canStart}
               className="w-full rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {step === "error" ? t("retry") : t("submit")}
+              {step === "error" ? t("retry") : isMerchantIntent ? t("submitMerchant") : t("submit")}
             </button>
           </div>
         </div>

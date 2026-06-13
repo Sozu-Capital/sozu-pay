@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
-import { getUsdcBalance } from "@/lib/stellar/balance";
+import { getOrgTreasuryUsdcBalance } from "@/lib/org-receive-address";
 import { rampProvider } from "@/lib/ramp/provider";
 import { createWithdrawalRequest } from "@/lib/db/withdrawal-requests";
 import { appendAuditEvent } from "@/lib/audit";
@@ -51,12 +51,15 @@ export async function POST(request: NextRequest) {
   if (!orgId) return NextResponse.json({ error: "No organization" }, { status: 403 });
 
   const org = await getOrganizationForUser(orgId);
-  const sourceAddress = org?.stellar_disbursement_public_key ?? null;
+  if (!org) {
+    return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+  }
+
+  const { address: sourceAddress, balance: balanceUsdc } = await getOrgTreasuryUsdcBalance(org);
   if (!sourceAddress) {
     return NextResponse.json({ error: "Organization has no Stellar wallet configured" }, { status: 422 });
   }
 
-  const balanceUsdc = await getUsdcBalance(sourceAddress);
   if (parseFloat(balanceUsdc) < amount) {
     return NextResponse.json(
       { error: `Insufficient balance. Available: ${balanceUsdc} USDC` },

@@ -21,7 +21,11 @@ import {
   mergedUploadedVerificationsAsync,
 } from "@/lib/disbursements/store";
 import { validateDisbursementFunds } from "@/lib/sdp/validateDisbursementStart";
-import { ensureSdpOrgMessagingForExternalInvites } from "@/lib/sdp/org-messaging";
+import {
+  ensureSdpOrgMessagingForExternalInvites,
+  startSdpCampaignIfDraft,
+} from "@/lib/sdp/org-messaging";
+import { formatSdpStartError } from "@/lib/sdp/validateDisbursementStart";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationById } from "@/lib/db/organizations";
 import { requireDisbursementOrgAccess } from "@/lib/disbursements/org-scope";
@@ -229,12 +233,37 @@ export async function POST(
       failed: failedCount,
     });
 
+    let campaign: {
+      started: boolean;
+      alreadyStarted: boolean;
+      error?: string;
+      code?: string;
+    } = { started: false, alreadyStarted: false };
+    try {
+      const campaignResult = await startSdpCampaignIfDraft({
+        disbursementId: id,
+        currentStatus: disbursement.status,
+      });
+      campaign = campaignResult;
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : String(e);
+      const formatted = formatSdpStartError(raw);
+      console.error("[send-invites] start-campaign:", raw);
+      campaign = {
+        started: false,
+        alreadyStarted: false,
+        error: formatted.error,
+        code: formatted.code,
+      };
+    }
+
     return NextResponse.json({
       ok: true,
       sent: sentCount,
       skipped: skippedCount,
       failed: failedCount,
       results,
+      campaign,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

@@ -12,6 +12,11 @@ export type CheckoutSession = {
   provider_session_id: string | null;
   provider_url: string | null;
   provider_event_at: string | null;
+  payment_method: string | null;
+  allow_debit: boolean;
+  allow_credit: boolean;
+  allow_bank_transfer: boolean;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -25,6 +30,10 @@ export async function createCheckoutSession(params: {
   providerSessionId: string;
   providerUrl: string;
   providerExpiresAt?: string;
+  paymentMethod?: string;
+  allowDebit?: boolean;
+  allowCredit?: boolean;
+  allowBankTransfer?: boolean;
 }): Promise<CheckoutSession> {
   const now = new Date().toISOString();
   const { data, error } = await getSupabase()
@@ -38,6 +47,10 @@ export async function createCheckoutSession(params: {
       destination_stellar_address: params.destinationStellarAddress,
       provider_session_id: params.providerSessionId,
       provider_url: params.providerUrl,
+      payment_method: params.paymentMethod ?? null,
+      allow_debit: params.allowDebit ?? true,
+      allow_credit: params.allowCredit ?? true,
+      allow_bank_transfer: params.allowBankTransfer ?? true,
       created_at: now,
       updated_at: now,
     })
@@ -46,6 +59,27 @@ export async function createCheckoutSession(params: {
 
   if (error) throw new Error(error.message);
   return data as CheckoutSession;
+}
+
+/** Latest non-deleted pending checkout for an org (live payment link). */
+export async function getLatestPendingCheckoutForOrg(
+  orgId: string,
+): Promise<CheckoutSession | null> {
+  const { data, error } = await getSupabase()
+    .from("checkout_sessions")
+    .select("*")
+    .eq("org_id", orgId)
+    .eq("status", "pending")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[checkout-sessions] getLatestPendingCheckoutForOrg error:", error.message);
+    return null;
+  }
+  return (data as CheckoutSession) ?? null;
 }
 
 export async function getCheckoutSession(id: string): Promise<CheckoutSession | null> {
@@ -70,6 +104,7 @@ export async function listCheckoutSessionsForOrg(
     .from("checkout_sessions")
     .select("*")
     .eq("org_id", orgId)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -78,4 +113,66 @@ export async function listCheckoutSessionsForOrg(
     return [];
   }
   return (data as CheckoutSession[]) ?? [];
+}
+
+export async function updateCheckoutSession(
+  id: string,
+  orgId: string,
+  updates: {
+    amountUsd?: string;
+    reference?: string;
+    paymentMethod?: string;
+    allowDebit?: boolean;
+    allowCredit?: boolean;
+    allowBankTransfer?: boolean;
+  }
+): Promise<CheckoutSession | null> {
+  const payload: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+  
+  if (updates.amountUsd !== undefined) payload.amount_usd = updates.amountUsd;
+  if (updates.reference !== undefined) payload.reference = updates.reference || null;
+  if (updates.paymentMethod !== undefined) payload.payment_method = updates.paymentMethod;
+  if (updates.allowDebit !== undefined) payload.allow_debit = updates.allowDebit;
+  if (updates.allowCredit !== undefined) payload.allow_credit = updates.allowCredit;
+  if (updates.allowBankTransfer !== undefined) payload.allow_bank_transfer = updates.allowBankTransfer;
+
+  const { data, error } = await getSupabase()
+    .from("checkout_sessions")
+    .update(payload)
+    .eq("id", id)
+    .eq("org_id", orgId)
+    .eq("status", "pending")
+    .is("deleted_at", null)
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    console.error("[checkout-sessions] update error:", error.message);
+    return null;
+  }
+  return (data as CheckoutSession) ?? null;
+}
+
+export async function softDeleteCheckoutSession(
+  id: string,
+  orgId: string
+): Promise<boolean> {
+  const { error } = await getSupabase()
+    .from("checkout_sessions")
+    .update({
+      deleted_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("org_id", orgId)
+    .eq("status", "pending")
+    .is("deleted_at", null);
+
+  if (error) {
+    console.error("[checkout-sessions] soft delete error:", error.message);
+    return false;
+  }
+  return true;
 }

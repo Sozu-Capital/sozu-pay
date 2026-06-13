@@ -834,7 +834,22 @@ export default function DisbursementsPage() {
         skipped: data.skipped,
         failed: data.failed,
       });
-      setActionMsg(inviteSummary);
+      const campaign = data.campaign as
+        | { started?: boolean; alreadyStarted?: boolean; error?: string }
+        | undefined;
+      if (campaign?.started || campaign?.alreadyStarted) {
+        setActionMsg(
+          t("invitesSentAndStarted", {
+            sent: data.sent,
+            skipped: data.skipped,
+            failed: data.failed,
+          })
+        );
+      } else if (campaign?.error) {
+        setActionMsg(`${inviteSummary} ${campaign.error}`);
+      } else {
+        setActionMsg(inviteSummary);
+      }
       await fetchList();
       if (selectedId === id) await refreshDetail(id);
     } catch (e) {

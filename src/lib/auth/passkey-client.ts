@@ -259,3 +259,24 @@ export async function loginWithPin(params: {
   }
   return { redirect: data.redirect ?? "/onboarding/organizations" };
 }
+
+export async function registerWithPin(params: {
+  username: string;
+  pin: string;
+  returnTo?: string;
+}): Promise<{ redirect: string }> {
+  const res = await fetch("/api/auth/pin/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(params),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (data.usernameExists) {
+      throw new Error(data.error ?? "This Sozu tag is already taken.");
+    }
+    throw new Error(data.error ?? "PIN registration failed");
+  }
+  return { redirect: data.redirect ?? "/onboarding/setup-smart-wallet" };
+}

@@ -33,6 +33,12 @@ export default function RecipientsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
+  const [phone, setPhone] = useState("");
+  const [bankHolder, setBankHolder] = useState("");
+  const [bankCountry, setBankCountry] = useState("");
+  const [bankCurrency, setBankCurrency] = useState("");
+  const [bankAccountNumber, setBankAccountNumber] = useState("");
+  const [bankRoutingCode, setBankRoutingCode] = useState("");
   const [showPayMultiple, setShowPayMultiple] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [amountPerRecipient, setAmountPerRecipient] = useState<Record<string, string>>({});
@@ -72,6 +78,7 @@ export default function RecipientsPage() {
     destination: string;
     recipientLabel?: string;
   } | null>(null);
+  const [isStore, setIsStore] = useState(false);
 
   function copyStellarToClipboard(recipientId: string, address: string) {
     navigator.clipboard.writeText(address).then(
@@ -100,10 +107,11 @@ export default function RecipientsPage() {
   useEffect(() => {
     fetch("/api/profile")
       .then((r) => (r.ok ? r.json() : {}))
-      .then((p: { admin_level?: string; org_payout_wallet_public_key?: string | null; org_stellar_disbursement_public_key?: string | null; email?: string }) => {
+      .then((p: { admin_level?: string; org_payout_wallet_public_key?: string | null; org_stellar_disbursement_public_key?: string | null; email?: string; org_type?: string }) => {
         setAdminLevel(p.admin_level ?? "");
         setPayoutWalletAddress(p.org_payout_wallet_public_key ?? p.org_stellar_disbursement_public_key ?? null);
         setUserDisplayName(p.email?.split("@")[0] ?? tc("you"));
+        setIsStore(p.org_type === "store");
       });
   }, []);
 
@@ -124,6 +132,13 @@ export default function RecipientsPage() {
         name: name.trim(),
         dateOfBirth: dateOfBirth.trim(),
         phone: phone.trim() || undefined,
+        ...(isStore && {
+          bankHolder: bankHolder.trim() || undefined,
+          bankCountry: bankCountry.trim() || undefined,
+          bankCurrency: bankCurrency.trim() || undefined,
+          bankAccountNumber: bankAccountNumber.trim() || undefined,
+          bankRoutingCode: bankRoutingCode.trim() || undefined,
+        }),
       }),
     })
       .then((r) => r.json())
@@ -136,6 +151,11 @@ export default function RecipientsPage() {
         setName("");
         setDateOfBirth("");
         setPhone("");
+        setBankHolder("");
+        setBankCountry("");
+        setBankCurrency("");
+        setBankAccountNumber("");
+        setBankRoutingCode("");
         load();
       })
       .catch(() => alert(t("addFailed")));
@@ -590,6 +610,71 @@ export default function RecipientsPage() {
               className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
             />
           </div>
+
+          {isStore && (
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-4 space-y-3">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Bank details (optional)</p>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Account holder</label>
+                <input
+                  type="text"
+                  value={bankHolder}
+                  onChange={(e) => setBankHolder(e.target.value)}
+                  placeholder="Full name on bank account"
+                  className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Country</label>
+                  <input
+                    type="text"
+                    value={bankCountry}
+                    onChange={(e) => setBankCountry(e.target.value.toUpperCase())}
+                    placeholder="US, MX…"
+                    maxLength={2}
+                    className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 uppercase"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Currency</label>
+                  <input
+                    type="text"
+                    value={bankCurrency}
+                    onChange={(e) => setBankCurrency(e.target.value.toUpperCase())}
+                    placeholder="USD…"
+                    maxLength={3}
+                    className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 uppercase"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Account number / IBAN</label>
+                <input
+                  type="text"
+                  value={bankAccountNumber}
+                  onChange={(e) => setBankAccountNumber(e.target.value)}
+                  placeholder="Account number or IBAN"
+                  className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Routing / sort / CLABE (optional)</label>
+                <input
+                  type="text"
+                  value={bankRoutingCode}
+                  onChange={(e) => setBankRoutingCode(e.target.value)}
+                  placeholder="Routing number or sort code"
+                  className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
+                />
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-2">
             <button type="submit" className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2">
               {t("add")}

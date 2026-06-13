@@ -8,10 +8,11 @@ import { useHomeLandingTransition } from "@/components/HomeLandingTransition";
 type HomePageIntroProps = {
   cta?: ReactNode;
   status?: ReactNode;
+  namespace?: string;
 };
 
-export function HomePageIntro({ cta, status }: HomePageIntroProps) {
-  const t = useTranslations("login");
+export function HomePageIntro({ cta, status, namespace = "login" }: HomePageIntroProps) {
+  const t = useTranslations(namespace);
   const { contentVisible } = useHomeLandingTransition();
 
   const fadeClass = cn(

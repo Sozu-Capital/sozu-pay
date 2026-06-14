@@ -75,16 +75,20 @@ export async function verifyStellarPayment(
           // Look for contract_debited/credited effects
           if (
             (effect.type === "contract_credited" || effect.type === "contract_debited") &&
-            "asset_code" in effect
+            "asset_code" in effect &&
+            "contract" in effect &&
+            "amount" in effect
           ) {
-            const contractEffect = effect as any;
+            const assetCode = (effect as { asset_code: string }).asset_code;
+            const contract = (effect as { contract: string }).contract;
+            const amount = (effect as { amount: string }).amount;
             
             // Check if this is USDC and to the right destination
             if (
-              (contractEffect.asset_code === "USDC" || contractEffect.asset_code === "USD") &&
-              contractEffect.contract === expectedDestination
+              (assetCode === "USDC" || assetCode === "USD") &&
+              contract === expectedDestination
             ) {
-              const actualAmount = parseFloat(contractEffect.amount);
+              const actualAmount = parseFloat(amount);
               if (Math.abs(actualAmount - expectedAmount) <= tolerance) {
                 return { success: true };
               }

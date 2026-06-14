@@ -39,9 +39,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Session deleted" }, { status: 410 });
   }
 
-  // Fetch merchant name
+  // Fetch merchant name and treasury address
   const org = await getOrganizationById(session.org_id);
   const merchantName = org?.name ?? "Merchant";
+  
+  // Use treasury smart account address if available, otherwise fall back to destination_stellar_address
+  const destinationAddress = org?.treasury_smart_account_address ?? session.destination_stellar_address;
 
   return NextResponse.json({
     id: session.id,
@@ -49,7 +52,8 @@ export async function GET(request: NextRequest) {
     amountUsd: session.amount_usd,
     reference: session.reference,
     merchantName,
-    destinationStellarAddress: session.destination_stellar_address,
+    destinationStellarAddress: destinationAddress,
+    organizationId: session.org_id,
     allowDebit: session.allow_debit,
     allowCredit: session.allow_credit,
     allowBankTransfer: session.allow_bank_transfer,

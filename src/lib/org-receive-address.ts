@@ -18,10 +18,13 @@ function stellarWalletPublicKeyColumn(): string {
 /**
  * On-chain address others should use to send USDC to this org.
  * Classic G is preferred for Sozu tag / SEP-style apps; Soroban C is the treasury contract.
+ * Treasury smart account address is prioritized for checkout payments.
  */
 export function resolveOrgReceiveAddress(org: Organization): {
   classicG: string | null;
   sorobanC: string | null;
+  /** Treasury smart account address (C) for checkout payments. */
+  treasurySmartAccountAddress: string | null;
   /** Best address for $tag directory + classic USDC payments. */
   tagReceiveAddress: string | null;
   /** Address the dashboard balance API uses. */
@@ -29,10 +32,11 @@ export function resolveOrgReceiveAddress(org: Organization): {
 } {
   const classicG = org.stellar_disbursement_public_key?.trim() || null;
   const sorobanC = resolveOrgTreasuryContractId(org);
+  const treasurySmartAccountAddress = org.treasury_smart_account_address?.trim() || null;
   /** Org $tag → smart account (C) by default; classic G is legacy fallback. */
   const tagReceiveAddress = sorobanC ?? classicG;
   const dashboardBalanceAddress = sorobanC ?? classicG;
-  return { classicG, sorobanC, tagReceiveAddress, dashboardBalanceAddress };
+  return { classicG, sorobanC, treasurySmartAccountAddress, tagReceiveAddress, dashboardBalanceAddress };
 }
 
 /** Same address + balance logic as GET /api/balance (Soroban treasury when configured). */

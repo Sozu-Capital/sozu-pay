@@ -41,8 +41,9 @@ export async function POST(request: NextRequest) {
 
   const org = await getOrganizationForUser(orgId);
   const receive = org ? resolveOrgReceiveAddress(org) : null;
+  // Prioritize treasury smart account address for checkout payments, fall back to classic G, tag, or soroban
   const destinationAddress =
-    receive?.classicG ?? receive?.tagReceiveAddress ?? receive?.sorobanC ?? null;
+    receive?.treasurySmartAccountAddress ?? receive?.classicG ?? receive?.tagReceiveAddress ?? receive?.sorobanC ?? null;
   if (!destinationAddress) {
     return NextResponse.json(
       { error: "Organization has no Stellar disbursement wallet configured" },

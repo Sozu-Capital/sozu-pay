@@ -22,5 +22,7 @@ export async function GET(request: NextRequest) {
     amountUsd: cs.amount_usd,
     reference: cs.reference,
     createdAt: cs.created_at,
+    stellarTxHash: cs.stellar_tx_hash,
+    completedPaymentMethod: cs.completed_payment_method,
   });
 }

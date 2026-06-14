@@ -16,6 +16,8 @@ export type CheckoutSession = {
   allow_debit: boolean;
   allow_credit: boolean;
   allow_bank_transfer: boolean;
+  stellar_tx_hash: string | null;
+  completed_payment_method: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -208,4 +210,31 @@ export function mapCheckoutSessionForApi(session: CheckoutSession) {
     allowCredit: session.allow_credit,
     allowBankTransfer: session.allow_bank_transfer,
   };
+}
+
+export async function completeCheckoutSession(
+  id: string,
+  stellarTxHash: string,
+  paymentMethod: "sozu" | "card" | "bank_transfer"
+): Promise<CheckoutSession | null> {
+  const now = new Date().toISOString();
+  const { data, error } = await getSupabase()
+    .from("checkout_sessions")
+    .update({
+      status: "completed",
+      stellar_tx_hash: stellarTxHash,
+      completed_payment_method: paymentMethod,
+      updated_at: now,
+    })
+    .eq("id", id)
+    .eq("status", "pending")
+    .is("deleted_at", null)
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    console.error("[checkout-sessions] complete error:", error.message);
+    return null;
+  }
+  return (data as CheckoutSession) ?? null;
 }

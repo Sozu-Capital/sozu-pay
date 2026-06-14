@@ -3,8 +3,9 @@ import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { resolveOrgReceiveAddress } from "@/lib/org-receive-address";
-import { createCheckoutSession } from "@/lib/db/checkout-sessions";
+import { createCheckoutSession, expirePendingCheckoutSessionsForOrg } from "@/lib/db/checkout-sessions";
 import { syncLiveCheckoutForOrg } from "@/lib/db/merchant-qr-points";
+import { checkoutSessionUrl, checkoutSuccessUrl } from "@/lib/checkout-url";
 import { rampProvider } from "@/lib/ramp/provider";
 
 /**
@@ -50,8 +51,7 @@ export async function POST(request: NextRequest) {
   }
 
   const id = `cs_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const redirectUrl = `${baseUrl}/checkout/${id}/success`;
+  const redirectUrl = checkoutSuccessUrl(id, request);
 
   let depositSession;
   try {
@@ -88,9 +88,10 @@ export async function POST(request: NextRequest) {
     // Return the URL anyway so the merchant can still share it; a background job or next call can reconcile
   }
 
+  await expirePendingCheckoutSessionsForOrg(orgId, id);
   await syncLiveCheckoutForOrg(orgId, id);
 
-  const checkoutUrl = `${baseUrl}/checkout/${id}`;
+  const checkoutUrl = checkoutSessionUrl(id, request);
 
   return NextResponse.json({
     id,

@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
-import { listCheckoutSessionsForOrg } from "@/lib/db/checkout-sessions";
+import {
+  listCheckoutSessionsForOrg,
+  mapCheckoutSessionForApi,
+} from "@/lib/db/checkout-sessions";
 
 /**
  * GET /api/checkout/list
@@ -20,5 +23,7 @@ export async function GET() {
   }
 
   const sessions = await listCheckoutSessionsForOrg(orgId, 30);
-  return NextResponse.json({ sessions });
+  return NextResponse.json({
+    sessions: sessions.map(mapCheckoutSessionForApi),
+  });
 }

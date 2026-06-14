@@ -3,9 +3,11 @@ import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { 
   getCheckoutSession, 
+  mapCheckoutSessionForApi,
   updateCheckoutSession, 
   softDeleteCheckoutSession 
 } from "@/lib/db/checkout-sessions";
+import { checkoutSessionUrl } from "@/lib/checkout-url";
 
 type Params = {
   params: Promise<{
@@ -80,18 +82,11 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Update failed" }, { status: 500 });
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const checkoutUrl = `${baseUrl}/checkout/${updated.id}`;
+  const checkoutUrl = checkoutSessionUrl(updated.id, request);
 
   return NextResponse.json({
-    id: updated.id,
+    ...mapCheckoutSessionForApi(updated),
     checkoutUrl,
-    amountUsd: updated.amount_usd,
-    reference: updated.reference,
-    paymentMethod: updated.payment_method,
-    allowDebit: updated.allow_debit,
-    allowCredit: updated.allow_credit,
-    allowBankTransfer: updated.allow_bank_transfer,
   });
 }
 

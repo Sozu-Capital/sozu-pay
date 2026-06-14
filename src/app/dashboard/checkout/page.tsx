@@ -158,10 +158,9 @@ export default function CheckoutPage() {
         ? "text-red-600 dark:text-red-400"
         : "text-amber-600 dark:text-amber-400";
 
-  const baseUrl =
-    typeof window !== "undefined"
-      ? window.location.origin
-      : process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const checkoutBaseUrl =
+    process.env.NEXT_PUBLIC_SOZUCREDIT_URL?.replace(/\/$/, "") ||
+    (typeof window !== "undefined" ? window.location.origin : "");
 
   return (
     <div className="max-w-5xl">
@@ -379,12 +378,14 @@ export default function CheckoutPage() {
                         </span>
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {new Date(s.createdAt).toLocaleDateString()}
+                        {s.createdAt && !Number.isNaN(Date.parse(s.createdAt))
+                          ? new Date(s.createdAt).toLocaleDateString()
+                          : "—"}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => copyLink(`${baseUrl}/checkout/${s.id}`)}
+                        onClick={() => copyLink(`${checkoutBaseUrl}/checkout/${s.id}`)}
                         className="rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700"
                       >
                         Copy link

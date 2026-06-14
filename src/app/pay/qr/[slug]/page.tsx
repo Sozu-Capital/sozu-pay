@@ -5,6 +5,7 @@ import {
   getLatestPendingCheckoutForOrg,
 } from "@/lib/db/checkout-sessions";
 import { getQRPointBySlug } from "@/lib/db/merchant-qr-points";
+import { checkoutSessionUrl } from "@/lib/checkout-url";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -82,5 +83,5 @@ export default async function PayQRPage({ params }: Props) {
     );
   }
 
-  redirect(`/checkout/${checkoutId}`);
+  redirect(checkoutSessionUrl(checkoutId));
 }

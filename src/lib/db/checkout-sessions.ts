@@ -176,3 +176,36 @@ export async function softDeleteCheckoutSession(
   }
   return true;
 }
+
+/** One live checkout per org — supersede older pending links when a new one is created. */
+export async function expirePendingCheckoutSessionsForOrg(
+  orgId: string,
+  exceptId: string,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await getSupabase()
+    .from("checkout_sessions")
+    .update({ status: "expired", updated_at: now })
+    .eq("org_id", orgId)
+    .eq("status", "pending")
+    .is("deleted_at", null)
+    .neq("id", exceptId);
+
+  if (error) {
+    console.error("[checkout-sessions] expire pending error:", error.message);
+  }
+}
+
+export function mapCheckoutSessionForApi(session: CheckoutSession) {
+  return {
+    id: session.id,
+    status: session.status,
+    amountUsd: session.amount_usd,
+    reference: session.reference,
+    createdAt: session.created_at,
+    paymentMethod: session.payment_method,
+    allowDebit: session.allow_debit,
+    allowCredit: session.allow_credit,
+    allowBankTransfer: session.allow_bank_transfer,
+  };
+}

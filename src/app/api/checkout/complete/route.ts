@@ -32,10 +32,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Load session
+    console.log("[checkout/complete] Loading session:", id);
     const session = await getCheckoutSession(id);
     if (!session) {
+      console.error("[checkout/complete] Session not found:", id);
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
+
+    console.log("[checkout/complete] Session found:", session.id, "status:", session.status, "destination:", session.destination_stellar_address, "amount:", session.amount_usd);
 
     if (session.deleted_at) {
       return NextResponse.json({ error: "Session deleted" }, { status: 410 });
@@ -43,10 +47,12 @@ export async function POST(request: NextRequest) {
 
     // Idempotent: if already completed with same hash, return success
     if (session.status === "completed" && session.stellar_tx_hash === transactionHash) {
+      console.log("[checkout/complete] Already completed with same hash");
       return NextResponse.json({ success: true, alreadyCompleted: true });
     }
 
     if (session.status !== "pending") {
+      console.error("[checkout/complete] Session not pending:", session.status);
       return NextResponse.json(
         { error: `Session is ${session.status}` },
         { status: 400 }
@@ -55,6 +61,8 @@ export async function POST(request: NextRequest) {
 
     // Verify on-chain payment (only for SOZU rail)
     if (paymentMethod === "sozu") {
+      console.log("[checkout/complete] Verifying SOZU payment, tx:", transactionHash);
+      
       // Check against session destination address first
       let verification = await verifyStellarPayment(
         transactionHash,
@@ -62,25 +70,42 @@ export async function POST(request: NextRequest) {
         session.amount_usd
       );
 
+      console.log("[checkout/complete] First verification result:", verification.success, !verification.success ? (verification as { success: false; error: string }).error : "success");
+
       // If verification fails, check against organization's treasury smart account address
       if (!verification.success) {
+        console.log("[checkout/complete] First verification failed, checking treasury address");
         const org = await getOrganizationById(session.org_id);
+        console.log("[checkout/complete] Org treasury address:", org?.treasury_smart_account_address, "soroban contract:", org?.soroban_contract_id);
+        
         if (org?.treasury_smart_account_address) {
           verification = await verifyStellarPayment(
             transactionHash,
             org.treasury_smart_account_address,
             session.amount_usd
           );
+          console.log("[checkout/complete] Second verification result:", verification.success, !verification.success ? (verification as { success: false; error: string }).error : "success");
+        }
+        
+        // Also try soroban_contract_id if treasury_smart_account_address is not set or verification failed
+        if (!verification.success && org?.soroban_contract_id) {
+          verification = await verifyStellarPayment(
+            transactionHash,
+            org.soroban_contract_id,
+            session.amount_usd
+          );
+          console.log("[checkout/complete] Third verification (soroban_contract_id) result:", verification.success, !verification.success ? (verification as { success: false; error: string }).error : "success");
         }
       }
 
       if (!verification.success) {
+        const errorMsg = (verification as { success: false; error: string }).error;
         console.error(
-          `[checkout/complete] Verification failed for ${id}:`,
-          verification.error
+          `[checkout/complete] All verifications failed for ${id}:`,
+          errorMsg
         );
         return NextResponse.json(
-          { error: "Payment verification failed", details: verification.error },
+          { error: "Payment verification failed", details: errorMsg },
           { status: 400 }
         );
       }

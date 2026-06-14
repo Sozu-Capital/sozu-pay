@@ -21,9 +21,13 @@ export async function POST(request: NextRequest) {
   const db = getSupabase();
 
   try {
+    console.log("[webhook/ramp] Processing event:", event.type, "sessionId:", event.sessionId, "externalRef:", event.externalRef);
+    
     switch (event.type) {
       case "deposit.completed": {
         if (!event.sessionId) break;
+        console.log("[webhook/ramp] deposit.completed - transactionHash:", event.transactionHash, "paymentMethod:", event.paymentMethod);
+        
         const updateData: Record<string, unknown> = {
           status: "completed",
           provider_event_at: event.occurredAt,
@@ -36,11 +40,19 @@ export async function POST(request: NextRequest) {
         if (event.paymentMethod) {
           updateData.completed_payment_method = event.paymentMethod;
         }
-        await db
+        
+        const { data, error } = await db
           .from("checkout_sessions")
           .update(updateData)
           .eq("provider_session_id", event.sessionId)
-          .neq("status", "completed"); // idempotent: skip if already marked
+          .neq("status", "completed") // idempotent: skip if already marked
+          .select();
+        
+        if (error) {
+          console.error("[webhook/ramp] DB update error:", error);
+        } else {
+          console.log("[webhook/ramp] Successfully updated checkout session:", data);
+        }
         break;
       }
 

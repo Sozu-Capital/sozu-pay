@@ -73,6 +73,11 @@ export type RampWebhookEvent = {
   amountUsd?: string;
   /** ISO timestamp from provider. */
   occurredAt: string;
+  /** Stellar transaction hash (for on-chain payments). */
+  transactionHash?: string;
+  /** Payment method used (card, bank_transfer, sozu). */
+  paymentMethod?: "card" | "bank_transfer" | "sozu";
+  /** Raw payload from provider. */
   raw: unknown;
 };
 

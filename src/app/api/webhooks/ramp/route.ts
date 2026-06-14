@@ -24,13 +24,21 @@ export async function POST(request: NextRequest) {
     switch (event.type) {
       case "deposit.completed": {
         if (!event.sessionId) break;
+        const updateData: Record<string, unknown> = {
+          status: "completed",
+          provider_event_at: event.occurredAt,
+          updated_at: new Date().toISOString(),
+        };
+        // Set transaction hash and payment method if available
+        if (event.transactionHash) {
+          updateData.stellar_tx_hash = event.transactionHash;
+        }
+        if (event.paymentMethod) {
+          updateData.completed_payment_method = event.paymentMethod;
+        }
         await db
           .from("checkout_sessions")
-          .update({
-            status: "completed",
-            provider_event_at: event.occurredAt,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updateData)
           .eq("provider_session_id", event.sessionId)
           .neq("status", "completed"); // idempotent: skip if already marked
         break;

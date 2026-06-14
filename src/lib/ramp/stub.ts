@@ -54,6 +54,8 @@ export const stubProvider: RampProvider = {
         externalRef: typeof body.external_ref === "string" ? body.external_ref : undefined,
         amountUsd: typeof body.amount_usd === "string" ? body.amount_usd : undefined,
         occurredAt: typeof body.occurred_at === "string" ? body.occurred_at : new Date().toISOString(),
+        transactionHash: typeof body.transaction_hash === "string" ? body.transaction_hash : undefined,
+        paymentMethod: (body.payment_method === "card" || body.payment_method === "bank_transfer" || body.payment_method === "sozu") ? body.payment_method : undefined,
         raw: body,
       };
     } catch {

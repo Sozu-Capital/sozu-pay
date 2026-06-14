@@ -215,8 +215,9 @@ async function webAuthnSignSorobanPreimage(
   rpId: string;
 }> {
   const rpId =
+    (typeof window !== "undefined" ? window.location.hostname : undefined) ||
     process.env.NEXT_PUBLIC_RP_ID?.trim() ||
-    (typeof window !== "undefined" ? window.location.hostname : "localhost");
+    "localhost";
 
   let authResponse: Awaited<ReturnType<typeof startAuthentication>>;
   try {

@@ -39,6 +39,7 @@ export default function RecipientsPage() {
   const [bankCurrency, setBankCurrency] = useState("");
   const [bankAccountNumber, setBankAccountNumber] = useState("");
   const [bankRoutingCode, setBankRoutingCode] = useState("");
+  const [stellarAddressOrTag, setStellarAddressOrTag] = useState("");
   const [showPayMultiple, setShowPayMultiple] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [amountPerRecipient, setAmountPerRecipient] = useState<Record<string, string>>({});
@@ -114,7 +115,7 @@ export default function RecipientsPage() {
       });
   }, []);
 
-  function handleAdd(e: React.FormEvent) {
+  async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) {
       alert(t("nameRequired"));
@@ -124,40 +125,90 @@ export default function RecipientsPage() {
       alert(t("dobRequired"));
       return;
     }
-    fetch("/api/recipients", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: name.trim(),
-        dateOfBirth: dateOfBirth.trim(),
-        phone: phone.trim() || undefined,
-        ...(isStore && {
-          bankHolder: bankHolder.trim() || undefined,
-          bankCountry: bankCountry.trim() || undefined,
-          bankCurrency: bankCurrency.trim() || undefined,
-          bankAccountNumber: bankAccountNumber.trim() || undefined,
-          bankRoutingCode: bankRoutingCode.trim() || undefined,
-        }),
-      }),
-    })
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.error) {
-          alert(d.error);
+
+    let finalStellarAddress = stellarAddressOrTag.trim();
+    if (finalStellarAddress) {
+      const isRawStellar =
+        (finalStellarAddress.toUpperCase().startsWith("G") ||
+          finalStellarAddress.toUpperCase().startsWith("C")) &&
+        finalStellarAddress.length === 56;
+      if (!isRawStellar) {
+        if (!finalStellarAddress.startsWith("$")) {
+          finalStellarAddress = "$" + finalStellarAddress;
+        }
+      }
+    }
+
+    const hasStellar = finalStellarAddress.length > 0;
+    const hasBank = isStore && bankAccountNumber.trim().length > 0;
+
+    if (!hasStellar && !hasBank) {
+      alert(t("bankOrStellarRequired"));
+      return;
+    }
+
+    if (hasStellar) {
+      const isRawStellar =
+        (finalStellarAddress.toUpperCase().startsWith("G") ||
+          finalStellarAddress.toUpperCase().startsWith("C")) &&
+        finalStellarAddress.length === 56;
+      if (!isRawStellar) {
+        // Resolve Sozu tag
+        try {
+          const res = await fetch("/api/wallet/resolve-recipient", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ recipient: finalStellarAddress }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.walletAddress) {
+            alert(data.error ?? t("resolveFailed"));
+            return;
+          }
+        } catch {
+          alert(t("resolveFailed"));
           return;
         }
-        setShowAdd(false);
-        setName("");
-        setDateOfBirth("");
-        setPhone("");
-        setBankHolder("");
-        setBankCountry("");
-        setBankCurrency("");
-        setBankAccountNumber("");
-        setBankRoutingCode("");
-        load();
-      })
-      .catch(() => alert(t("addFailed")));
+      }
+    }
+
+    try {
+      const res = await fetch("/api/recipients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          dateOfBirth: dateOfBirth.trim(),
+          phone: phone.trim() || undefined,
+          stellarAddress: finalStellarAddress || undefined,
+          ...(isStore && {
+            bankHolder: bankHolder.trim() || undefined,
+            bankCountry: bankCountry.trim() || undefined,
+            bankCurrency: bankCurrency.trim() || undefined,
+            bankAccountNumber: bankAccountNumber.trim() || undefined,
+            bankRoutingCode: bankRoutingCode.trim() || undefined,
+          }),
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (d.error) {
+        alert(d.error);
+        return;
+      }
+      setShowAdd(false);
+      setName("");
+      setDateOfBirth("");
+      setPhone("");
+      setStellarAddressOrTag("");
+      setBankHolder("");
+      setBankCountry("");
+      setBankCurrency("");
+      setBankAccountNumber("");
+      setBankRoutingCode("");
+      load();
+    } catch {
+      alert(t("addFailed"));
+    }
   }
 
   function submitPayoutBody(body: Record<string, unknown>) {
@@ -609,6 +660,17 @@ export default function RecipientsPage() {
               className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t("stellarLabel")}</label>
+            <input
+              type="text"
+              value={stellarAddressOrTag}
+              onChange={(e) => setStellarAddressOrTag(e.target.value)}
+              placeholder={t("stellarPlaceholder")}
+              className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("bankOrStellarHint")}</p>
+          </div>
 
           {isStore && (
             <div className="border-t border-gray-200 dark:border-gray-700 pt-4 space-y-3">
@@ -733,7 +795,9 @@ export default function RecipientsPage() {
                       <span className="font-medium">{r.name}</span>
                       {(r.stellarAddress || !r.bankAccountId) && (
                         <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {r.stellarAddress ? t("stellarBadge") : t("noBankBadge")}
+                          {r.stellarAddress
+                            ? (r.stellarAddress.startsWith("$") ? "Sozu Tag" : t("stellarBadge"))
+                            : t("noBankBadge")}
                         </span>
                       )}
                     </label>
@@ -797,7 +861,9 @@ export default function RecipientsPage() {
                       <span className="font-medium truncate">{r.name}</span>
                       {(r.stellarAddress || !r.bankAccountId) && (
                         <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
-                          {r.stellarAddress ? t("stellarBadge") : t("noBankBadge")}
+                          {r.stellarAddress
+                            ? (r.stellarAddress.startsWith("$") ? "Sozu Tag" : t("stellarBadge"))
+                            : t("noBankBadge")}
                         </span>
                       )}
                     </button>
@@ -814,7 +880,9 @@ export default function RecipientsPage() {
                       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-600 dark:text-gray-400">
                         {r.stellarAddress && (
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="font-medium text-gray-500 dark:text-gray-500 shrink-0">{t("stellarBadge")}</span>
+                            <span className="font-medium text-gray-500 dark:text-gray-500 shrink-0">
+                              {r.stellarAddress.startsWith("$") ? "Sozu Tag" : t("stellarBadge")}
+                            </span>
                             <button
                               type="button"
                               onClick={() => copyStellarToClipboard(r.id, r.stellarAddress!)}

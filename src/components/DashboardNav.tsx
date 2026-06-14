@@ -51,8 +51,8 @@ export function DashboardNav({ onNavigate }: { onNavigate?: () => void } = {}) {
   const linkProps = { onNavigate };
 
   return (
-    <nav className="flex flex-col flex-1 min-h-0 overflow-y-auto">
-      <div className="space-y-1">
+    <div className="flex flex-col flex-1 min-h-0">
+      <nav className="flex-1 min-h-0 overflow-y-auto space-y-1">
         <NavLink href="/dashboard" label={t("overview")} {...linkProps} />
         <NavLink href="/dashboard/transactions" label={t("transactions")} {...linkProps} />
         {isStore ? (
@@ -104,22 +104,31 @@ export function DashboardNav({ onNavigate }: { onNavigate?: () => void } = {}) {
             <NavLink href="/dashboard/keys" label={t("keysCustody")} indent {...linkProps} />
           </>
         )}
-      </div>
-      <div className="mt-auto pt-4 border-t border-white/10">
+      </nav>
+      <div className="mt-auto pt-4 border-t border-white/10 shrink-0">
         <LanguageSwitcher className="mb-3" />
-        <button
-          type="button"
-          onClick={() => signOut()}
-          disabled={signingOut}
-          className="w-full flex items-center justify-end gap-2 px-3 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white disabled:opacity-50"
-          aria-label={t("logOut")}
-        >
-          <span className="sr-only">{t("logOut")}</span>
-          <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-        </button>
+        <div className="flex items-center justify-between min-h-[36px]">
+          {isStore ? (
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider select-none">
+              {t("merchant")}
+            </span>
+          ) : (
+            <div />
+          )}
+          <button
+            type="button"
+            onClick={() => signOut()}
+            disabled={signingOut}
+            className="flex items-center justify-center p-2 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white disabled:opacity-50"
+            aria-label={t("logOut")}
+          >
+            <span className="sr-only">{t("logOut")}</span>
+            <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+          </button>
+        </div>
       </div>
-    </nav>
+    </div>
   );
 }

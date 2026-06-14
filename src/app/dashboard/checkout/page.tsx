@@ -14,6 +14,8 @@ type Session = {
   allowDebit?: boolean;
   allowCredit?: boolean;
   allowBankTransfer?: boolean;
+  stellarTxHash?: string | null;
+  completedPaymentMethod?: string | null;
 };
 
 export default function CheckoutPage() {
@@ -37,6 +39,8 @@ export default function CheckoutPage() {
   const [editAllowBankTransfer, setEditAllowBankTransfer] = useState(true);
   const [editBusy, setEditBusy] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
+  const [showReceipt, setShowReceipt] = useState(false);
 
   const loadSessions = useCallback(() => {
     setLoadingSessions(true);
@@ -149,6 +153,23 @@ export default function CheckoutPage() {
     } catch {
       // fallback: no-op
     }
+  };
+
+  const handleViewReceipt = (session: Session) => {
+    setSelectedSession(session);
+    setShowReceipt(true);
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!selectedSession) return;
+    // TODO: Implement PDF download functionality
+    alert("PDF download functionality to be implemented");
+  };
+
+  const handleSendReceipt = async () => {
+    if (!selectedSession) return;
+    // TODO: Implement send receipt functionality
+    alert("Send receipt functionality to be implemented");
   };
 
   const statusColor = (s: string) =>
@@ -366,7 +387,10 @@ export default function CheckoutPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between">
+                  <div 
+                    className="flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    onClick={() => handleViewReceipt(s)}
+                  >
                     <div>
                       <div className="flex items-center gap-3">
                         <span className="font-medium text-gray-900 dark:text-white">${s.amountUsd}</span>
@@ -385,7 +409,7 @@ export default function CheckoutPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => copyLink(`${checkoutBaseUrl}/checkout/${s.id}`)}
+                        onClick={(e) => { e.stopPropagation(); copyLink(`${checkoutBaseUrl}/checkout/${s.id}`); }}
                         className="rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700"
                       >
                         Copy link
@@ -393,13 +417,13 @@ export default function CheckoutPage() {
                       {s.status === "pending" && (
                         <>
                           <button
-                            onClick={() => handleEdit(s)}
+                            onClick={(e) => { e.stopPropagation(); handleEdit(s); }}
                             className="rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700"
                           >
                             Edit
                           </button>
                           <button
-                            onClick={() => handleDelete(s.id)}
+                            onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}
                             disabled={deletingId === s.id}
                             className="rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 px-3 py-1.5 text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50"
                           >
@@ -415,6 +439,83 @@ export default function CheckoutPage() {
           </div>
         )}
       </section>
+
+      {/* Receipt Modal */}
+      {showReceipt && selectedSession && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Payment Receipt</h3>
+              <button
+                onClick={() => setShowReceipt(false)}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Amount</span>
+                  <span className="font-medium text-gray-900 dark:text-white">${selectedSession.amountUsd} USD</span>
+                </div>
+                {selectedSession.reference && (
+                  <div className="flex justify-between mt-2">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Reference</span>
+                    <span className="text-sm text-gray-900 dark:text-white">{selectedSession.reference}</span>
+                  </div>
+                )}
+                <div className="flex justify-between mt-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Status</span>
+                  <span className={`text-sm font-medium capitalize ${statusColor(selectedSession.status)}`}>
+                    {selectedSession.status}
+                  </span>
+                </div>
+                <div className="flex justify-between mt-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Date</span>
+                  <span className="text-sm text-gray-900 dark:text-white">
+                    {selectedSession.createdAt && !Number.isNaN(Date.parse(selectedSession.createdAt))
+                      ? new Date(selectedSession.createdAt).toLocaleString()
+                      : "—"}
+                  </span>
+                </div>
+                {selectedSession.stellarTxHash && (
+                  <div className="flex justify-between mt-2">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Transaction</span>
+                    <span className="text-xs text-gray-900 dark:text-white font-mono break-all max-w-[200px]">
+                      {selectedSession.stellarTxHash}
+                    </span>
+                  </div>
+                )}
+                {selectedSession.completedPaymentMethod && (
+                  <div className="flex justify-between mt-2">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Payment Method</span>
+                    <span className="text-sm text-gray-900 dark:text-white capitalize">
+                      {selectedSession.completedPaymentMethod}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleDownloadPDF}
+                  className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  Download PDF
+                </button>
+                <button
+                  onClick={handleSendReceipt}
+                  className="flex-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm font-medium transition-colors"
+                >
+                  Send
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

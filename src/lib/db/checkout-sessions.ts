@@ -210,6 +210,8 @@ export function mapCheckoutSessionForApi(session: CheckoutSession) {
     allowCredit: session.allow_credit,
     allowBankTransfer: session.allow_bank_transfer,
     organizationId: session.org_id,
+    stellarTxHash: session.stellar_tx_hash,
+    completedPaymentMethod: session.completed_payment_method,
   };
 }
 

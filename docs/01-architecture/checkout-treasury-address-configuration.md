@@ -1,7 +1,10 @@
 # Checkout Treasury Address Configuration
 
 ## Overview
+
 This document provides SQL commands to configure treasury smart account addresses for organizations. These addresses are used by the credit side to determine where to send payments instead of using the checkout session destination address.
+
+**IMPORTANT**: The `treasury_smart_account_address` column must be set in the database for checkout payments to use the treasury C address instead of the classic G address. Without this configuration, payments will default to the classic G address.
 
 ## SQL Configuration
 
@@ -10,8 +13,18 @@ This document provides SQL commands to configure treasury smart account addresse
 Replace `org_123` with your actual organization ID and `CCVXRJR3WR4Y33J527JECXILVFDQEGCPBUQOYVGQDSJUKJOPVAKUSIWX` with your treasury smart account address:
 
 ```sql
-UPDATE organizations 
+UPDATE organizations
 SET treasury_smart_account_address = 'CCVXRJR3WR4Y33J527JECXILVFDQEGCPBUQOYVGQDSJUKJOPVAKUSIWX'
+WHERE id = 'org_123';
+```
+
+### Verify the configuration
+
+After updating, verify the treasury addresses are set correctly:
+
+```sql
+SELECT id, name, treasury_smart_account_address, stellar_disbursement_public_key, soroban_contract_id
+FROM organizations
 WHERE id = 'org_123';
 ```
 
@@ -20,8 +33,8 @@ WHERE id = 'org_123';
 If you have multiple organizations, you can update them in a single query:
 
 ```sql
-UPDATE organizations 
-SET treasury_smart_account_address = CASE 
+UPDATE organizations
+SET treasury_smart_account_address = CASE
   WHEN id = 'org_123' THEN 'CCVXRJR3WR4Y33J527JECXILVFDQEGCPBUQOYVGQDSJUKJOPVAKUSIWX'
   WHEN id = 'org_456' THEN 'ANOTHER_SMART_ACCOUNT_ADDRESS_HERE'
   WHEN id = 'org_789' THEN 'YET_ANOTHER_ADDRESS_HERE'
@@ -35,8 +48,8 @@ WHERE id IN ('org_123', 'org_456', 'org_789');
 After updating, verify the treasury addresses are set correctly:
 
 ```sql
-SELECT id, name, treasury_smart_account_address 
-FROM organizations 
+SELECT id, name, treasury_smart_account_address
+FROM organizations
 WHERE treasury_smart_account_address IS NOT NULL;
 ```
 

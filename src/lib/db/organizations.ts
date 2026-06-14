@@ -255,15 +255,37 @@ export async function updateOrganizationSorobanContract(
   orgId: string,
   sorobanContractId: string
 ): Promise<Organization | null> {
-  const { data, error } = await getSupabase()
-    .from("organizations")
-    .update({
-      soroban_contract_id: sorobanContractId,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", orgId)
-    .select()
-    .single();
+  const payload: Record<string, unknown> = {
+    soroban_contract_id: sorobanContractId,
+    treasury_smart_account_address: sorobanContractId,
+    updated_at: new Date().toISOString(),
+  };
+
+  const attemptUpdate = async (p: Record<string, unknown>) => {
+    return await getSupabase()
+      .from("organizations")
+      .update(p as never)
+      .eq("id", orgId)
+      .select()
+      .single();
+  };
+
+  let { data, error } = await attemptUpdate(payload);
+  for (let i = 0; i < 8 && error?.message; i++) {
+    const missing = parseMissingOrganizationsColumn(error.message);
+    if (!missing || !(missing in payload)) break;
+    if (missing === "soroban_contract_id") {
+      console.error(
+        `[organizations] updateOrganizationSorobanContract: required column missing in DB: ${missing}`
+      );
+      return null;
+    }
+    console.warn(
+      `[organizations] updateOrganizationSorobanContract: omitting missing column "${missing}" and retrying`
+    );
+    delete payload[missing];
+    ({ data, error } = await attemptUpdate(payload));
+  }
 
   if (error) {
     console.error("[organizations] updateOrganizationSorobanContract:", error.message);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCheckoutSession, completeCheckoutSession } from "@/lib/db/checkout-sessions";
+import { getOrganizationById } from "@/lib/db/organizations";
 import { verifyStellarPayment } from "@/lib/checkout/verify-stellar-payment";
 
 /**
@@ -54,11 +55,24 @@ export async function POST(request: NextRequest) {
 
     // Verify on-chain payment (only for SOZU rail)
     if (paymentMethod === "sozu") {
-      const verification = await verifyStellarPayment(
+      // Check against session destination address first
+      let verification = await verifyStellarPayment(
         transactionHash,
         session.destination_stellar_address,
         session.amount_usd
       );
+
+      // If verification fails, check against organization's treasury smart account address
+      if (!verification.success) {
+        const org = await getOrganizationById(session.org_id);
+        if (org?.treasury_smart_account_address) {
+          verification = await verifyStellarPayment(
+            transactionHash,
+            org.treasury_smart_account_address,
+            session.amount_usd
+          );
+        }
+      }
 
       if (!verification.success) {
         console.error(

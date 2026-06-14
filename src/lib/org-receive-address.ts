@@ -35,7 +35,8 @@ export function resolveOrgReceiveAddress(org: Organization): {
   const treasurySmartAccountAddress = org.treasury_smart_account_address?.trim() || null;
   /** Org $tag → smart account (C) by default; classic G is legacy fallback. */
   const tagReceiveAddress = sorobanC ?? classicG;
-  const dashboardBalanceAddress = sorobanC ?? classicG;
+  /** Dashboard balance prioritizes treasury smart account address for checkout payments. */
+  const dashboardBalanceAddress = treasurySmartAccountAddress ?? sorobanC ?? classicG;
   return { classicG, sorobanC, treasurySmartAccountAddress, tagReceiveAddress, dashboardBalanceAddress };
 }
 

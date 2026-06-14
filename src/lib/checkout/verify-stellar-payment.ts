@@ -59,6 +59,59 @@ export async function verifyStellarPayment(
   expectedDestination: string,
   expectedAmountUsd: string
 ): Promise<PaymentVerificationResult> {
+  const tolerance = 0.01; // $0.01 tolerance for decimal rounding
+  const expectedAmount = parseFloat(expectedAmountUsd);
+
+  // 1. Try verifying using Soroban RPC events first (fast, bypasses Horizon indexing delay)
+  try {
+    const rpcUrl = getSorobanRpcUrl();
+    const server = new rpc.Server(rpcUrl, { allowHttp: rpcUrl.startsWith("http://") });
+    const rpcTx = await server.getTransaction(transactionHash);
+    
+    if (rpcTx.status === "SUCCESS" && rpcTx.ledger) {
+      const tokenId = getSorobanUsdcTokenId();
+      const res = await (server as unknown as RpcServerWithEvents).getEvents({
+        startLedger: rpcTx.ledger,
+        filters: [{ type: "contract", contractIds: [tokenId] }],
+        pagination: { limit: 100 },
+      });
+      
+      const events = res?.events ?? [];
+      for (const ev of events) {
+        if (ev.txHash !== transactionHash) continue;
+        if (!ev.topic || !Array.isArray(ev.topic) || ev.topic.length < 3) continue;
+        
+        let t0: xdr.ScVal | null = null;
+        let from: string | null = null;
+        let to: string | null = null;
+        try {
+          t0 = coerceSimulateRetval(ev.topic[0]);
+          const t1 = coerceSimulateRetval(ev.topic[1]);
+          const t2 = coerceSimulateRetval(ev.topic[2]);
+          if (t1?.switch().name === "scvAddress") from = Address.fromScVal(t1).toString();
+          if (t2?.switch().name === "scvAddress") to = Address.fromScVal(t2).toString();
+        } catch {
+          continue;
+        }
+        
+        if (!t0 || t0.switch().name !== "scvSymbol" || t0.sym() !== "transfer") continue;
+        if (!from || !to) continue;
+        
+        if (to.toUpperCase() === expectedDestination.toUpperCase()) {
+          const val = coerceSimulateRetval(ev.value);
+          const actualAmount = val ? parseFloat(i128ToDecimalString(scValI128ToBigInt(val), 7)) : 0;
+          if (Math.abs(actualAmount - expectedAmount) <= tolerance) {
+            console.log(`[verify-stellar-payment] Verified Soroban transfer event via RPC of ${actualAmount} USDC to ${to} in tx ${transactionHash}`);
+            return { success: true };
+          }
+        }
+      }
+    }
+  } catch (rpcErr) {
+    console.warn("[verify-stellar-payment] Soroban RPC verification skipped or failed:", rpcErr);
+  }
+
+  // 2. Horizon fallback (classic payments or if RPC failed/was missing)
   try {
     const horizon = getHorizon();
     
@@ -82,10 +135,6 @@ export async function verifyStellarPayment(
       .limit(200)
       .call();
 
-    // Look for payment operation to expected destination
-    const expectedAmount = parseFloat(expectedAmountUsd);
-    const tolerance = 0.01; // $0.01 tolerance for decimal rounding
-
     for (const op of operations.records) {
       // Check both classic payment and Soroban invoke_host_function operations
       if (op.type === "payment") {
@@ -108,52 +157,6 @@ export async function verifyStellarPayment(
           return { success: true };
         }
       } else if (op.type === "invoke_host_function") {
-        // Try verifying using Soroban RPC events first
-        try {
-          const rpcUrl = getSorobanRpcUrl();
-          const server = new rpc.Server(rpcUrl, { allowHttp: rpcUrl.startsWith("http://") });
-          const tokenId = getSorobanUsdcTokenId();
-          
-          const res = await (server as unknown as RpcServerWithEvents).getEvents({
-            startLedger: tx.ledger_attr,
-            filters: [{ type: "contract", contractIds: [tokenId] }],
-            pagination: { limit: 100 },
-          });
-          
-          const events = res?.events ?? [];
-          for (const ev of events) {
-            if (ev.txHash !== transactionHash) continue;
-            if (!ev.topic || !Array.isArray(ev.topic) || ev.topic.length < 3) continue;
-            
-            let t0: xdr.ScVal | null = null;
-            let from: string | null = null;
-            let to: string | null = null;
-            try {
-              t0 = coerceSimulateRetval(ev.topic[0]);
-              const t1 = coerceSimulateRetval(ev.topic[1]);
-              const t2 = coerceSimulateRetval(ev.topic[2]);
-              if (t1?.switch().name === "scvAddress") from = Address.fromScVal(t1).toString();
-              if (t2?.switch().name === "scvAddress") to = Address.fromScVal(t2).toString();
-            } catch {
-              continue;
-            }
-            
-            if (!t0 || t0.switch().name !== "scvSymbol" || t0.sym() !== "transfer") continue;
-            if (!from || !to) continue;
-            
-            if (to.toUpperCase() === expectedDestination.toUpperCase()) {
-              const val = coerceSimulateRetval(ev.value);
-              const actualAmount = val ? parseFloat(i128ToDecimalString(scValI128ToBigInt(val), 7)) : 0;
-              if (Math.abs(actualAmount - expectedAmount) <= tolerance) {
-                console.log(`[verify-stellar-payment] Verified Soroban transfer event of ${actualAmount} USDC to ${to} in tx ${transactionHash}`);
-                return { success: true };
-              }
-            }
-          }
-        } catch (rpcErr) {
-          console.warn("[verify-stellar-payment] Soroban RPC event fetch failed, falling back to Horizon effects:", rpcErr);
-        }
-
         // Soroban payment - check effects for transfer (fallback)
         const effects = await horizon
           .effects()
@@ -193,7 +196,7 @@ export async function verifyStellarPayment(
       error: "No matching USDC payment found to destination",
     };
   } catch (err) {
-    console.error("[verify-stellar-payment] Error:", err);
+    console.error("[verify-stellar-payment] Horizon fallback error:", err);
     return {
       success: false,
       error: err instanceof Error ? err.message : "Verification failed",

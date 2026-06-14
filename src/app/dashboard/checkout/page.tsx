@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { CheckoutPreviewCard } from "@/components/CheckoutPreviewCard";
+import ReceiptModal from "@/components/ReceiptModal";
+import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 
 type Session = {
   id: string;
@@ -20,6 +22,9 @@ type Session = {
 
 export default function CheckoutPage() {
   const t = useTranslations("checkoutPage");
+  const profileCtx = useDashboardProfile();
+  const orgName = profileCtx?.profile?.org_name ?? null;
+
   const [amountUsd, setAmountUsd] = useState("");
   const [reference, setReference] = useState("");
   const [allowDebit, setAllowDebit] = useState(true);
@@ -160,17 +165,7 @@ export default function CheckoutPage() {
     setShowReceipt(true);
   };
 
-  const handleDownloadPDF = async () => {
-    if (!selectedSession) return;
-    // TODO: Implement PDF download functionality
-    alert("PDF download functionality to be implemented");
-  };
 
-  const handleSendReceipt = async () => {
-    if (!selectedSession) return;
-    // TODO: Implement send receipt functionality
-    alert("Send receipt functionality to be implemented");
-  };
 
   const statusColor = (s: string) =>
     s === "completed"
@@ -441,81 +436,12 @@ export default function CheckoutPage() {
       </section>
 
       {/* Receipt Modal */}
-      {showReceipt && selectedSession && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg max-w-md w-full p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Payment Receipt</h3>
-              <button
-                onClick={() => setShowReceipt(false)}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              >
-                ✕
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Amount</span>
-                  <span className="font-medium text-gray-900 dark:text-white">${selectedSession.amountUsd} USD</span>
-                </div>
-                {selectedSession.reference && (
-                  <div className="flex justify-between mt-2">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Reference</span>
-                    <span className="text-sm text-gray-900 dark:text-white">{selectedSession.reference}</span>
-                  </div>
-                )}
-                <div className="flex justify-between mt-2">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Status</span>
-                  <span className={`text-sm font-medium capitalize ${statusColor(selectedSession.status)}`}>
-                    {selectedSession.status}
-                  </span>
-                </div>
-                <div className="flex justify-between mt-2">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Date</span>
-                  <span className="text-sm text-gray-900 dark:text-white">
-                    {selectedSession.createdAt && !Number.isNaN(Date.parse(selectedSession.createdAt))
-                      ? new Date(selectedSession.createdAt).toLocaleString()
-                      : "—"}
-                  </span>
-                </div>
-                {selectedSession.stellarTxHash && (
-                  <div className="flex justify-between mt-2">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Transaction</span>
-                    <span className="text-xs text-gray-900 dark:text-white font-mono break-all max-w-[200px]">
-                      {selectedSession.stellarTxHash}
-                    </span>
-                  </div>
-                )}
-                {selectedSession.completedPaymentMethod && (
-                  <div className="flex justify-between mt-2">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Payment Method</span>
-                    <span className="text-sm text-gray-900 dark:text-white capitalize">
-                      {selectedSession.completedPaymentMethod}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={handleDownloadPDF}
-                  className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                >
-                  Download PDF
-                </button>
-                <button
-                  onClick={handleSendReceipt}
-                  className="flex-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm font-medium transition-colors"
-                >
-                  Send
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ReceiptModal
+        open={showReceipt}
+        onClose={() => setShowReceipt(false)}
+        checkoutSession={selectedSession}
+        orgName={orgName}
+      />
     </div>
   );
 }

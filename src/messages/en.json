@@ -812,6 +812,23 @@
     "failedTitle": "Payout failed",
     "failedGeneric": "Something went wrong."
   },
+  "receiptModal": {
+    "title": "Payment Receipt",
+    "transactionTitle": "Stellar Transaction",
+    "checkoutTitle": "Checkout Receipt",
+    "amount": "Amount",
+    "reference": "Reference",
+    "status": "Status",
+    "date": "Date",
+    "transaction": "Transaction",
+    "paymentMethod": "Payment Method",
+    "downloadPdf": "Download PDF",
+    "share": "Share",
+    "copied": "Copied!",
+    "viewExpert": "Review Seller Transaction",
+    "loading": "Loading receipt details...",
+    "close": "Close"
+  },
   "recipientsPage": {
     "title": "Recipients",
     "subtitle": "Providers and employees. One-off or scheduled payouts from the same wallet.",

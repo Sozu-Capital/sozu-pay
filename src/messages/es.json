@@ -812,6 +812,23 @@
     "failedTitle": "Error en el retiro",
     "failedGeneric": "Algo salió mal."
   },
+  "receiptModal": {
+    "title": "Comprobante de Pago",
+    "transactionTitle": "Transacción Stellar",
+    "checkoutTitle": "Comprobante de Pago",
+    "amount": "Monto",
+    "reference": "Referencia",
+    "status": "Estado",
+    "date": "Fecha",
+    "transaction": "Transacción",
+    "paymentMethod": "Medio de Pago",
+    "downloadPdf": "Descargar PDF",
+    "share": "Compartir",
+    "copied": "¡Copiado!",
+    "viewExpert": "Revisar Transacción de Venta",
+    "loading": "Cargando detalles del comprobante...",
+    "close": "Cerrar"
+  },
   "recipientsPage": {
     "title": "Destinatarios",
     "subtitle": "Proveedores y empleados. Retiros puntuales o programados desde la misma billetera.",

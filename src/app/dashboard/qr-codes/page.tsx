@@ -114,8 +114,18 @@ export default function QRCodesPage() {
     }
   };
 
-  const getQRImageUrl = (pointSlug: string) => {
-    const payUrl = `${baseUrl}/pay/qr/${pointSlug}`;
+  const getPointUrl = (qr: QRPoint) => {
+    if (qr.destinationType === "checkout" && qr.destinationRef) {
+      return `${baseUrl}/checkout/${qr.destinationRef}`;
+    }
+    if (qr.destinationType === "custom_url" && qr.destinationRef) {
+      return qr.destinationRef;
+    }
+    return `${baseUrl}/pay/qr/${qr.slug}`;
+  };
+
+  const getQRImageUrl = (qr: QRPoint) => {
+    const payUrl = getPointUrl(qr);
     return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payUrl)}`;
   };
 
@@ -314,8 +324,8 @@ export default function QRCodesPage() {
                         {qr.isOnline ? t("online") : t("offline")}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 break-all">
-                      {baseUrl}/pay/qr/{qr.slug}
+                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 break-all font-mono">
+                      {getPointUrl(qr)}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                       {qr.destinationType === "checkout"
@@ -327,7 +337,7 @@ export default function QRCodesPage() {
                   </div>
                   {qr.pointType === "qr" && (
                     <img
-                      src={getQRImageUrl(qr.slug)}
+                      src={getQRImageUrl(qr)}
                       alt=""
                       className="w-20 h-20 rounded border border-gray-200 dark:border-gray-700 shrink-0"
                     />

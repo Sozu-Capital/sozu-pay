@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
+import ReceiptModal, { ReceiptSession } from "@/components/ReceiptModal";
+import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 
 interface Tx {
   id: string;
@@ -17,6 +19,32 @@ export default function TransactionsPage() {
   const t = useTranslations("transactionsPage");
   const [list, setList] = useState<Tx[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [selectedTx, setSelectedTx] = useState<Tx | null>(null);
+  const [checkoutSession, setCheckoutSession] = useState<ReceiptSession | null>(null);
+  const [loadingCheckout, setLoadingCheckout] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+
+  const profileCtx = useDashboardProfile();
+  const orgName = profileCtx?.profile?.org_name ?? null;
+
+  const handleRowClick = async (tx: Tx) => {
+    setSelectedTx(tx);
+    setCheckoutSession(null);
+    setShowModal(true);
+    setLoadingCheckout(true);
+    try {
+      const res = await fetch(`/api/checkout/by-tx?txHash=${tx.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCheckoutSession(data);
+      }
+    } catch (err) {
+      console.error("Error looking up checkout by tx:", err);
+    } finally {
+      setLoadingCheckout(false);
+    }
+  };
 
   useEffect(() => {
     fetch("/api/transactions?limit=50")
@@ -56,7 +84,8 @@ export default function TransactionsPage() {
               {list.map((tx) => (
                 <tr
                   key={tx.id}
-                  className="border-t border-gray-200 dark:border-gray-700"
+                  onClick={() => handleRowClick(tx)}
+                  className="border-t border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
                 >
                   <td className="p-3">
                     {new Date(tx.date).toLocaleDateString()}
@@ -70,6 +99,7 @@ export default function TransactionsPage() {
                       href={tx.stellarExpertUrl}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
                       className="text-blue-600 dark:text-blue-400 hover:underline"
                     >
                       {t("view")}
@@ -81,6 +111,15 @@ export default function TransactionsPage() {
           </table>
         </div>
       )}
+
+      <ReceiptModal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        checkoutSession={checkoutSession}
+        transaction={selectedTx}
+        orgName={orgName}
+        loading={loadingCheckout}
+      />
     </div>
   );
 }

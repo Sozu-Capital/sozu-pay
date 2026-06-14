@@ -98,6 +98,22 @@ export async function getCheckoutSession(id: string): Promise<CheckoutSession | 
   return (data as CheckoutSession) ?? null;
 }
 
+export async function getCheckoutSessionByTxHash(
+  stellarTxHash: string,
+): Promise<CheckoutSession | null> {
+  const { data, error } = await getSupabase()
+    .from("checkout_sessions")
+    .select("*")
+    .eq("stellar_tx_hash", stellarTxHash)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[checkout-sessions] getCheckoutSessionByTxHash error:", error.message);
+    return null;
+  }
+  return (data as CheckoutSession) ?? null;
+}
+
 export async function listCheckoutSessionsForOrg(
   orgId: string,
   limit = 20,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { createQRPoint, listQRPointsForOrg } from "@/lib/db/merchant-qr-points";
+import { getLatestPendingCheckoutForOrg } from "@/lib/db/checkout-sessions";
 
 /**
  * GET /api/merchant/qr-points
@@ -60,13 +61,21 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    let finalDestinationRef = destinationRef;
+    if (destinationType === "checkout" && !finalDestinationRef) {
+      const latest = await getLatestPendingCheckoutForOrg(orgId);
+      if (latest) {
+        finalDestinationRef = latest.id;
+      }
+    }
+
     const qrPoint = await createQRPoint({
       orgId,
       name,
       slug,
       pointType,
       destinationType,
-      destinationRef,
+      destinationRef: finalDestinationRef,
       isOnline,
     });
     return NextResponse.json({ qrPoint });

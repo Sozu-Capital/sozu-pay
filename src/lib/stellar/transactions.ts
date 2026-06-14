@@ -199,60 +199,85 @@ export async function getTransactions(
     .map((h) => h.trim().toUpperCase())
     .filter((h) => h && h !== pk);
 
-  if (pk.startsWith("C") || extra.some((h) => h.startsWith("C"))) {
-    try {
-      const holders = [pk, ...extra].filter((h) => h.startsWith("C"));
-      const rows = await getSorobanTransferRows({ holders, limit });
-      return enrichTransactionRows(rows);
-    } catch {
-      return [];
-    }
-  }
+  const holders = [pk, ...extra];
+  const gAddresses = holders.filter((h) => h.startsWith("G"));
 
-  const server = getHorizon();
-  const rows: RawTxRow[] = [];
-  try {
-    const payments = await server
-      .payments()
-      .forAccount(pk)
-      .limit(limit)
-      .order("desc")
-      .call();
+  // Fetch Soroban transfers (which contain contract-to-contract and contract-to-classic transfers)
+  const fetchSoroban = getSorobanTransferRows({ holders, limit }).catch((err) => {
+    console.warn("[getTransactions] getSorobanTransferRows failed:", err);
+    return [] as RawTxRow[];
+  });
 
-    for (const p of payments.records) {
-      const id = p.id ?? p.transaction_hash ?? "";
-      const rawDate: unknown = (p as { created_at?: unknown }).created_at;
-      const date =
-        rawDate instanceof Date ? rawDate.toISOString() : String(rawDate ?? "");
-      let amount = "0";
-      let type: TransactionRow["type"] = "incoming";
-      let counterpartyAddress = "";
+  // Fetch classic payments for all G addresses in parallel
+  const fetchClassic = Promise.all(
+    gAddresses.map(async (gAddress) => {
+      const server = getHorizon();
+      const rows: RawTxRow[] = [];
+      try {
+        const payments = await server
+          .payments()
+          .forAccount(gAddress)
+          .limit(limit)
+          .order("desc")
+          .call();
 
-      if (p.type === "payment" && "amount" in p) {
-        amount = (p as { amount: string }).amount;
-        const to = (p as { to?: string }).to?.toUpperCase() ?? "";
-        const from = (p as { from?: string }).from?.toUpperCase() ?? "";
-        if (to === pk) {
-          type = "incoming";
-          counterpartyAddress = from;
-        } else {
-          type = "payout";
-          counterpartyAddress = to;
+        for (const p of payments.records) {
+          const id = p.id ?? p.transaction_hash ?? "";
+          const rawDate: unknown = (p as { created_at?: unknown }).created_at;
+          const date =
+            rawDate instanceof Date ? rawDate.toISOString() : String(rawDate ?? "");
+          let amount = "0";
+          let type: TransactionRow["type"] = "incoming";
+          let counterpartyAddress = "";
+
+          if (p.type === "payment" && "amount" in p) {
+            amount = (p as { amount: string }).amount;
+            const to = (p as { to?: string }).to?.toUpperCase() ?? "";
+            const from = (p as { from?: string }).from?.toUpperCase() ?? "";
+            if (to === gAddress) {
+              type = "incoming";
+              counterpartyAddress = from;
+            } else {
+              type = "payout";
+              counterpartyAddress = to;
+            }
+          }
+
+          rows.push({
+            id,
+            date,
+            amount,
+            type,
+            counterpartyAddress: counterpartyAddress || gAddress,
+            status: "completed",
+            stellarExpertUrl: stellarExpertTxUrl(p.transaction_hash),
+          });
         }
+      } catch (e) {
+        // account not found or network/rate limit error
       }
+      return rows;
+    })
+  ).then((results) => results.flat());
 
-      rows.push({
-        id,
-        date,
-        amount,
-        type,
-        counterpartyAddress: counterpartyAddress || pk,
-        status: "completed",
-        stellarExpertUrl: stellarExpertTxUrl(p.transaction_hash),
-      });
-    }
-  } catch {
-    /* account not found */
+  const [sorobanRows, classicRows] = await Promise.all([fetchSoroban, fetchClassic]);
+
+  // Merge, deduplicate by transaction hash (id), and sort by date descending
+  const mergedMap = new Map<string, RawTxRow>();
+
+  // Prefer Soroban rows as they represent native smart account USDC transfer events
+  for (const row of sorobanRows) {
+    mergedMap.set(row.id, row);
   }
-  return enrichTransactionRows(rows);
+  for (const row of classicRows) {
+    if (!mergedMap.has(row.id)) {
+      mergedMap.set(row.id, row);
+    }
+  }
+
+  const sortedRows = Array.from(mergedMap.values())
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, limit);
+
+  return enrichTransactionRows(sortedRows);
 }

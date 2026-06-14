@@ -26,6 +26,11 @@ export default function StubRampCheckoutPage() {
     setBusy(true);
     try {
       if (data.session) {
+        // Generate a mock transaction hash for the stub
+        const mockTxHash = `stub_tx_${Date.now()}_${Math.random().toString(36).slice(2, 16)}`;
+        // Determine payment method from the method parameter or default to card
+        const paymentMethod = data.method === "bank_transfer" ? "bank_transfer" : data.method === "sozu" ? "sozu" : "card";
+        
         await fetch("/api/webhooks/ramp", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -35,6 +40,8 @@ export default function StubRampCheckoutPage() {
             external_ref: data.ref || undefined,
             amount_usd: data.amount || undefined,
             occurred_at: new Date().toISOString(),
+            transaction_hash: mockTxHash,
+            payment_method: paymentMethod,
           }),
         });
       }

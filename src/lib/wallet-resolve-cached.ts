@@ -29,7 +29,7 @@ export const getDashboardWalletContext = cache(async (): Promise<WalletContext> 
 
   const contractId = resolveOrgTreasuryContractId(org);
   const disbursementId = resolveOrgDisbursementContractId(org);
-  const publicKey = contractId ?? org.stellar_disbursement_public_key ?? null;
+  const publicKey = org.treasury_smart_account_address?.trim() || contractId || org.stellar_disbursement_public_key || null;
 
   return { publicKey, orgId, org, disbursementContractId: disbursementId };
 });

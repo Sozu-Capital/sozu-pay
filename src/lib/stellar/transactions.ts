@@ -140,7 +140,7 @@ async function getSorobanTransferRows(params: {
       continue;
     }
 
-    if (!t0 || t0.switch().name !== "scvSymbol" || t0.sym() !== "transfer") continue;
+    if (!t0 || t0.switch().name !== "scvSymbol" || t0.sym().toString() !== "transfer") continue;
     if (!from || !to) continue;
 
     const fromU = from.toUpperCase();

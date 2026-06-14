@@ -78,7 +78,7 @@ export async function verifyStellarPayment(
       
       const events = res?.events ?? [];
       for (const ev of events) {
-        if (ev.txHash !== transactionHash) continue;
+        if (ev.txHash?.toLowerCase() !== transactionHash.toLowerCase()) continue;
         if (!ev.topic || !Array.isArray(ev.topic) || ev.topic.length < 3) continue;
         
         let t0: xdr.ScVal | null = null;
@@ -94,7 +94,7 @@ export async function verifyStellarPayment(
           continue;
         }
         
-        if (!t0 || t0.switch().name !== "scvSymbol" || t0.sym() !== "transfer") continue;
+        if (!t0 || t0.switch().name !== "scvSymbol" || t0.sym().toString() !== "transfer") continue;
         if (!from || !to) continue;
         
         if (to.toUpperCase() === expectedDestination.toUpperCase()) {
@@ -157,7 +157,30 @@ export async function verifyStellarPayment(
           return { success: true };
         }
       } else if (op.type === "invoke_host_function") {
-        // Soroban payment - check effects for transfer (fallback)
+        // First check asset_balance_changes (cleaner, no separate API call needed)
+        const assetChanges = (op as { asset_balance_changes?: Array<{
+          asset_code?: string;
+          type?: string;
+          to?: string;
+          amount?: string;
+        }> }).asset_balance_changes;
+        
+        if (Array.isArray(assetChanges)) {
+          for (const change of assetChanges) {
+            if (
+              (change.asset_code === "USDC" || change.asset_code === "USD") &&
+              change.type === "transfer" &&
+              change.to?.toUpperCase() === expectedDestination.toUpperCase()
+            ) {
+              const actualAmount = parseFloat(change.amount ?? "0");
+              if (Math.abs(actualAmount - expectedAmount) <= tolerance) {
+                return { success: true };
+              }
+            }
+          }
+        }
+
+        // Fallback: Soroban payment - check effects for transfer
         const effects = await horizon
           .effects()
           .forOperation(op.id)
@@ -165,23 +188,41 @@ export async function verifyStellarPayment(
           .call();
 
         for (const effect of effects.records) {
-          // Look for contract_debited/credited effects
+          const eff = effect as { asset_code?: string; contract?: string; account?: string; amount?: string };
           if (
-            (effect.type === "contract_credited" || effect.type === "contract_debited") &&
+            effect.type === "contract_credited" &&
             "asset_code" in effect &&
             "contract" in effect &&
             "amount" in effect
           ) {
-            const assetCode = (effect as { asset_code: string }).asset_code;
-            const contract = (effect as { contract: string }).contract;
-            const amount = (effect as { amount: string }).amount;
+            const assetCode = eff.asset_code;
+            const contract = eff.contract;
+            const amount = eff.amount;
             
-            // Check if this is USDC and to the right destination
             if (
               (assetCode === "USDC" || assetCode === "USD") &&
-              contract === expectedDestination
+              contract?.toUpperCase() === expectedDestination.toUpperCase()
             ) {
-              const actualAmount = parseFloat(amount);
+              const actualAmount = parseFloat(amount ?? "0");
+              if (Math.abs(actualAmount - expectedAmount) <= tolerance) {
+                return { success: true };
+              }
+            }
+          } else if (
+            effect.type === "account_credited" &&
+            "asset_code" in effect &&
+            "account" in effect &&
+            "amount" in effect
+          ) {
+            const assetCode = eff.asset_code;
+            const account = eff.account;
+            const amount = eff.amount;
+            
+            if (
+              (assetCode === "USDC" || assetCode === "USD") &&
+              account?.toUpperCase() === expectedDestination.toUpperCase()
+            ) {
+              const actualAmount = parseFloat(amount ?? "0");
               if (Math.abs(actualAmount - expectedAmount) <= tolerance) {
                 return { success: true };
               }

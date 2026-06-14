@@ -91,7 +91,7 @@ export async function GET() {
 
   // --- Stellar + FX data (parallel, org wallet only) ---
   // Dashboard shows treasury balance (receive address). Payout flows use disbursement contract separately.
-  const publicKey = orgTreasuryContractId ?? org?.stellar_disbursement_public_key ?? null;
+  const publicKey = org?.treasury_smart_account_address?.trim() || orgTreasuryContractId || org?.stellar_disbursement_public_key || null;
 
   if (!publicKey) {
     // No wallet configured yet — return zeros so the dashboard still renders.
@@ -122,17 +122,30 @@ export async function GET() {
   const sdpDistributionConfigured = org ? isOrgDistributionConfigured(org) : false;
   let fx = { rate: 1, currency: "USD", source: "1 USDC = 1 USD" };
   let transactions: Awaited<ReturnType<typeof getTransactions>> = [];
-  const disbursementHolder =
-    orgDisbursementContractId &&
-    orgDisbursementContractId !== publicKey
-      ? orgDisbursementContractId
-      : null;
+  
+  // Collect all potential holders for transaction fetching to ensure no transfers are missed
+  const additionalHoldersList: string[] = [];
+  if (org?.stellar_disbursement_public_key) {
+    additionalHoldersList.push(org.stellar_disbursement_public_key);
+  }
+  if (orgDisbursementContractId) {
+    additionalHoldersList.push(orgDisbursementContractId);
+  }
+  if (orgTreasuryContractId) {
+    additionalHoldersList.push(orgTreasuryContractId);
+  }
+  if (org?.treasury_smart_account_address) {
+    additionalHoldersList.push(org.treasury_smart_account_address);
+  }
+  const uniqueHolders = Array.from(new Set(additionalHoldersList))
+    .filter((h) => h !== publicKey);
+
   try {
     [usdcBalance, fx, transactions, distributionUsdc] = await Promise.all([
       publicKey.startsWith("C") ? getSorobanUsdcBalance(publicKey) : getUsdcBalance(publicKey),
       getUsdToLocalRate(),
       getTransactions(publicKey, 10, {
-        additionalHolders: disbursementHolder ? [disbursementHolder] : undefined,
+        additionalHolders: uniqueHolders,
       }),
       distributionPk ? getUsdcBalance(distributionPk) : Promise.resolve("0"),
     ]);

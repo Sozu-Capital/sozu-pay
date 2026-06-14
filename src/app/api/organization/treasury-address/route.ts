@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     const org = await getOrganizationById(organizationId);
     
     if (!org) {
+      console.log("[organization/treasury-address] Organization not found:", organizationId);
       return NextResponse.json({ error: "Organization not found" }, { status: 404 });
     }
 
@@ -26,7 +27,11 @@ export async function GET(request: NextRequest) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("[organization/treasury-address]", message, err);
+    console.error("[organization/treasury-address] Error fetching organization:", message, err);
+    // If the error is about 0 rows, treat it as organization not found
+    if (message.includes("result contains 0 rows") || message.includes("PGRST116")) {
+      return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+    }
     return NextResponse.json(
       { error: "Failed to fetch treasury address" },
       { status: 500 }

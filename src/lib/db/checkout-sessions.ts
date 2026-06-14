@@ -209,6 +209,7 @@ export function mapCheckoutSessionForApi(session: CheckoutSession) {
     allowDebit: session.allow_debit,
     allowCredit: session.allow_credit,
     allowBankTransfer: session.allow_bank_transfer,
+    organizationId: session.org_id,
   };
 }
 

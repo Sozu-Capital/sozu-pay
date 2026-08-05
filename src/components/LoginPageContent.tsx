@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import { HomeLandingShell } from "@/components/HomeLandingShell";
@@ -49,6 +50,13 @@ export function LoginPageContent({ clearSessionOnMount, returnTo }: LoginPageCon
       <HomeLandingShell
         passkeyRegister={false}
         introCta={<HomePollarAuth returnTo={returnTo} onBusyChange={() => {}} />}
+        footerExtra={
+          <p className="text-center text-sm text-gray-400">
+            <Link href="/join" className="underline underline-offset-2 hover:text-gray-200">
+              {t("haveInvite")}
+            </Link>
+          </p>
+        }
       />
     </DarkGradientBg>
   );

@@ -32,6 +32,11 @@ export default function SettingsPage() {
   const [orgTagError, setOrgTagError] = useState<string | null>(null);
   const [orgTagSaved, setOrgTagSaved] = useState(false);
   const [linkedTreasuryAddress, setLinkedTreasuryAddress] = useState<string | null>(null);
+  const [inviteRole, setInviteRole] = useState("member");
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteExpires, setInviteExpires] = useState<string | null>(null);
   const { signOut, signingOut } = useSignOut();
 
   function loadSozuTagInfo() {
@@ -99,6 +104,29 @@ export default function SettingsPage() {
       setPinMsg(e instanceof Error ? e.message : "Failed");
     } finally {
       setPinBusy(false);
+    }
+  }
+
+  async function createStaffInvite() {
+    setInviteBusy(true);
+    setInviteError(null);
+    setInviteUrl(null);
+    setInviteExpires(null);
+    try {
+      const res = await fetch("/api/org/invites", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: inviteRole }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? t("inviteCreateFailed"));
+      setInviteUrl(typeof data.url === "string" ? data.url : null);
+      setInviteExpires(typeof data.expiresAt === "string" ? data.expiresAt : null);
+    } catch (e) {
+      setInviteError(e instanceof Error ? e.message : t("inviteCreateFailed"));
+    } finally {
+      setInviteBusy(false);
     }
   }
 
@@ -310,6 +338,60 @@ export default function SettingsPage() {
           <p className="mt-3 max-w-md text-xs text-amber-700 dark:text-amber-400">{t("sozuTagNotLinkedYet")}</p>
         ) : null}
       </section>
+
+      {user?.isPollarUser ? (
+        <section
+          className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4"
+          id="staff-invite"
+        >
+          <h2 className="text-lg font-semibold">{t("inviteTitle")}</h2>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("inviteBody")}</p>
+          <div className="mt-4 flex flex-wrap items-end gap-3">
+            <label className="text-sm">
+              <span className="block text-gray-500 dark:text-gray-400 mb-1">{t("inviteRoleLabel")}</span>
+              <select
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value)}
+                className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+              >
+                <option value="member">{t("inviteRoleMember")}</option>
+                <option value="admin">{t("inviteRoleAdmin")}</option>
+                <option value="guardian">{t("inviteRoleGuardian")}</option>
+                <option value="treasury_manager">{t("inviteRoleTreasury")}</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={inviteBusy}
+              onClick={() => void createStaffInvite()}
+              className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              {inviteBusy ? t("inviteCreating") : t("inviteCreate")}
+            </button>
+          </div>
+          {inviteError && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{inviteError}</p>}
+          {inviteUrl && (
+            <div className="mt-3 space-y-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("inviteLinkReady")}</p>
+              <code className="block break-all rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 text-xs">
+                {inviteUrl}
+              </code>
+              {inviteExpires && (
+                <p className="text-xs text-gray-400">
+                  {t("inviteExpires", { at: new Date(inviteExpires).toLocaleString() })}
+                </p>
+              )}
+              <button
+                type="button"
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                onClick={() => void navigator.clipboard.writeText(inviteUrl)}
+              >
+                {t("inviteCopy")}
+              </button>
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <div className="mt-8" id="recovery">
         <ProfileCollapsibleCard

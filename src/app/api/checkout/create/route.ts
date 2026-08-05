@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
-import { resolveOrgReceiveAddress } from "@/lib/org-receive-address";
+import { resolveCheckoutSettleToAddress } from "@/lib/checkout/settle-to";
 import { createCheckoutSession, expirePendingCheckoutSessionsForOrg } from "@/lib/db/checkout-sessions";
 import { syncLiveCheckoutForOrg } from "@/lib/db/merchant-qr-points";
 import { checkoutSessionUrl, checkoutSuccessUrl } from "@/lib/checkout-url";
@@ -40,13 +40,16 @@ export async function POST(request: NextRequest) {
   }
 
   const org = await getOrganizationForUser(orgId);
-  const receive = org ? resolveOrgReceiveAddress(org) : null;
-  // Prioritize treasury smart account address for checkout payments, fall back to classic G, tag, or soroban
-  const destinationAddress =
-    receive?.treasurySmartAccountAddress ?? receive?.classicG ?? receive?.tagReceiveAddress ?? receive?.sorobanC ?? null;
-  
-  console.log("[checkout/create] Organization:", orgId, "treasurySmartAccountAddress:", receive?.treasurySmartAccountAddress, "classicG:", receive?.classicG, "sorobanC:", receive?.sorobanC, "selected destination:", destinationAddress);
-  
+  const destinationAddress = org ? resolveCheckoutSettleToAddress(org) : null;
+
+  console.log(
+    "[checkout/create] Organization:",
+    orgId,
+    "type:",
+    org?.type,
+    "selected destination:",
+    destinationAddress,
+  );
   if (!destinationAddress) {
     return NextResponse.json(
       { error: "Organization has no Stellar disbursement wallet configured" },

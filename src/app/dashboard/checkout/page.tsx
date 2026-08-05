@@ -24,6 +24,7 @@ export default function CheckoutPage() {
   const t = useTranslations("checkoutPage");
   const profileCtx = useDashboardProfile();
   const orgName = profileCtx?.profile?.org_name ?? null;
+  const isNgo = profileCtx?.profile?.org_type === "ngo";
 
   const [amountUsd, setAmountUsd] = useState("");
   const [reference, setReference] = useState("");
@@ -180,8 +181,12 @@ export default function CheckoutPage() {
 
   return (
     <div className="max-w-5xl">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t("title")}</h1>
-      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("subtitle")}</p>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+        {isNgo ? t("titleFunding") : t("title")}
+      </h1>
+      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        {isNgo ? t("subtitleFunding") : t("subtitle")}
+      </p>
 
       <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Create form */}
@@ -189,7 +194,9 @@ export default function CheckoutPage() {
           onSubmit={handleCreate}
           className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6 space-y-4"
         >
-          <h2 className="font-semibold text-gray-900 dark:text-white">{t("newLink")}</h2>
+          <h2 className="font-semibold text-gray-900 dark:text-white">
+            {isNgo ? t("newFundingLink") : t("newLink")}
+          </h2>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 
@@ -82,6 +83,12 @@ export function PollarCreateOrganizationForm() {
           >
             {busy ? tCommon("loading") : t("pollarCreateCta")}
           </button>
+
+          <p className="mt-4 text-center text-xs text-gray-400">
+            <Link href="/join" className="underline underline-offset-2 hover:text-gray-200">
+              {t("haveInviteSecondary")}
+            </Link>
+          </p>
         </form>
       </main>
     </DarkGradientBg>

@@ -3,10 +3,12 @@ import { attachSessionCookie } from "@/lib/auth/establish-session";
 import { getSession, setSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationById } from "@/lib/db/organizations";
+import { getOrgIdsForUser } from "@/lib/db/org-members";
 
 /**
  * POST /api/auth/set-org – set the current organization for this session.
- * Body: { orgId: string }. User can select their user.org_id or the default org (e.g. Mujeres2000) so everyone can open the dashboard.
+ * Body: { orgId: string }. User can select their user.org_id, org_members membership,
+ * or the default org (e.g. Mujeres2000) so everyone can open the dashboard.
  */
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -30,9 +32,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Organization not found" }, { status: 404 });
   }
 
+  const memberOrgIds = await getOrgIdsForUser(user.id);
   const isManager = org.treasury_manager_user_id === user.id;
   const canSelect =
     user.org_id === orgId ||
+    memberOrgIds.includes(orgId) ||
     user.admin_level === "super_admin" ||
     isManager;
 

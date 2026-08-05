@@ -1,0 +1,78 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import {
+  validateStaffInvite,
+  staffInvitePlaceholderEmail,
+  isValidOrgInviteRole,
+  mapInviteRoleToAdminLevel,
+  buildStaffInviteUrl,
+  STAFF_INVITE_TTL_MS,
+} from "@/lib/org/staff-invite";
+
+describe("validateStaffInvite", () => {
+  it("rejects missing token", () => {
+    const r = validateStaffInvite(null);
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.equal(r.code, "NOT_FOUND");
+  });
+
+  it("rejects already-used (one-time)", () => {
+    const r = validateStaffInvite({
+      token: "t1",
+      role: "member",
+      expiresAt: new Date(Date.now() + STAFF_INVITE_TTL_MS).toISOString(),
+      acceptedAt: new Date().toISOString(),
+    });
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.equal(r.code, "ALREADY_USED");
+  });
+
+  it("rejects expired", () => {
+    const r = validateStaffInvite(
+      {
+        token: "t2",
+        role: "admin",
+        expiresAt: "2020-01-01T00:00:00.000Z",
+        acceptedAt: null,
+      },
+      new Date("2024-01-01T00:00:00.000Z"),
+    );
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.equal(r.code, "EXPIRED");
+  });
+
+  it("accepts valid unused unexpired invite with role", () => {
+    const r = validateStaffInvite({
+      token: "t3",
+      role: "treasury_manager",
+      expiresAt: new Date(Date.now() + STAFF_INVITE_TTL_MS).toISOString(),
+      acceptedAt: null,
+    });
+    assert.equal(r.ok, true);
+  });
+});
+
+describe("staff invite helpers", () => {
+  it("placeholder email is unique per token and not a real match target", () => {
+    const a = staffInvitePlaceholderEmail("abc");
+    const b = staffInvitePlaceholderEmail("xyz");
+    assert.notEqual(a, b);
+    assert.match(a, /@staff-invite\.local$/);
+  });
+
+  it("validates roles and maps admin levels", () => {
+    assert.equal(isValidOrgInviteRole("admin"), true);
+    assert.equal(isValidOrgInviteRole("hacker"), false);
+    assert.equal(mapInviteRoleToAdminLevel("member"), "user");
+    assert.equal(mapInviteRoleToAdminLevel("admin"), "admin");
+    assert.equal(mapInviteRoleToAdminLevel("treasury_manager"), "admin");
+    assert.equal(mapInviteRoleToAdminLevel("guardian"), "user");
+  });
+
+  it("builds join URL", () => {
+    assert.equal(
+      buildStaffInviteUrl("https://app.example.com/", "tok-1"),
+      "https://app.example.com/join/tok-1",
+    );
+  });
+});

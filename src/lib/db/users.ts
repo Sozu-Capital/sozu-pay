@@ -18,6 +18,20 @@ export type User = {
   updated_at: string;
 };
 
+/** Staff Pollar identity → users.privy_user_id (`pollar:<subject>`). */
+export function pollarSubjectToPrivyUserId(subject: string): string {
+  const clean = subject.trim();
+  if (!clean) throw new Error("Pollar subject is required");
+  return clean.startsWith("pollar:") ? clean : `pollar:${clean}`;
+}
+
+export async function getOrCreateUserByPollar(
+  subject: string,
+  email: string
+): Promise<User> {
+  return getOrCreateUserByPrivy(pollarSubjectToPrivyUserId(subject), email);
+}
+
 export async function getOrCreateUserByPrivy(
   privyUserId: string,
   email: string

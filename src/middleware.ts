@@ -72,7 +72,8 @@ export function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/api/auth/register") ||
     request.nextUrl.pathname.startsWith("/api/auth/login") ||
     request.nextUrl.pathname.startsWith("/api/auth/username") ||
-    request.nextUrl.pathname.startsWith("/api/auth/pin");
+    request.nextUrl.pathname.startsWith("/api/auth/pin") ||
+    request.nextUrl.pathname.startsWith("/api/auth/pollar");
 
   if (isAuthApi) return NextResponse.next();
 
@@ -143,5 +144,6 @@ export const config = {
     "/api/auth/login/:path*",
     "/api/auth/username/:path*",
     "/api/auth/pin/:path*",
+    "/api/auth/pollar/:path*",
   ],
 };

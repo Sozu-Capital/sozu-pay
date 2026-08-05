@@ -8,11 +8,14 @@
     "start": "next start",
     "sdp:e2e-cli": "node scripts/sdp-railway-e2e-cli.mjs",
     "sdp:preflight": "bash scripts/sdp-preflight.sh credit.sozu.capital",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --import tsx --test src/lib/pollar/session-bridge.test.ts"
   },
   "dependencies": {
     "@creit-tech/stellar-wallets-kit": "file:src/shims/creit-tech-stellar-wallets-kit",
     "@noble/curves": "^1.8.1",
+    "@pollar/core": "^0.11.2",
+    "@pollar/react": "^0.11.2",
     "@simplewebauthn/browser": "^13.3.0",
     "@stellar/stellar-sdk": "^14.0.0",
     "@supabase/supabase-js": "^2.98.0",
@@ -35,6 +38,7 @@
     "postcss": "^8.0.0",
     "prettier": "^3.0.0",
     "tailwindcss": "^3.4.0",
+    "tsx": "^4.23.8",
     "typescript": "^5.0.0"
   }
 }

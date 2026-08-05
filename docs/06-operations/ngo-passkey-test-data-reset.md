@@ -17,10 +17,13 @@ For matching NGO orgs only:
 | Target | Behavior |
 |--------|----------|
 | `organizations` (`type = 'ngo'`) | Deleted |
-| `org_members`, `smart_accounts`, `webauthn_credentials`, `org_invites` | Cascaded / deleted with those orgs |
+| `smart_accounts`, `webauthn_credentials`, `org_invites` | Deleted by `org_id` when the table exists |
+| `org_members` | Deleted by `org_id` when the table exists (some environments use `users.org_id` only) |
 | `disbursement_signing_sessions`, SDP meta / checkout rows scoped by `org_id` | Deleted when present |
-| Users **only** in NGO orgs | Deleted (cascades `auth_passkeys`, clears `recovery_pin_hash` with the user) |
-| Users also in a `store` org | **Kept**; NGO membership removed via org delete; `users.org_id` cleared if it pointed at a deleted NGO |
+| Users whose primary `org_id` is a target NGO (and who are not also on a `store` org) | Deleted (cascades `auth_passkeys` when FK is present) |
+| Users also in a `store` org | **Kept**; `users.org_id` cleared if it pointed at a deleted NGO |
+
+Missing optional tables are skipped with a log line — the script must still be safe on projects that never applied `org_members`.
 
 ## What it does **not** touch
 

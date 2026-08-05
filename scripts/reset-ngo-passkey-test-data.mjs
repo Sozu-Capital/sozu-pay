@@ -64,12 +64,22 @@ const supabase = createClient(url, key, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+function isMissingTable(error) {
+  const msg = error?.message ?? "";
+  return /Could not find the table|schema cache|does not exist/i.test(msg);
+}
+
 async function fetchAll(table, columns, filterFn) {
   let q = supabase.from(table).select(columns);
   q = filterFn ? filterFn(q) : q;
   const { data, error } = await q;
-  if (error) throw new Error(`${table}: ${error.message}`);
-  return data ?? [];
+  if (error) {
+    if (isMissingTable(error)) {
+      return { missing: true, rows: [] };
+    }
+    throw new Error(`${table}: ${error.message}`);
+  }
+  return { missing: false, rows: data ?? [] };
 }
 
 function chunk(arr, size) {
@@ -79,17 +89,20 @@ function chunk(arr, size) {
 }
 
 async function deleteIn(table, column, ids) {
-  if (ids.length === 0) return 0;
+  if (ids.length === 0) return { deleted: 0, missing: false };
   let deleted = 0;
   for (const batch of chunk(ids, 100)) {
     const { error, count } = await supabase
       .from(table)
       .delete({ count: "exact" })
       .in(column, batch);
-    if (error) throw new Error(`delete ${table}: ${error.message}`);
+    if (error) {
+      if (isMissingTable(error)) return { deleted: 0, missing: true };
+      throw new Error(`delete ${table}: ${error.message}`);
+    }
     deleted += count ?? batch.length;
   }
-  return deleted;
+  return { deleted, missing: false };
 }
 
 async function main() {
@@ -98,12 +111,13 @@ async function main() {
   if (orgIdArg) console.log(`Filter: org-id=${orgIdArg}`);
   if (namePrefix) console.log(`Filter: name-prefix=${namePrefix}`);
 
-  let orgs = await fetchAll("organizations", "id, name, type", (q) => {
+  const orgsRes = await fetchAll("organizations", "id, name, type", (q) => {
     q = q.eq("type", "ngo");
     if (orgIdArg) q = q.eq("id", orgIdArg);
     if (namePrefix) q = q.ilike("name", `${namePrefix}%`);
     return q;
   });
+  const orgs = orgsRes.rows;
 
   const storeLeak = orgs.filter((o) => o.type !== "ngo");
   if (storeLeak.length > 0) {
@@ -117,48 +131,43 @@ async function main() {
   }
 
   const ngoIds = orgs.map((o) => o.id);
+  const ngoIdSet = new Set(ngoIds);
   console.log(`\nTarget NGO orgs (${orgs.length}):`);
   for (const o of orgs) console.log(`  - ${o.id}  ${o.name}`);
 
-  const members = await fetchAll("org_members", "id, user_id, org_id, role", (q) =>
+  // Membership: prefer org_members when present; always include users.org_id
+  const membersRes = await fetchAll("org_members", "id, user_id, org_id, role", (q) =>
     q.in("org_id", ngoIds),
   );
-  const memberUserIds = [...new Set(members.map((m) => m.user_id))];
+  if (membersRes.missing) {
+    console.log("\nNote: public.org_members not present — using users.org_id only.");
+  }
+  const memberUserIds = membersRes.rows.map((m) => m.user_id);
 
-  const primaryUsers = await fetchAll("users", "id, email, username, org_id, privy_user_id", (q) =>
-    q.in("org_id", ngoIds.map(String)),
+  const primaryUsersRes = await fetchAll(
+    "users",
+    "id, email, username, org_id, privy_user_id",
+    (q) => q.in("org_id", ngoIds),
   );
-  // users.org_id is text in schema; also try uuid form
+  const primaryUsers = primaryUsersRes.rows;
   const candidateUserIds = [
     ...new Set([...memberUserIds, ...primaryUsers.map((u) => u.id)]),
   ];
 
-  // Store memberships for candidates (must keep those users)
-  let storeMemberUserIds = new Set();
+  // Store orgs — never delete users who still belong to a store
+  const storeOrgsRes = await fetchAll("organizations", "id", (q) => q.eq("type", "store"));
+  const storeIdSet = new Set(storeOrgsRes.rows.map((o) => o.id));
+
+  const storeMemberUserIds = new Set();
+  if (candidateUserIds.length > 0 && storeIdSet.size > 0 && !membersRes.missing) {
+    const storeMembersRes = await fetchAll("org_members", "user_id", (q) =>
+      q.in("user_id", candidateUserIds).in("org_id", [...storeIdSet]),
+    );
+    for (const m of storeMembersRes.rows) storeMemberUserIds.add(m.user_id);
+  }
   if (candidateUserIds.length > 0) {
-    const { data: storeOrgs, error: storeOrgErr } = await supabase
-      .from("organizations")
-      .select("id")
-      .eq("type", "store");
-    if (storeOrgErr) throw new Error(`store orgs: ${storeOrgErr.message}`);
-    const storeIds = (storeOrgs ?? []).map((o) => o.id);
-    if (storeIds.length > 0) {
-      const { data: storeMembers, error: smErr } = await supabase
-        .from("org_members")
-        .select("user_id")
-        .in("user_id", candidateUserIds)
-        .in("org_id", storeIds);
-      if (smErr) throw new Error(`store members: ${smErr.message}`);
-      storeMemberUserIds = new Set((storeMembers ?? []).map((m) => m.user_id));
-    }
-    // Also: users whose primary org_id points at a store
-    const { data: storePrimary, error: spErr } = await supabase
-      .from("users")
-      .select("id, org_id")
-      .in("id", candidateUserIds);
-    if (spErr) throw new Error(`users primary: ${spErr.message}`);
-    const storeIdSet = new Set(storeIds);
-    for (const u of storePrimary ?? []) {
+    const candRes = await fetchAll("users", "id, org_id", (q) => q.in("id", candidateUserIds));
+    for (const u of candRes.rows) {
       if (u.org_id && storeIdSet.has(u.org_id)) storeMemberUserIds.add(u.id);
     }
   }
@@ -172,38 +181,42 @@ async function main() {
   const webauthn = await fetchAll("webauthn_credentials", "id, org_id, user_id", (q) =>
     q.in("org_id", ngoIds),
   );
-
-  let signingSessions = [];
-  try {
-    signingSessions = await fetchAll(
-      "disbursement_signing_sessions",
-      "id, org_id",
-      (q) => q.in("org_id", ngoIds.map(String)),
-    );
-  } catch (err) {
-    console.warn(`(skip signing sessions) ${err.message}`);
-  }
-
-  let authPasskeys = [];
-  if (exclusiveUserIds.length > 0) {
-    try {
-      authPasskeys = await fetchAll("auth_passkeys", "id, user_id", (q) =>
-        q.in("user_id", exclusiveUserIds),
-      );
-    } catch (err) {
-      console.warn(`(skip auth_passkeys) ${err.message}`);
-    }
-  }
+  const signingSessions = await fetchAll("disbursement_signing_sessions", "id, org_id", (q) =>
+    q.in("org_id", ngoIds),
+  );
+  const authPasskeys =
+    exclusiveUserIds.length === 0
+      ? { missing: false, rows: [] }
+      : await fetchAll("auth_passkeys", "id, user_id", (q) => q.in("user_id", exclusiveUserIds));
 
   console.log("\nPlanned impact:");
   console.log(`  organizations (ngo):              ${orgs.length}`);
-  console.log(`  org_members (ngo rows):           ${members.length}`);
-  console.log(`  smart_accounts:                   ${smartAccounts.length}`);
-  console.log(`  webauthn_credentials (org):       ${webauthn.length}`);
-  console.log(`  disbursement_signing_sessions:    ${signingSessions.length}`);
+  console.log(
+    `  org_members (ngo rows):           ${
+      membersRes.missing ? "n/a (table missing)" : membersRes.rows.length
+    }`,
+  );
+  console.log(
+    `  smart_accounts:                   ${
+      smartAccounts.missing ? "n/a" : smartAccounts.rows.length
+    }`,
+  );
+  console.log(
+    `  webauthn_credentials (org):       ${webauthn.missing ? "n/a" : webauthn.rows.length}`,
+  );
+  console.log(
+    `  disbursement_signing_sessions:    ${
+      signingSessions.missing ? "n/a" : signingSessions.rows.length
+    }`,
+  );
   console.log(`  exclusive users (delete):         ${exclusiveUserIds.length}`);
   console.log(`  shared users (keep; strip NGO):   ${sharedUserIds.length}`);
-  console.log(`  auth_passkeys (exclusive users):  ${authPasskeys.length}`);
+  console.log(
+    `  auth_passkeys (exclusive users):  ${
+      authPasskeys.missing ? "n/a" : authPasskeys.rows.length
+    }`,
+  );
+  console.log(`  store orgs in project (untouched): ${storeIdSet.size}`);
 
   if (!confirm) {
     console.log("\nDry-run only. Re-run with --confirm to delete.");
@@ -212,47 +225,40 @@ async function main() {
 
   console.log("\nDeleting…");
 
-  // Soft-FK / text org_id tables first
-  const ssDeleted = await deleteIn(
-    "disbursement_signing_sessions",
-    "org_id",
-    ngoIds.map(String),
-  );
-  console.log(`  disbursement_signing_sessions: ${ssDeleted}`);
-
-  // Optional SDP meta (ignore if missing)
   for (const table of [
+    "disbursement_signing_sessions",
     "sdp_disbursement_meta",
     "sdp_disbursement_verifications",
     "sdp_beneficiary_sozu_tags",
     "checkout_sessions",
     "org_invites",
+    "webauthn_credentials",
+    "smart_accounts",
   ]) {
-    try {
-      const n = await deleteIn(table, "org_id", ngoIds);
-      console.log(`  ${table}: ${n}`);
-    } catch (err) {
-      console.warn(`  ${table}: skipped (${err.message})`);
-    }
+    const { deleted, missing } = await deleteIn(table, "org_id", ngoIds);
+    console.log(`  ${table}: ${missing ? "skipped (missing)" : deleted}`);
   }
 
-  // Org delete cascades org_members, smart_accounts, webauthn_credentials (org FK)
-  const orgsDeleted = await deleteIn("organizations", "id", ngoIds);
-  console.log(`  organizations: ${orgsDeleted}`);
+  if (!membersRes.missing) {
+    const { deleted, missing } = await deleteIn("org_members", "org_id", ngoIds);
+    console.log(`  org_members: ${missing ? "skipped (missing)" : deleted}`);
+  }
 
-  // Strip shared users' primary org_id if it pointed at deleted NGO
-  for (const uid of sharedUserIds) {
+  // Clear exclusive/shared users' primary org_id before org delete (FK / soft refs)
+  for (const uid of [...exclusiveUserIds, ...sharedUserIds]) {
     const { data: u } = await supabase.from("users").select("id, org_id").eq("id", uid).maybeSingle();
-    if (u?.org_id && ngoIds.includes(u.org_id)) {
+    if (u?.org_id && ngoIdSet.has(u.org_id)) {
       const { error } = await supabase.from("users").update({ org_id: null }).eq("id", uid);
       if (error) throw new Error(`clear org_id user ${uid}: ${error.message}`);
     }
   }
-  console.log(`  shared users org_id cleared if needed: ${sharedUserIds.length}`);
 
-  // Delete exclusive users (cascades auth_passkeys / user-owned rows)
+  const orgsDeleted = await deleteIn("organizations", "id", ngoIds);
+  console.log(`  organizations: ${orgsDeleted.missing ? "FAILED" : orgsDeleted.deleted}`);
+  if (orgsDeleted.missing) throw new Error("organizations table missing — abort");
+
   const usersDeleted = await deleteIn("users", "id", exclusiveUserIds);
-  console.log(`  exclusive users: ${usersDeleted}`);
+  console.log(`  exclusive users: ${usersDeleted.deleted}`);
 
   console.log("\nDone. Merchant (store) orgs were not selected.");
 }

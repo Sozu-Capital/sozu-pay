@@ -201,10 +201,12 @@ export default function DisbursementsPage() {
   const searchParams = useSearchParams();
   const { profile } = useDashboardProfile() ?? { profile: null };
   const { ready: kitReady, kit, credentialId } = useSmartAccountKitContext();
+  const isPollarPath = profile?.is_pollar_user === true;
   const isDisbursementAdmin =
     profile?.can_manage_disbursements === true ||
     profile?.admin_level === "admin" ||
     profile?.admin_level === "super_admin";
+  const canSpendWithoutPasskey = isPollarPath && isDisbursementAdmin;
 
   // List view
   const [disbursements, setDisbursements] = useState<SdpDisbursement[]>([]);
@@ -569,7 +571,7 @@ export default function DisbursementsPage() {
   // ── Distribuir (passkey Soroban payout) / Auto liberación ─────────────────
 
   async function beginDistribuir(disbursementId: string, batchName: string) {
-    if (!kitReady || !kit) {
+    if (!canSpendWithoutPasskey && (!kitReady || !kit)) {
       setActionMsg(t("distributionTreasury.kitNotReady"));
       return;
     }
@@ -608,18 +610,85 @@ export default function DisbursementsPage() {
   }
 
   async function confirmDistribuir() {
-    if (!distribuirContext || !kit) return;
+    if (!distribuirContext) return;
+    if (!canSpendWithoutPasskey && !kit) return;
 
     setPayoutModalStatus("submitting");
     setPayoutModalError(null);
     const { disbursementId, items } = distribuirContext;
-    const txHashes: string[] = [];
 
     try {
+      if (canSpendWithoutPasskey) {
+        const confirmRes = await fetch("/api/disbursements/org-spend/confirm", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            disbursementId,
+            payments: items.map((item) => ({
+              paymentId: item.paymentId,
+              toAddress: item.recipientAddress,
+              amount: item.amount,
+              recipientLabel: item.recipientLabel,
+            })),
+          }),
+        });
+        const confirmData = await confirmRes.json().catch(() => ({}));
+        if (!confirmRes.ok) {
+          throw new Error(confirmData.error ?? "Confirm failed");
+        }
+
+        if (confirmData.outcome === "queued") {
+          setPayoutModalStatus("success");
+          setPayoutModalSuccess({
+            amount: String(confirmData.totalAmount ?? distribuirContext.totalAmount),
+            batchCount: items.length > 1 ? items.length : undefined,
+            recipientLabel: items.length === 1 ? items[0]!.recipientLabel : undefined,
+          });
+          setActionMsg(t("spendQueuedForOwner"));
+          setDistribuirContext(null);
+          await fetchList();
+          return;
+        }
+
+        if (confirmData.outcome === "awaiting_owner_client_tx") {
+          setPayoutModalStatus("failed");
+          setPayoutModalError(t("spendNeedsPollarSession"));
+          return;
+        }
+
+        const txHashes = (confirmData.txHashes ?? []) as string[];
+        const successPayload: PayoutModalSuccess =
+          items.length === 1
+            ? {
+                amount: items[0]!.amount,
+                recipientLabel: items[0]!.recipientLabel,
+                destination: items[0]!.recipientAddress,
+                stellarTxHash: txHashes[0],
+              }
+            : {
+                amount: distribuirContext.totalAmount,
+                batchCount: items.length,
+                stellarTxHash: txHashes[txHashes.length - 1],
+              };
+
+        setPayoutModalStatus("success");
+        setPayoutModalSuccess(successPayload);
+        setActionMsg(
+          items.length === 1
+            ? t("distributePaidOne", { hash: (txHashes[0] ?? "").slice(0, 12) })
+            : t("distributePaidMany", { count: items.length })
+        );
+        await fetchList();
+        if (selectedId === disbursementId) await refreshDetail(disbursementId);
+        return;
+      }
+
+      const txHashes: string[] = [];
       for (const item of items) {
         const payoutId = `sdp-${disbursementId}-${item.paymentId}`;
         const result = await executePasskeySorobanPayout({
-          kit,
+          kit: kit!,
           credentialId,
           payoutId,
           recipientAddress: item.recipientAddress,
@@ -681,7 +750,35 @@ export default function DisbursementsPage() {
       return;
     }
     setActionMsg(null);
+    if (canSpendWithoutPasskey) {
+      void completeAutoReleasePollar(id);
+      return;
+    }
     setAutoReleaseAuthorizeId(id);
+  }
+
+  async function completeAutoReleasePollar(id: string) {
+    setCommittingId(id);
+    try {
+      const res = await fetch(`/api/sdp/disbursements/${id}/commit`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setActionMsg(data.error ? `Error: ${data.error}` : `Error: ${res.status}`);
+        return;
+      }
+      setActionMsg(t("autoReleaseSuccess"));
+      await fetchList();
+      if (selectedId === id) await refreshDetail(id);
+    } catch (e) {
+      setActionMsg(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setCommittingId(null);
+    }
   }
 
   async function disableAutoRelease(id: string) {
@@ -1703,7 +1800,7 @@ export default function DisbursementsPage() {
                         e.stopPropagation();
                         void beginDistribuir(d.id, d.name);
                       }}
-                      disabled={distributingId === d.id || !kitReady || payoutModalOpen}
+                      disabled={distributingId === d.id || (!canSpendWithoutPasskey && !kitReady) || payoutModalOpen}
                       title={!invitesSent ? t("startPaymentsDisabledHint") : undefined}
                       className={`${CARD_ACTION_BTN} bg-green-600 text-white hover:bg-green-700 disabled:opacity-40`}
                     >
@@ -1927,6 +2024,7 @@ export default function DisbursementsPage() {
         }}
         status={payoutModalStatus}
         userName={profile?.username ?? undefined}
+        confirmMode={canSpendWithoutPasskey ? "pollar" : "passkey"}
         payoutSummary={
           distribuirContext
             ? distribuirContext.items.length === 1

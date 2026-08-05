@@ -6,7 +6,8 @@ import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
 import { resolveOrgDisbursementContractId, resolveOrgTreasuryContractId } from "@/lib/stellar/org-treasury";
 import { isUserDerivedEncrypted } from "@/lib/org-wallet-encryption";
-import { canManageDisbursements } from "@/lib/auth/disbursement-auth";
+import { canManageDisbursements, isOrgTreasuryOwner } from "@/lib/auth/disbursement-auth";
+import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
 import { getUsdcBalance } from "@/lib/stellar/balance";
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
 import { getUsdToLocalRate, convertUsdToLocal } from "@/lib/fx";
@@ -57,7 +58,7 @@ export async function GET() {
   const needsSmartWalletSetup =
     !!user.org_id &&
     memberSa == null &&
-    !((user.privy_user_id ?? "").startsWith("pollar:") && org?.stellar_disbursement_public_key);
+    !(isPollarMappedUser(user) && org?.stellar_disbursement_public_key);
 
   const profile = {
     email: user.email,
@@ -90,6 +91,8 @@ export async function GET() {
     needsOrganization,
     needsSmartWalletSetup,
     treasury_ready: !!orgDisbursementContractId,
+    is_pollar_user: isPollarMappedUser(user),
+    is_treasury_owner: isOrgTreasuryOwner(user, org),
   };
 
   // --- Stellar + FX data (parallel, org wallet only) ---

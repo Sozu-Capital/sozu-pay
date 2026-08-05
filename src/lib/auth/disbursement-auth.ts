@@ -28,6 +28,57 @@ export function canManageDisbursements(user: User, org: Organization | null): bo
   return org.treasury_manager_user_id === user.id;
 }
 
+/** Creator / treasury manager whose Staff Pollar wallet is bound as Org treasury. */
+export function isOrgTreasuryOwner(user: User, org: Organization | null): boolean {
+  if (!org) return false;
+  return org.treasury_manager_user_id === user.id;
+}
+
+/**
+ * Session + treasury-capable role for Disbursement confirmation (Pollar path).
+ * Does not require a passkey smart account.
+ */
+export async function requireDisbursementConfirm(
+  sessionId: string
+): Promise<AdminOk | AuthFailure> {
+  return requireDisbursementAdmin(sessionId);
+}
+
+/** Confirm + execute gate: treasury-capable role AND Org treasury owner. */
+export async function requireTreasuryOwnerConfirm(
+  sessionId: string
+): Promise<(AdminOk & { org: Organization }) | AuthFailure> {
+  const admin = await requireDisbursementAdmin(sessionId);
+  if (!admin.ok) return admin;
+
+  const org = await getOrganizationById(admin.user.org_id!);
+  if (!org) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "Organization not found.", code: "NO_ORG" }, { status: 400 }),
+    };
+  }
+  if (!isOrgTreasuryOwner(admin.user, org)) {
+    logDenied("not org treasury owner", {
+      sessionId,
+      userId: admin.user.id,
+      orgId: org.id,
+      treasury_manager_user_id: org.treasury_manager_user_id,
+    });
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: "Only the Org treasury wallet owner can approve and execute spends.",
+          code: "TREASURY_OWNER_REQUIRED",
+        },
+        { status: 403 }
+      ),
+    };
+  }
+  return { ok: true, user: admin.user, org };
+}
+
 export async function userCanManageDisbursements(user: User): Promise<boolean> {
   if (user.admin_level === "admin" || user.admin_level === "super_admin") {
     return true;

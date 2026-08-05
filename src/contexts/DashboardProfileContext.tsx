@@ -26,6 +26,8 @@ export type DashboardProfile = {
   smart_wallet_ready?: boolean;
   org_id?: string | null;
   org_type?: "store" | "ngo" | null;
+  is_pollar_user?: boolean;
+  is_treasury_owner?: boolean;
 };
 
 export type DashboardBalanceData = {

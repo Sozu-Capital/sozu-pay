@@ -9,7 +9,7 @@
     "sdp:e2e-cli": "node scripts/sdp-railway-e2e-cli.mjs",
     "sdp:preflight": "bash scripts/sdp-preflight.sh credit.sozu.capital",
     "lint": "next lint",
-    "test": "node --import tsx --test src/lib/pollar/session-bridge.test.ts src/lib/pollar/org-treasury.test.ts src/lib/checkout/settle-to.test.ts"
+    "test": "node --import tsx --test src/lib/pollar/session-bridge.test.ts src/lib/pollar/org-treasury.test.ts src/lib/checkout/settle-to.test.ts src/lib/pollar/spend.test.ts src/lib/disbursements/org-spend.test.ts"
   },
   "dependencies": {
     "@creit-tech/stellar-wallets-kit": "file:src/shims/creit-tech-stellar-wallets-kit",

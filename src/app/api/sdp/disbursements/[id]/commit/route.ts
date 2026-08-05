@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { requireDisbursementAuthorized } from "@/lib/auth/disbursement-auth";
+import {
+  requireDisbursementAuthorized,
+  requireDisbursementConfirm,
+} from "@/lib/auth/disbursement-auth";
 import { getDisbursement } from "@/lib/sdp/adminClient";
 import { distributeDisbursementPayments } from "@/lib/sdp/distributePayments";
 import {
@@ -20,10 +23,11 @@ import {
 import { logPasskeyEvent } from "@/lib/passkey/log";
 import { formatSdpStartError } from "@/lib/sdp/validateDisbursementStart";
 import { requireDisbursementOrgAccess } from "@/lib/disbursements/org-scope";
+import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
 
 /**
  * POST /api/sdp/disbursements/[id]/commit
- * Hotlink: passkey-authorized start — funds available for recipients to claim without further NGO approval.
+ * Hotlink: passkey-authorized start — or Pollar-path Disbursement confirmation (no passkey).
  */
 export async function POST(
   request: NextRequest,
@@ -32,10 +36,64 @@ export async function POST(
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const { id: disbursementId } = await params;
+  const body = await request.json().catch(() => ({}));
+  const pollarConfirm = body?.confirmation === true;
+
+  if (pollarConfirm) {
+    const auth = await requireDisbursementConfirm(session.id);
+    if (!auth.ok) return auth.response;
+    if (!isPollarMappedUser(auth.user)) {
+      return NextResponse.json(
+        { error: "confirmation flag is only valid for Pollar-path orgs.", code: "POLLAR_PATH_REQUIRED" },
+        { status: 400 },
+      );
+    }
+
+    const orgAccess = await requireDisbursementOrgAccess(disbursementId, auth.user.org_id!);
+    if (!orgAccess.ok) return orgAccess.response;
+
+    const meta = await getDisbursementMetaAsync(disbursementId);
+    const invitesSentAt = meta?.invitesSentAt ?? invitesSentAtFromAudit(disbursementId);
+    if (!invitesSentAt) {
+      return NextResponse.json(
+        { error: "Send invite emails before enabling Hotlink.", code: "INVITES_REQUIRED" },
+        { status: 400 }
+      );
+    }
+
+    const actor = { userId: String(auth.user.id), label: actorLabelFromUser(auth.user) };
+    try {
+      const disbursement = await getDisbursement(disbursementId);
+      if (disbursement.status === "DRAFT" || disbursement.status === "READY" || disbursement.status === "PAUSED") {
+        try {
+          await distributeDisbursementPayments(disbursementId);
+        } catch (e) {
+          const raw = e instanceof Error ? e.message : String(e);
+          const formatted = formatSdpStartError(raw);
+          console.error("[api/sdp/disbursements/[id]/commit] pollar distribute", raw);
+          return NextResponse.json({ error: formatted.error, code: formatted.code }, { status: 400 });
+        }
+        markPaymentsStarted(disbursementId, actor, disbursement.name);
+      }
+
+      markHotlinkCommitted(disbursementId, actor);
+      appendAuditEvent(
+        "disbursement_hotlink",
+        `Hotlink enabled (Pollar confirm) for "${disbursement.name}" (${actor.label})`,
+        String(auth.user.id),
+        { destination: disbursementId, recipientLabel: disbursement.name }
+      );
+      return NextResponse.json({ ok: true, hotlink: true, mode: "pollar_confirm" });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[api/sdp/disbursements/[id]/commit] pollar", msg);
+      return NextResponse.json({ error: msg }, { status: 502 });
+    }
+  }
+
   const auth = await requireDisbursementAuthorized(session.id);
   if (!auth.ok) return auth.response;
-
-  const { id: disbursementId } = await params;
 
   const orgAccess = await requireDisbursementOrgAccess(disbursementId, auth.user.org_id!);
   if (!orgAccess.ok) return orgAccess.response;
@@ -49,7 +107,6 @@ export async function POST(
     );
   }
 
-  const body = await request.json().catch(() => ({}));
   const sessionId = typeof body.sessionId === "string" ? body.sessionId.trim() : "";
   const credentialId = typeof body.credentialId === "string" ? body.credentialId.trim() : "";
   const contractId = typeof body.contractId === "string" ? body.contractId.trim() : "";

@@ -47,3 +47,4 @@ sdp-v2-production*/
 
 # Rust / Soroban contract build artifacts
 contracts/**/target/
+.exponential/

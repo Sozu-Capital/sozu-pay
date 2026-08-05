@@ -26,7 +26,10 @@ export type DisbursementAuditAction =
   | "payment_success"
   | "payment_failed"
   | "payment_pending"
-  | "campaign_completed";
+  | "campaign_completed"
+  | "spend_confirmed"
+  | "spend_queued"
+  | "spend_executed";
 
 export interface DisbursementAuditEntry {
   id: string;

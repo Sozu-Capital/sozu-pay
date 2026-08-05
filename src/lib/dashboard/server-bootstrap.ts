@@ -5,7 +5,8 @@ import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
 import { resolveOrgDisbursementContractId, resolveOrgTreasuryContractId } from "@/lib/stellar/org-treasury";
-import { canManageDisbursements } from "@/lib/auth/disbursement-auth";
+import { canManageDisbursements, isOrgTreasuryOwner } from "@/lib/auth/disbursement-auth";
+import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
 import { getUsdcBalance } from "@/lib/stellar/balance";
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
 import { getUsdToLocalRate, convertUsdToLocal } from "@/lib/fx";
@@ -70,6 +71,7 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
   const orgTreasuryContractId = org ? resolveOrgTreasuryContractId(org) : null;
   const orgHasTreasury = !!orgDisbursementContractId || !!(org?.stellar_disbursement_secret_encrypted);
   const hasPayoutKey = !!(user.stellar_payout_public_key || user.stellar_public_key);
+  const pollarUser = isPollarMappedUser(user);
 
   const profile: DashboardProfile = {
     email: user.email,
@@ -84,16 +86,15 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
     needsSmartWalletSetup:
       !!user.org_id &&
       memberSa == null &&
-      !(
-        (user.privy_user_id ?? "").startsWith("pollar:") &&
-        !!org?.stellar_disbursement_public_key
-      ),
+      !(pollarUser && !!org?.stellar_disbursement_public_key),
     admin_level: user.admin_level,
     can_manage_disbursements,
     member_smart_account_id: memberSa?.contract_id ?? null,
     smart_wallet_ready: !!memberSa,
     org_id: user.org_id ?? null,
     org_type: org?.type ?? null,
+    is_pollar_user: pollarUser,
+    is_treasury_owner: isOrgTreasuryOwner(user, org),
   };
 
   // Dashboard shows treasury balance (receive address). Payout flows use disbursement contract separately.

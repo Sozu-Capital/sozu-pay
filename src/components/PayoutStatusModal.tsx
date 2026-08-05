@@ -29,6 +29,7 @@ export default function PayoutStatusModal({
   errorMessage,
   batchCount,
   onConfirm,
+  confirmMode = "passkey",
 }: {
   open: boolean;
   onClose: () => void;
@@ -39,14 +40,17 @@ export default function PayoutStatusModal({
   errorMessage?: string | null;
   /** When set, submitting/success copy is for batch payout (e.g. "Confirm batch", "N payouts sent"). */
   batchCount?: number;
-  /** Called when user clicks "Sign to confirm" in the confirm step. */
+  /** Called when user clicks confirm in the confirm step. */
   onConfirm?: () => void;
+  /** Pollar-path uses Disbursement confirmation (no passkey wording). */
+  confirmMode?: "passkey" | "pollar";
 }) {
   const t = useTranslations("payoutStatusModal");
 
   if (!open) return null;
 
   const isBatch = batchCount != null && batchCount > 0;
+  const isPollarConfirm = confirmMode === "pollar";
 
   function summaryLine() {
     if (isBatch) {
@@ -70,6 +74,15 @@ export default function PayoutStatusModal({
       : null;
   }
 
+  const title =
+    status === "confirm" || status === "submitting"
+      ? isPollarConfirm
+        ? t("confirmTitle")
+        : t("signTitle")
+      : null;
+
+  const confirmLabel = isPollarConfirm ? t("confirmDisbursement") : t("signConfirm");
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
@@ -82,7 +95,7 @@ export default function PayoutStatusModal({
         {status === "confirm" && (
           <div className="p-6 text-center">
             <h2 id="payout-modal-title" className="text-lg font-semibold text-gray-900 dark:text-white">
-              {t("signTitle")}
+              {title}
             </h2>
             {confirmPrompt() && (
               <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{confirmPrompt()}</p>
@@ -96,7 +109,7 @@ export default function PayoutStatusModal({
                 onClick={() => onConfirm?.()}
                 className="w-full rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 py-2.5 px-4 font-medium hover:opacity-90"
               >
-                {t("signConfirm")}
+                {confirmLabel}
               </button>
               <button
                 type="button"
@@ -114,7 +127,7 @@ export default function PayoutStatusModal({
             <div className="p-6 text-center">
               <div className="mx-auto w-12 h-12 border-4 border-gray-200 dark:border-gray-600 border-t-gray-900 dark:border-t-white rounded-full animate-spin" aria-hidden />
               <h2 id="payout-modal-title" className="mt-4 text-lg font-semibold text-gray-900 dark:text-white">
-                {t("signTitle")}
+                {title}
               </h2>
               {confirmPrompt() && (
                 <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{confirmPrompt()}</p>

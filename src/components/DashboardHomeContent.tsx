@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 import DashboardBalance from "@/components/DashboardBalance";
 import DashboardStats from "@/components/DashboardStats";
@@ -10,9 +11,13 @@ import { useTranslations } from "next-intl";
 
 export default function DashboardHomeContent() {
   const ctx = useDashboardProfile();
-  const { profile, loading } = ctx ?? { profile: null, loading: true };
+  const { profile, loading, balance } = ctx ?? { profile: null, loading: true, balance: null };
   const isStore = profile?.org_type === "store";
   const t = useTranslations("dashboard");
+  const showFundCta =
+    !isStore &&
+    !!profile?.org_id &&
+    (balance == null || Number.parseFloat(balance.usdc || "0") === 0);
 
   // Wait until profile is resolved so we mount the right layout once and avoid
   // the NGO components briefly mounting before switching to the store layout.
@@ -54,6 +59,19 @@ export default function DashboardHomeContent() {
       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
         {t("subtitle")}
       </p>
+      {showFundCta ? (
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/40">
+          <p className="flex-1 text-sm text-emerald-900 dark:text-emerald-100">
+            {t("fundTreasuryHint")}
+          </p>
+          <Link
+            href="/dashboard/checkout"
+            className="inline-flex rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
+          >
+            {t("fundTreasuryCta")}
+          </Link>
+        </div>
+      ) : null}
       <section className="mt-6" aria-label={t("keyMetrics")}>
         <DashboardStats />
       </section>

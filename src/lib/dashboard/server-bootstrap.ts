@@ -81,7 +81,13 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
       user.admin_level === "super_admin" && !hasPayoutKey && !orgHasTreasury && !orgDisbursementContractId,
     needsOrgCreation: user.admin_level === "super_admin" && !user.org_id,
     needsOrganization: !user.org_id,
-    needsSmartWalletSetup: !!user.org_id && memberSa == null,
+    needsSmartWalletSetup:
+      !!user.org_id &&
+      memberSa == null &&
+      !(
+        (user.privy_user_id ?? "").startsWith("pollar:") &&
+        !!org?.stellar_disbursement_public_key
+      ),
     admin_level: user.admin_level,
     can_manage_disbursements,
     member_smart_account_id: memberSa?.contract_id ?? null,

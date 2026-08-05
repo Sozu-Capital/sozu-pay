@@ -135,7 +135,9 @@
     "keyMetrics": "Key metrics",
     "recentActivity": "Recent activity",
     "storeTitle": "Your balance",
-    "storeSubtitle": "Accept payments, pay suppliers, and withdraw to your bank."
+    "storeSubtitle": "Accept payments, pay suppliers, and withdraw to your bank.",
+    "fundTreasuryCta": "Fund treasury",
+    "fundTreasuryHint": "Your Org treasury wallet is ready. Add USDC to start disbursements."
   },
   "paySupplierBank": {
     "title": "Pay {name} via bank transfer",
@@ -488,6 +490,11 @@
       "orgNameLabel": "Organization name",
       "orgNamePlaceholder": "e.g. My NGO",
       "orgNamePlaceholderMerchant": "e.g. Maria's Bakery",
+      "pollarTitle": "Create your organization",
+      "pollarSubtitle": "Just a name to start. Your Org treasury wallet is provisioned automatically — no passkey or PIN setup.",
+      "pollarNameRequired": "Enter an organization name.",
+      "pollarCreateCta": "Create organization",
+      "createFailed": "Failed to create organization.",
       "wrongPasskey": "Use the same passkey you used to sign in.",
       "passkeyKeyMissing": "We could not link your passkey for smart wallet setup. Sign out, register again, or contact support.",
       "setTaxNow": "Set tax now (optional)",

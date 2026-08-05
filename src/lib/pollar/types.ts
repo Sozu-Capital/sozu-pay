@@ -20,3 +20,7 @@ export class PollarTokenVerifyError extends Error {
     this.name = "PollarTokenVerifyError";
   }
 }
+
+/** Stable fake G-address for local/fake Pollar identity + treasury binding. */
+export const FAKE_POLLAR_STAFF_WALLET =
+  "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";

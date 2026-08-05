@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PollarCreateOrganizationForm } from "@/components/onboarding/PollarCreateOrganizationForm";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
@@ -44,6 +45,45 @@ function isValidOrgTag(tag: string): boolean {
 }
 
 export default function CreateOrganizationPage() {
+  const router = useRouter();
+  const t = useTranslations("onboardingPages.createOrg");
+  const [authMode, setAuthMode] = useState<"loading" | "pollar" | "passkey">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/profile", { credentials: "include", cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        setAuthMode(data.is_pollar_user ? "pollar" : "passkey");
+      } catch {
+        if (!cancelled) setAuthMode("passkey");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (authMode === "loading") {
+    return (
+      <DarkGradientBg>
+        <main className="flex min-h-screen items-center justify-center p-4 text-white">
+          <p className="text-sm text-gray-300">…</p>
+        </main>
+      </DarkGradientBg>
+    );
+  }
+
+  if (authMode === "pollar") {
+    return <PollarCreateOrganizationForm />;
+  }
+
+  return <PasskeyCreateOrganizationPage />;
+}
+
+function PasskeyCreateOrganizationPage() {
   const router = useRouter();
   const t = useTranslations("onboardingPages.createOrg");
   const {

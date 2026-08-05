@@ -46,7 +46,7 @@ describe("resolvePollarPostAuthRedirect", () => {
   it("sends new users to org onboarding", () => {
     assert.equal(
       resolvePollarPostAuthRedirect({ org_id: null }),
-      "/onboarding/organizations",
+      "/onboarding/create-organization",
     );
   });
 });
@@ -59,7 +59,7 @@ describe("planPollarSessionBridge", () => {
     );
     assert.equal(plan.privyUserId, "pollar:sub-1");
     assert.equal(plan.email, "maria@example.com");
-    assert.equal(plan.redirect, "/onboarding/organizations");
+    assert.equal(plan.redirect, "/onboarding/create-organization");
   });
 
   it("resumes existing member without re-onboarding", () => {

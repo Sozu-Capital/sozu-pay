@@ -46,7 +46,11 @@ export async function GET() {
 
   const memberSa =
     user.org_id ? await getMemberSmartAccount(user.org_id, user.id) : null;
-  const needsSmartWalletSetup = !!user.org_id && memberSa == null;
+  const isPollarUser = (user.privy_user_id ?? "").startsWith("pollar:");
+  const pollarTreasuryReady =
+    isPollarUser && !!(org?.stellar_disbursement_public_key);
+  const needsSmartWalletSetup =
+    !!user.org_id && memberSa == null && !pollarTreasuryReady;
 
   const org_stellar_disbursement_public_key = org?.stellar_disbursement_public_key ?? null;
   const org_soroban_contract_id = orgDisbursementContractId;
@@ -83,6 +87,8 @@ export async function GET() {
     needsOrgCreation,
     needsOrganization,
     needsSmartWalletSetup,
-    treasury_ready: !!orgDisbursementContractId,
+    treasury_ready: !!orgDisbursementContractId || pollarTreasuryReady,
+    is_pollar_user: isPollarUser,
+    org_treasury_empty: pollarTreasuryReady,
   });
 }

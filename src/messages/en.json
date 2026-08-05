@@ -42,7 +42,10 @@
     "homeFeatureUsdc": "USDC on Stellar",
     "homeFeatureAudit": "Audit trail",
     "homeCta": "Log in",
-    "homeExplore": "SozuPay"
+    "homeExplore": "SozuPay",
+    "continueWithGoogle": "Continue with Google",
+    "pollarNotConfigured": "Google login is not configured.",
+    "pollarDevModeHint": "Dev mode: Google is simulated until Pollar keys are set."
   },
   "merchants": {
     "homeHeadline": "Get paid online today.",

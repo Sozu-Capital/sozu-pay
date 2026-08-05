@@ -42,7 +42,10 @@
     "homeFeatureUsdc": "USDC en Stellar",
     "homeFeatureAudit": "Trazabilidad",
     "homeCta": "Ingresar",
-    "homeExplore": "SozuPay"
+    "homeExplore": "SozuPay",
+    "continueWithGoogle": "Continuar con Google",
+    "pollarNotConfigured": "El inicio de sesión con Google no está configurado.",
+    "pollarDevModeHint": "Modo dev: Google se simula hasta configurar las claves de Pollar."
   },
   "merchants": {
     "homeHeadline": "Recibe pagos hoy.",

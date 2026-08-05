@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import { HomeLandingShell } from "@/components/HomeLandingShell";
-import { HomePasskeyAuth } from "@/components/HomePasskeyAuth";
+import { HomePollarAuth } from "@/components/HomePollarAuth";
 
 type LoginPageContentProps = {
   clearSessionOnMount?: boolean;
@@ -36,7 +36,10 @@ export function LoginPageContent({ clearSessionOnMount, returnTo }: LoginPageCon
   if (!cleared) {
     return (
       <DarkGradientBg mobileLanding>
-        <HomeLandingShell status={<p className="text-sm text-gray-400">{t("redirecting")}</p>} />
+        <HomeLandingShell
+          passkeyRegister={false}
+          status={<p className="text-sm text-gray-400">{t("redirecting")}</p>}
+        />
       </DarkGradientBg>
     );
   }
@@ -44,9 +47,8 @@ export function LoginPageContent({ clearSessionOnMount, returnTo }: LoginPageCon
   return (
     <DarkGradientBg mobileLanding>
       <HomeLandingShell
-        introCta={
-          <HomePasskeyAuth returnTo={returnTo} onBusyChange={() => {}} />
-        }
+        passkeyRegister={false}
+        introCta={<HomePollarAuth returnTo={returnTo} onBusyChange={() => {}} />}
       />
     </DarkGradientBg>
   );

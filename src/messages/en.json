@@ -272,7 +272,10 @@
   "checkoutPage": {
     "title": "Get paid",
     "subtitle": "Create a payment link to share with your customer. They pay in USD and the money lands directly in your account.",
+    "titleFunding": "Funding links",
+    "subtitleFunding": "Create a link to top up your Org treasury wallet. Supporters pay with current checkout methods; funds settle to your organization treasury.",
     "newLink": "New payment link",
+    "newFundingLink": "New funding link",
     "amountLabel": "Amount",
     "referenceLabel": "Reference (optional)",
     "referencePlaceholder": "Order number, customer name…",

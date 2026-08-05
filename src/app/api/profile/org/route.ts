@@ -13,6 +13,8 @@ import {
   trimOrNull,
   type OrgTaxProfile,
 } from "@/lib/org-tax";
+import { createOrgTreasuryProvisioner } from "@/lib/pollar/org-treasury";
+import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
 import { randomUUID } from "crypto";
 
 /**
@@ -92,14 +94,30 @@ export async function POST(request: NextRequest) {
     .filter((x) => x.email.includes("@")) as Array<{ email: string; role: OrgInviteRole }>;
 
   const sozuTagRaw = typeof body.sozuTag === "string" ? body.sozuTag : "";
+  const pollarPath = isPollarMappedUser(activeUser);
 
   try {
+    let treasuryPublicKey: string | null = null;
+    if (pollarPath) {
+      // Optional client-supplied G (from Pollar session); else provisioner uses creator.stellar_public_key
+      const bodyTreasury =
+        typeof body.treasuryPublicKey === "string" ? body.treasuryPublicKey.trim() : "";
+      if (bodyTreasury.startsWith("G") && bodyTreasury.length >= 56) {
+        treasuryPublicKey = bodyTreasury;
+      } else {
+        const provisioner = createOrgTreasuryProvisioner();
+        const provisioned = await provisioner.provisionForCreator(activeUser);
+        treasuryPublicKey = provisioned.publicKey;
+      }
+    }
+
     const org = await createOrganization({
       name,
-      type,
-      tax: taxProfile,
+      type: pollarPath ? "ngo" : type,
+      tax: pollarPath ? null : taxProfile,
       treasury_manager_user_id: activeUser.id,
-      treasury_guardian_threshold: guardianThreshold,
+      treasury_guardian_threshold: pollarPath ? 1 : guardianThreshold,
+      stellar_disbursement_public_key: treasuryPublicKey,
     });
 
     if (invites.length > 0) {
@@ -143,9 +161,14 @@ export async function POST(request: NextRequest) {
       NextResponse.json({
         ok: true,
         organization: { id: org.id, name: org.name, type: org.type },
-        guardianThreshold,
+        guardianThreshold: pollarPath ? 1 : guardianThreshold,
         invitesCount: invites.length,
         ...(sozuTag && { sozu_tag: sozuTag }),
+        ...(treasuryPublicKey && {
+          org_treasury_wallet: treasuryPublicKey,
+          treasury_source: "creator_staff_pollar_wallet",
+        }),
+        redirect: pollarPath ? "/dashboard" : undefined,
       }),
       nextSession
     );

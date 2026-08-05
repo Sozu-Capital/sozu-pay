@@ -29,7 +29,7 @@ export function resolvePollarPostAuthRedirect(
 ): string {
   if (returnTo && returnTo.startsWith("/")) return returnTo;
   if (user.org_id) return "/dashboard";
-  return "/onboarding/organizations";
+  return "/onboarding/create-organization";
 }
 
 export type PollarSessionBridgeResult = {
@@ -50,6 +50,6 @@ export function planPollarSessionBridge(
     ? resolvePollarPostAuthRedirect(existingUser, returnTo)
     : returnTo && returnTo.startsWith("/")
       ? returnTo
-      : "/onboarding/organizations";
+      : "/onboarding/create-organization";
   return { privyUserId, email, redirect };
 }

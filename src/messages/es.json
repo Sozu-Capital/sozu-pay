@@ -135,7 +135,9 @@
     "keyMetrics": "Métricas clave",
     "recentActivity": "Actividad reciente",
     "storeTitle": "Tu balance",
-    "storeSubtitle": "Acepta pagos, paga proveedores y retira a tu banco."
+    "storeSubtitle": "Acepta pagos, paga proveedores y retira a tu banco.",
+    "fundTreasuryCta": "Fondear tesorería",
+    "fundTreasuryHint": "Tu billetera de tesorería de la org está lista. Agregá USDC para empezar a desembolsar."
   },
   "paySupplierBank": {
     "title": "Pagar a {name} por transferencia bancaria",
@@ -488,6 +490,11 @@
       "orgNameLabel": "Nombre de la organización",
       "orgNamePlaceholder": "p. ej. Mi ONG",
       "orgNamePlaceholderMerchant": "p. ej. Panadería de María",
+      "pollarTitle": "Creá tu organización",
+      "pollarSubtitle": "Solo un nombre para empezar. La billetera de tesorería se provisiona sola — sin passkey ni PIN.",
+      "pollarNameRequired": "Ingresá el nombre de la organización.",
+      "pollarCreateCta": "Crear organización",
+      "createFailed": "No se pudo crear la organización.",
       "wrongPasskey": "Usa el mismo passkey con el que iniciaste sesión.",
       "passkeyKeyMissing": "No pudimos vincular tu passkey para la billetera inteligente. Cierra sesión, regístrate de nuevo o contacta soporte.",
       "setTaxNow": "Configurar impuestos ahora (opcional)",

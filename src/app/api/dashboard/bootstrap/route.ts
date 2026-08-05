@@ -54,7 +54,10 @@ export async function GET() {
     user.admin_level === "super_admin" && !hasPayoutKey && !orgHasTreasury && !orgDisbursementContractId;
   const needsOrgCreation = user.admin_level === "super_admin" && !user.org_id;
   const needsOrganization = !user.org_id;
-  const needsSmartWalletSetup = !!user.org_id && memberSa == null;
+  const needsSmartWalletSetup =
+    !!user.org_id &&
+    memberSa == null &&
+    !((user.privy_user_id ?? "").startsWith("pollar:") && org?.stellar_disbursement_public_key);
 
   const profile = {
     email: user.email,

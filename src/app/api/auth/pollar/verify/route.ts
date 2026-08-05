@@ -8,7 +8,8 @@ import { setSession, type SessionUser } from "@/lib/auth/session";
 import { createPollarTokenVerifier } from "@/lib/pollar/adapter";
 import { resolvePollarPostAuthRedirect } from "@/lib/pollar/session-bridge";
 import { PollarTokenVerifyError } from "@/lib/pollar/types";
-import { getOrCreateUserByPollar } from "@/lib/db/users";
+import { getOrCreateUserByPollar, updateUserStellarPublicKey } from "@/lib/db/users";
+
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,14 @@ export async function POST(request: NextRequest) {
       throw err;
     }
 
-    const user = await getOrCreateUserByPollar(identity.subject, identity.email);
+    let user = await getOrCreateUserByPollar(identity.subject, identity.email);
+
+    const wallet = (identity.walletAddress ?? "").trim();
+    if (wallet.startsWith("G") && wallet.length >= 56 && user.stellar_public_key !== wallet) {
+      const updated = await updateUserStellarPublicKey(String(user.id), wallet);
+      if (updated) user = updated;
+    }
+
     const redirect = resolvePollarPostAuthRedirect(user, returnTo);
 
     // Attach orgId to session when resuming a known membership (skip re-onboarding).

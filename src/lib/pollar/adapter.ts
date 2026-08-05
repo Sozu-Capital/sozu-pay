@@ -1,4 +1,5 @@
 import {
+  FAKE_POLLAR_STAFF_WALLET,
   PollarTokenVerifyError,
   type PollarTokenVerifier,
   type PollarVerifiedIdentity,
@@ -24,7 +25,12 @@ export class FakePollarTokenVerifier implements PollarTokenVerifier {
     if (!subject || !email.includes("@")) {
       throw new PollarTokenVerifyError("Invalid fake identity", "POLLAR_FAKE_TOKEN_INVALID");
     }
-    return { subject, email, authProvider: "google" };
+    return {
+      subject,
+      email,
+      authProvider: "google",
+      walletAddress: FAKE_POLLAR_STAFF_WALLET,
+    };
   }
 }
 

@@ -27,14 +27,34 @@ export default function OrganizationsPage() {
           ? r.json()
           : { organizations: [], canCreate: true }
       )
-      .then((d) => {
-        setOrganizations(d.organizations ?? []);
+      .then(async (d) => {
+        const orgs: Org[] = d.organizations ?? [];
+        setOrganizations(orgs);
+        // Single-org: skip picker and enter dashboard
+        if (orgs.length === 1) {
+          setSelectingId(orgs[0].id);
+          try {
+            const res = await fetch("/api/auth/set-org", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orgId: orgs[0].id }),
+            });
+            if (res.ok) {
+              router.replace("/dashboard");
+              return;
+            }
+          } catch {
+            // fall through to picker UI
+          } finally {
+            setSelectingId(null);
+          }
+        }
       })
       .catch(() => {
         setOrganizations([]);
       })
       .finally(() => setLoading(false));
-  // handleSelectOrg is stable (no deps that change), so it's safe in this effect.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

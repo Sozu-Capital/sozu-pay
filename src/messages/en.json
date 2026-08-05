@@ -114,6 +114,9 @@
     "paymentWalls": "Payment walls",
     "payouts": "Payouts",
     "disbursements": "Disbursements",
+    "disbursementHistory": "History",
+    "fundingLinks": "Funding links",
+    "settings": "Settings",
     "recipients": "Recipients",
     "profile": "Profile",
     "admin": "Admin",
@@ -128,6 +131,12 @@
     "offRampQueue": "Off-ramp queue",
     "qrCodes": "QR codes",
     "posNfc": "POS & NFC"
+  },
+  "tagSoftPrompt": {
+    "title": "Add optional Sozu tags",
+    "body": "A personal Sozu tag and an Org Sozu tag make it easier for people to pay you by handle. You can skip this and set them later in Settings.",
+    "addTags": "Open Settings",
+    "dismiss": "Not now"
   },
   "dashboard": {
     "title": "Dashboard",

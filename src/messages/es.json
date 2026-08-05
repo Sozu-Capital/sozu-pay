@@ -114,6 +114,9 @@
     "paymentWalls": "Muros de pago",
     "payouts": "Retiros",
     "disbursements": "Distribuciones",
+    "disbursementHistory": "Historial",
+    "fundingLinks": "Enlaces de fondeo",
+    "settings": "Ajustes",
     "recipients": "Destinatarios",
     "profile": "Perfil",
     "admin": "Admin",
@@ -128,6 +131,12 @@
     "offRampQueue": "Cola off-ramp",
     "qrCodes": "Códigos QR",
     "posNfc": "POS y NFC"
+  },
+  "tagSoftPrompt": {
+    "title": "Agregá tags Sozu opcionales",
+    "body": "Un tag personal y un Org Sozu tag facilitan que te paguen por handle. Podés saltear esto y configurarlos después en Ajustes.",
+    "addTags": "Abrir Ajustes",
+    "dismiss": "Ahora no"
   },
   "dashboard": {
     "title": "Panel",

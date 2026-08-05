@@ -7,6 +7,7 @@ import DashboardStats from "@/components/DashboardStats";
 import DashboardTransactions from "@/components/DashboardTransactions";
 import OnboardingChecklist from "@/components/OnboardingChecklist";
 import StoreHomeDashboard from "@/components/StoreHomeDashboard";
+import { TagSoftPrompt } from "@/components/TagSoftPrompt";
 import { useTranslations } from "next-intl";
 
 export default function DashboardHomeContent() {
@@ -53,6 +54,7 @@ export default function DashboardHomeContent() {
 
   return (
     <div>
+      <TagSoftPrompt />
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
         {t("title")}
       </h1>

@@ -17,6 +17,7 @@ export default function SettingsPage() {
     email: string;
     username?: string | null;
     twoFactorEnabled?: boolean;
+    isPollarUser?: boolean;
   } | null>(null);
   const [pin, setPin] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
@@ -63,6 +64,7 @@ export default function SettingsPage() {
           email: data.email,
           username: data.username ?? null,
           twoFactorEnabled: false,
+          isPollarUser: !!data.is_pollar_user,
         });
       })
       .catch(() => setUser(null));
@@ -163,7 +165,7 @@ export default function SettingsPage() {
 
       <section className="mt-8" id="security">
         <h2 className="text-lg font-semibold">{t("security")}</h2>
-        {isPasskeyAuth() && (
+        {isPasskeyAuth() && !user?.isPollarUser && (
           <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-600 p-4 space-y-3">
             <p className="text-sm text-gray-600 dark:text-gray-400">{t("backupPinBody")}</p>
             <input

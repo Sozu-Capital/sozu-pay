@@ -131,7 +131,7 @@
     "qrAndNfc": "QR & NFC",
     "offRampQueue": "Off-ramp queue",
     "qrCodes": "QR codes",
-    "posNfc": "POS & NFC"
+    "posNfc": "POS"
   },
   "tagSoftPrompt": {
     "title": "Add optional Sozu tags",
@@ -301,9 +301,21 @@
     "actionGetPaid": "Get paid",
     "actionQrAndNfc": "QR & NFC",
     "actionQRCodes": "QR codes",
-    "actionPOS": "POS & NFC",
+    "actionPOS": "POS",
     "actionPaySupplier": "Pay supplier",
     "actionCashOut": "Withdraw to bank"
+  },
+  "posPage": {
+    "title": "POS",
+    "subtitle": "Enter an amount, create a live charge, and show the QR for your customer to scan.",
+    "createCharge": "Create charge",
+    "creating": "Creating…",
+    "readyTitle": "Show this QR to your customer",
+    "qrAlt": "Checkout QR code",
+    "newCharge": "New charge",
+    "emptyHint": "Enter an amount to preview the charge, then create it for a scannable QR.",
+    "managePoints": "Need a permanent counter code?",
+    "managePointsLink": "Manage QR & NFC points"
   },
   "errors": {
     "notFoundTitle": "404 – Page not found",
@@ -646,9 +658,15 @@
     "verificationPlugin": "Verification flow plug-in (per compliance requirements).",
     "bankAccounts": "Bank accounts",
     "bankAccountsBody": "Add or edit bank accounts (2FA required). Default for your withdrawals; others for payouts to providers.",
-    "stores": "Stores",
+    "stores": "Your store",
     "storesBody": "Connect Shopify, WooCommerce, or custom stores. Same wallet and transaction list.",
     "storesDocs": "See docs/ecommerce-integration.md for widget and API.",
+    "storesBodyStore": "This organization is your store. Balance, POS charges, QR & NFC, and cash-out all share one wallet.",
+    "storesBodyOrg": "This organization is your operating identity. One wallet powers funding, payouts, and reporting.",
+    "storesOneOrgNote": "Week 1 model: one organization = one store. Multi-location and ecommerce connectors come later.",
+    "storesCurrentFallback": "Your organization",
+    "storesNoOrg": "You don’t have a store organization yet.",
+    "storesCreateCta": "Create your store",
     "inviteTitle": "Staff invite links",
     "inviteBody": "Create a one-time link. The invitee signs in with Google (any account — no email match) and joins with the role you choose.",
     "inviteRoleLabel": "Role",

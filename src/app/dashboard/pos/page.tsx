@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
+import PosShell from "@/components/PosShell";
 
-/** Legacy route — QR and NFC live on one page. */
-export default function POSRedirectPage() {
-  redirect("/dashboard/qr-codes");
+/** Merchant POS shell — amount → live checkout QR/URL (device registry stays API-only). */
+export default function POSPage() {
+  return <PosShell />;
 }

@@ -58,9 +58,11 @@ export function DashboardNav({ onNavigate }: { onNavigate?: () => void } = {}) {
           <>
             <NavLink href="/dashboard/transactions" label={t("transactions")} {...linkProps} />
             <NavLink href="/dashboard/checkout" label={t("getPaid")} {...linkProps} />
+            <NavLink href="/dashboard/pos" label={t("posNfc")} {...linkProps} />
             <NavLink href="/dashboard/qr-codes" label={t("qrAndNfc")} {...linkProps} />
             <NavLink href="/dashboard/recipients" label={t("paySupplier")} {...linkProps} />
             <NavLink href="/dashboard/cashout" label={t("cashOut")} {...linkProps} />
+            <NavLink href="/dashboard/settings" label={t("settings")} {...linkProps} />
             <NavLink href="/dashboard/profile" label={t("profile")} {...linkProps} />
             {isAdmin && <NavLink href="/dashboard/admin" label={t("admin")} indent {...linkProps} />}
             {isAdmin && (

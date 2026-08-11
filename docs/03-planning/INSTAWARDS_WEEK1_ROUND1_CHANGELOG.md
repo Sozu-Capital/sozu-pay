@@ -15,7 +15,8 @@
 | Branch | Tip / role |
 |--------|------------|
 | `main` | Production ship line |
-| `feat/instawards-w1-merchant-foundation-polish` | **2026-08-10** — POS shell + store Settings polish + this changelog |
+| `cursor/instawards-w1-round1-changelog-8a1c` | **PR** — POS shell + store Settings polish + this changelog |
+| `feat/instawards-w1-merchant-foundation-polish` | **2026-08-10** — same polish commit (source tip) |
 | `feat/privy-stellar-kyc` | Early auth/login (merged) |
 | `feat/smart-account-onboarding` | Smart-account onboarding + planning (merged) |
 

@@ -131,7 +131,7 @@
     "qrAndNfc": "QR y NFC",
     "offRampQueue": "Cola off-ramp",
     "qrCodes": "Códigos QR",
-    "posNfc": "POS y NFC"
+    "posNfc": "POS"
   },
   "tagSoftPrompt": {
     "title": "Agregá tags Sozu opcionales",
@@ -301,9 +301,21 @@
     "actionGetPaid": "Cobrar",
     "actionQrAndNfc": "QR y NFC",
     "actionQRCodes": "Códigos QR",
-    "actionPOS": "POS y NFC",
+    "actionPOS": "POS",
     "actionPaySupplier": "Pagar proveedor",
     "actionCashOut": "Retirar al banco"
+  },
+  "posPage": {
+    "title": "POS",
+    "subtitle": "Ingresá un monto, creá un cobro en vivo y mostrá el QR para que tu cliente escanee.",
+    "createCharge": "Crear cobro",
+    "creating": "Creando…",
+    "readyTitle": "Mostrá este QR a tu cliente",
+    "qrAlt": "Código QR de checkout",
+    "newCharge": "Nuevo cobro",
+    "emptyHint": "Ingresá un monto para previsualizar el cobro y crealo para obtener un QR escaneable.",
+    "managePoints": "¿Necesitás un código fijo de mostrador?",
+    "managePointsLink": "Administrar puntos QR y NFC"
   },
   "errors": {
     "notFoundTitle": "404 – Página no encontrada",
@@ -646,9 +658,15 @@
     "verificationPlugin": "Flujo de verificación (según cumplimiento).",
     "bankAccounts": "Cuentas bancarias",
     "bankAccountsBody": "Añade o edita cuentas bancarias (se requiere 2FA). La predeterminada para retiros; otras para pagos a proveedores.",
-    "stores": "Tiendas",
+    "stores": "Tu tienda",
     "storesBody": "Conecta Shopify, WooCommerce o tiendas personalizadas. Misma billetera y lista de transacciones.",
     "storesDocs": "Ver docs/ecommerce-integration.md para widget y API.",
+    "storesBodyStore": "Esta organización es tu tienda. Balance, cobros POS, QR y NFC, y retiros comparten una sola billetera.",
+    "storesBodyOrg": "Esta organización es tu identidad operativa. Una billetera alimenta fondeo, pagos y reportes.",
+    "storesOneOrgNote": "Modelo Semana 1: una organización = una tienda. Multi-sucursal y conectores ecommerce vienen después.",
+    "storesCurrentFallback": "Tu organización",
+    "storesNoOrg": "Aún no tenés una organización tienda.",
+    "storesCreateCta": "Crear tu tienda",
     "inviteTitle": "Enlaces de invitación de staff",
     "inviteBody": "Creá un enlace de un solo uso. Quien lo abra inicia sesión con Google (cualquier cuenta — sin coincidencia de email) y se une con el rol que elijas.",
     "inviteRoleLabel": "Rol",

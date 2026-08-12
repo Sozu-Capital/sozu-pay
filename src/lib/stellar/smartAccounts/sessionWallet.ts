@@ -17,9 +17,25 @@ export async function fetchSessionPasskeyWallet(): Promise<SessionPasskeyWallet 
   return data;
 }
 
+export function sessionPasskeyConnectTarget(
+  session: SessionPasskeyWallet | null,
+  opts?: { credentialId?: string | null; contractId?: string | null },
+): { credentialId: string; contractId: string } | null {
+  if (!session) return null;
+  const credentialId =
+    opts?.credentialId?.trim() ||
+    session.signingCredentialId?.trim() ||
+    session.loginCredentialId?.trim() ||
+    "";
+  const contractId = opts?.contractId?.trim() || session.memberContractId?.trim() || "";
+  if (!credentialId || !contractId) return null;
+  return { credentialId, contractId };
+}
+
 /**
  * Connect the kit to the logged-in user's member wallet (login passkey + DB contract).
  * Avoids default connectWallet() picking the most recently created kit wallet.
+ * Silent init (prompt false) returns null when there is no wallet yet — do not throw.
  */
 export async function connectSessionPasskeyWallet(
   kit: SmartAccountKit,
@@ -27,51 +43,30 @@ export async function connectSessionPasskeyWallet(
     prompt?: boolean;
     credentialId?: string | null;
     contractId?: string | null;
-  }
+  },
 ): Promise<{
   contractId: string | null;
   credentialId: string | null;
   publicKey: Uint8Array | null;
 } | null> {
   const session = await fetchSessionPasskeyWallet();
-  if (!session) {
-    throw new Error("Could not load passkey signing context. Sign out and sign in again.");
-  }
+  const target = sessionPasskeyConnectTarget(session, opts);
 
-  const credentialId =
-    opts?.credentialId?.trim() ||
-    session.signingCredentialId?.trim() ||
-    session.loginCredentialId?.trim() ||
-    null;
-  const contractId = opts?.contractId?.trim() || session.memberContractId?.trim() || null;
-
-  if (!credentialId) {
-    throw new Error("No login passkey found for this account.");
-  }
-  if (!contractId) {
-    throw new Error("Set up your passkey smart wallet before signing transactions.");
-  }
-
-  if (!contractId) {
-    if (!opts?.prompt) return null;
-    const connected = await kit.connectWallet({
-      prompt: true,
-      credentialId: credentialId ?? undefined,
-    });
-    if (!connected?.contractId || !connected.credentialId) {
-      throw new Error("Passkey authorization was cancelled or unavailable.");
+  if (!target) {
+    if (opts?.prompt) {
+      throw new Error(
+        session
+          ? "Set up your passkey smart wallet before signing transactions."
+          : "Could not load passkey signing context. Sign out and sign in again.",
+      );
     }
-    return {
-      contractId: connected.contractId,
-      credentialId: connected.credentialId,
-      publicKey: connected.credential?.publicKey ?? null,
-    };
+    return null;
   }
 
   const connected = await kit.connectWallet({
     prompt: opts?.prompt ?? false,
-    credentialId,
-    contractId,
+    credentialId: target.credentialId,
+    contractId: target.contractId,
   });
 
   if (!connected?.contractId || !connected.credentialId) {
@@ -81,11 +76,11 @@ export async function connectSessionPasskeyWallet(
     return null;
   }
 
-  const expected = contractId.toUpperCase();
+  const expected = target.contractId.toUpperCase();
   const got = connected.contractId.trim().toUpperCase();
   if (got !== expected) {
     throw new Error(
-      "This passkey is not linked to your org member wallet. Use the same passkey you signed in with."
+      "This passkey is not linked to your org member wallet. Use the same passkey you signed in with.",
     );
   }
 

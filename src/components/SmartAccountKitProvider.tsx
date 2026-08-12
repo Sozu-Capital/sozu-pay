@@ -47,19 +47,22 @@ export function SmartAccountKitProvider({ children }: { children: React.ReactNod
     let cancelled = false;
     (async () => {
       try {
-        const { kit } = await getSmartAccountKit();
+        const { kit: nextKit } = await getSmartAccountKit();
         if (cancelled) return;
-        setKit(kit);
-        const res = await connectSessionPasskeyWallet(kit, { prompt: false });
+        setKit(nextKit);
+        setReady(true);
+        const res = await connectSessionPasskeyWallet(nextKit, { prompt: false });
+        if (cancelled) return;
         if (res?.contractId) {
           setConnected(true);
           setContractId(res.contractId);
           setCredentialId(res.credentialId ?? null);
         }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Smart account init failed");
-      } finally {
-        if (!cancelled) setReady(true);
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Smart account init failed");
+          setReady(true);
+        }
       }
     })();
     return () => {

@@ -1031,7 +1031,7 @@ export default function DisbursementsPage() {
         </div>
       )}
 
-      {isDisbursementAdmin ? (
+      {isDisbursementAdmin && !isPollarPath ? (
         <DistributionTreasuryPanel
           onBalancesChange={(b) => {
             setDistributionUsdc(b.distributionUsdc);
@@ -1729,7 +1729,7 @@ export default function DisbursementsPage() {
                   />
                 </svg>
               </div>
-              {isDisbursementAdmin && batchRemaining > 0 ? (
+              {isDisbursementAdmin && !isPollarPath && batchRemaining > 0 ? (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -1739,7 +1739,7 @@ export default function DisbursementsPage() {
                   disabled={fundingId === d.id || !kitReady || !distributionConfigured}
                   title={
                     !distributionConfigured
-                      ? t("distributionTreasury.notConfigured")
+                      ? t("distributionTreasury.orgTreasuryMissing")
                       : t("fundBatchHint", {
                           amount: formatBatchAmount(batchRemaining),
                           asset: d.asset.code,

@@ -47,6 +47,15 @@ Exponential feature: `cmso2a555000dkw04fqspp31a` — **Instawards Week 1 — Mer
 
 ---
 
+## Prod hotfix (2026-08-11)
+
+Caught while testing the Week 1 merchant path on `pay.sozu.capital`.
+
+- **SDP banner:** Google/Pollar orgs have a classic G treasury, not a Soroban C contract. The disbursements panel treated that as “`SDP_DISTRIBUTION_PUBLIC_KEY` is missing” even when the env var is set. Hide the SDP funding panel and Fund button on the Pollar path. If a passkey org still has no Soroban treasury, say that instead of blaming the env key.
+- **Passkey setup freeze:** Kit init waited on a silent session connect (and threw “no login passkey” for Pollar) before marking ready, so `/onboarding/setup-smart-wallet` sat on Loading. Ready now flips as soon as the kit exists; silent connect is skipped when there is no passkey yet. Create shows device-prompt vs on-chain deploy (deploy can take up to a minute).
+
+---
+
 ## Demo script (Round 1 / V1.1)
 
 1. Open `/merchants` → passkey signup

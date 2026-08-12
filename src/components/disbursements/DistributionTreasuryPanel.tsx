@@ -120,7 +120,7 @@ export function DistributionTreasuryPanel({ onBalancesChange }: Props) {
   if (!balances?.configured) {
     return (
       <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4 text-sm text-amber-800 dark:text-amber-300">
-        {t("notConfigured")}
+        {balances?.distributionPublicKey ? t("orgTreasuryMissing") : t("notConfigured")}
       </div>
     );
   }

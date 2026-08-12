@@ -3,9 +3,7 @@ import "server-only";
 /** SDP distribution account (classic G) — pays batch recipients on-chain. */
 export function readDistributionPublicKey(): string {
   const raw =
-    process.env.SDP_DISTRIBUTION_PUBLIC_KEY?.trim() ||
-    process.env.DISTRIBUTION_PUBLIC_KEY?.trim() ||
-    "";
+    (process.env["SDP_DISTRIBUTION_PUBLIC_KEY"] ?? process.env["DISTRIBUTION_PUBLIC_KEY"] ?? "").trim();
   return raw.replace(/^stellar:/i, "");
 }
 

@@ -32,6 +32,7 @@ export default function SetupSmartWalletPage() {
   const [fullName, setFullName] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [createStep, setCreateStep] = useState<"device" | "deploy" | null>(null);
 
   const goBack = useCallback(() => {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -93,12 +94,15 @@ export default function SetupSmartWalletPage() {
   const handleCreate = async () => {
     setSaveError(null);
     setSaving(true);
+    setCreateStep("device");
+    const unsubCreated = kit?.events.on("credentialCreated", () => setCreateStep("deploy"));
     try {
       if (isMerchant) {
         const wallet = await createWallet(
           passkeyLabel,
           profileEmail || fullName.trim() || "merchant",
         );
+        setCreateStep("deploy");
         if (!wallet.contractId || !wallet.credentialId || !wallet.publicKey) {
           throw new Error(t("noWalletConnected"));
         }
@@ -119,7 +123,9 @@ export default function SetupSmartWalletPage() {
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : t("failed"));
     } finally {
+      unsubCreated?.();
       setSaving(false);
+      setCreateStep(null);
     }
   };
 
@@ -187,7 +193,13 @@ export default function SetupSmartWalletPage() {
         </div>
 
         {!canProceed && <p className="mt-4 text-sm text-gray-400">{tCommon("loading")}</p>}
-        {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
+        {createStep === "device" ? (
+          <p className="mt-4 text-sm text-gray-300">{t("creatingDevice")}</p>
+        ) : null}
+        {createStep === "deploy" ? (
+          <p className="mt-4 text-sm text-gray-300">{t("creatingDeploy")}</p>
+        ) : null}
+        {error && !saving ? <p className="mt-4 text-sm text-red-400">{error}</p> : null}
         {saveError && <p className="mt-4 text-sm text-red-400">{saveError}</p>}
 
         <div className="mt-6 flex flex-col gap-3">
@@ -197,7 +209,13 @@ export default function SetupSmartWalletPage() {
             onClick={() => void handleCreate()}
             className="rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium disabled:opacity-50"
           >
-            {isMerchant ? t("linkCtaMerchant") : t("linkCta")}
+            {saving
+              ? createStep === "deploy"
+                ? t("creatingDeployCta")
+                : t("creatingDeviceCta")
+              : isMerchant
+                ? t("linkCtaMerchant")
+                : t("linkCta")}
           </button>
           <button
             type="button"

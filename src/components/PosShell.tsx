@@ -4,8 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { CheckoutPreviewCard } from "@/components/CheckoutPreviewCard";
+import { posPaneState } from "@/lib/dashboard/pos-pane";
 
-type CreateResult = { checkoutUrl: string; id: string };
+type CreateResult = {
+  checkoutUrl: string;
+  id: string;
+  amountUsd: string;
+  reference: string | null;
+};
 
 export default function PosShell() {
   const t = useTranslations("posPage");
@@ -44,9 +50,20 @@ export default function PosShell() {
         setError((data.error as string) ?? tc("createFailed"));
         return;
       }
-      setResult({ checkoutUrl: data.checkoutUrl, id: data.id });
-      setAmountUsd("");
-      setReference("");
+      const chargedAmount =
+        typeof data.amountUsd === "string" && data.amountUsd.trim()
+          ? data.amountUsd.trim()
+          : amountUsd.trim();
+      const chargedReference =
+        typeof data.reference === "string" && data.reference.trim()
+          ? data.reference.trim()
+          : reference.trim() || null;
+      setResult({
+        checkoutUrl: data.checkoutUrl,
+        id: data.id,
+        amountUsd: chargedAmount,
+        reference: chargedReference,
+      });
     } finally {
       setBusy(false);
     }
@@ -62,6 +79,7 @@ export default function PosShell() {
     }
   };
 
+  const pane = posPaneState({ amountUsd, hasResult: !!result });
   const qrSrc = result
     ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(result.checkoutUrl)}`
     : null;
@@ -140,15 +158,24 @@ export default function PosShell() {
         </form>
 
         <div className="space-y-4">
-          {amountUsd && !result && (
+          {pane === "preview" && (
             <CheckoutPreviewCard amountUsd={amountUsd || "0.00"} reference={reference} />
           )}
 
-          {result && qrSrc && (
+          {pane === "ready" && result && qrSrc && (
             <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-6 text-center">
               <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
                 {t("readyTitle")}
               </p>
+              <p className="mt-3 text-3xl font-bold tabular-nums text-gray-900 dark:text-white">
+                ${result.amountUsd}
+              </p>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">USD</p>
+              {result.reference && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {t("chargedReference", { reference: result.reference })}
+                </p>
+              )}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={qrSrc}
@@ -170,6 +197,8 @@ export default function PosShell() {
                   type="button"
                   onClick={() => {
                     setResult(null);
+                    setAmountUsd("");
+                    setReference("");
                     setError(null);
                   }}
                   className="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
@@ -180,7 +209,7 @@ export default function PosShell() {
             </div>
           )}
 
-          {!amountUsd && !result && (
+          {pane === "empty" && (
             <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-600 p-8 text-center text-sm text-gray-500 dark:text-gray-400">
               {t("emptyHint")}
             </div>

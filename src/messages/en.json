@@ -304,6 +304,7 @@
     "readyTitle": "Show this QR to your customer",
     "qrAlt": "Checkout QR code",
     "newCharge": "New charge",
+    "chargedReference": "Ref: {reference}",
     "emptyHint": "Enter an amount to preview the charge, then create it for a scannable QR.",
     "managePoints": "Need a permanent counter code?",
     "managePointsLink": "Manage QR & NFC points"

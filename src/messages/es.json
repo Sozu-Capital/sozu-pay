@@ -304,6 +304,7 @@
     "readyTitle": "Mostrá este QR a tu cliente",
     "qrAlt": "Código QR de checkout",
     "newCharge": "Nuevo cobro",
+    "chargedReference": "Ref: {reference}",
     "emptyHint": "Ingresá un monto para previsualizar el cobro y crealo para obtener un QR escaneable.",
     "managePoints": "¿Necesitás un código fijo de mostrador?",
     "managePointsLink": "Administrar puntos QR y NFC"

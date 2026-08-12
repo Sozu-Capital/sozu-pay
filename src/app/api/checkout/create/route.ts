@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
+import { CHECKOUT_NO_SETTLE_TO_ERROR } from "@/lib/checkout/ready";
 import { resolveCheckoutSettleToAddress } from "@/lib/checkout/settle-to";
 import { createCheckoutSession, expirePendingCheckoutSessionsForOrg } from "@/lib/db/checkout-sessions";
 import { syncLiveCheckoutForOrg } from "@/lib/db/merchant-qr-points";
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
   );
   if (!destinationAddress) {
     return NextResponse.json(
-      { error: "Organization has no Stellar disbursement wallet configured" },
+      { error: CHECKOUT_NO_SETTLE_TO_ERROR },
       { status: 422 },
     );
   }

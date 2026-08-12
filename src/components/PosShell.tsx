@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { CheckoutPreviewCard } from "@/components/CheckoutPreviewCard";
 import { LocalQrCode } from "@/components/LocalQrCode";
+import {
+  CHECKOUT_SETUP_WALLET_PATH,
+  isCheckoutWalletNotReadyHttpStatus,
+} from "@/lib/checkout/ready";
 import { posPaneState } from "@/lib/dashboard/pos-pane";
 
 type CreateResult = {
@@ -23,6 +27,31 @@ export default function PosShell() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CreateResult | null>(null);
   const [copied, setCopied] = useState(false);
+  const [walletReady, setWalletReady] = useState<boolean | null>(null);
+  const [setupUrl, setSetupUrl] = useState(CHECKOUT_SETUP_WALLET_PATH);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/checkout/ready", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled) return;
+        if (d && d.ready === false) {
+          setWalletReady(false);
+          if (typeof d.setupUrl === "string" && d.setupUrl.startsWith("/")) {
+            setSetupUrl(d.setupUrl);
+          }
+          return;
+        }
+        setWalletReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setWalletReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,6 +77,11 @@ export default function PosShell() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (isCheckoutWalletNotReadyHttpStatus(res.status)) {
+          setWalletReady(false);
+          setError(null);
+          return;
+        }
         setError((data.error as string) ?? tc("createFailed"));
         return;
       }
@@ -91,6 +125,24 @@ export default function PosShell() {
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("subtitle")}</p>
       </header>
 
+      {walletReady === false && (
+        <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-6">
+          <h2 className="text-lg font-semibold text-amber-950 dark:text-amber-100">
+            {t("walletNotReadyTitle")}
+          </h2>
+          <p className="mt-2 text-sm text-amber-900 dark:text-amber-200">
+            {t("walletNotReadyBody")}
+          </p>
+          <Link
+            href={setupUrl}
+            className="mt-4 inline-flex rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 text-sm transition-colors"
+          >
+            {t("walletNotReadyCta")}
+          </Link>
+        </div>
+      )}
+
+      {walletReady !== false && (
       <div className="grid gap-6 lg:grid-cols-2">
         <form
           onSubmit={handleCreate}
@@ -214,6 +266,7 @@ export default function PosShell() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

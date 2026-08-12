@@ -307,7 +307,10 @@
     "chargedReference": "Ref: {reference}",
     "emptyHint": "Enter an amount to preview the charge, then create it for a scannable QR.",
     "managePoints": "Need a permanent counter code?",
-    "managePointsLink": "Manage QR & NFC points"
+    "managePointsLink": "Manage QR & NFC points",
+    "walletNotReadyTitle": "Finish wallet setup",
+    "walletNotReadyBody": "This store has no Stellar receive wallet yet. Finish setup to take POS charges.",
+    "walletNotReadyCta": "Finish setup"
   },
   "storeDashboard": {
     "balanceLabel": "Available balance",

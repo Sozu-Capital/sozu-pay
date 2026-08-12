@@ -307,7 +307,10 @@
     "chargedReference": "Ref: {reference}",
     "emptyHint": "Ingresá un monto para previsualizar el cobro y crealo para obtener un QR escaneable.",
     "managePoints": "¿Necesitás un código fijo de mostrador?",
-    "managePointsLink": "Administrar puntos QR y NFC"
+    "managePointsLink": "Administrar puntos QR y NFC",
+    "walletNotReadyTitle": "Terminá la configuración de la wallet",
+    "walletNotReadyBody": "Esta tienda aún no tiene una wallet Stellar de cobro. Completá la configuración para cobrar por POS.",
+    "walletNotReadyCta": "Terminar configuración"
   },
   "storeDashboard": {
     "balanceLabel": "Balance disponible",

@@ -8,13 +8,13 @@ import { createOrganization, getOrganizationById } from "@/lib/db/organizations"
 import { createOrgInvites, type OrgInviteRole } from "@/lib/db/org-invites";
 import { applyOrganizationSozuTag } from "@/lib/org-sozu-tag";
 import {
-  orgTypeFromTaxEntity,
   parseTaxEntityType,
   trimOrNull,
   type OrgTaxProfile,
 } from "@/lib/org-tax";
 import { createOrgTreasuryProvisioner } from "@/lib/pollar/org-treasury";
 import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
+import { resolveCreateOrganizationType } from "@/lib/org/resolve-create-type";
 import { randomUUID } from "crypto";
 
 /**
@@ -72,10 +72,8 @@ export async function POST(request: NextRequest) {
       }
     : null;
 
-  const type =
-    body.type === "store" || body.type === "ngo"
-      ? body.type
-      : orgTypeFromTaxEntity(taxEntity);
+  const requestedType =
+    body.type === "store" || body.type === "ngo" ? (body.type as "store" | "ngo") : undefined;
 
   const guardianThresholdRaw =
     typeof body.guardianThreshold === "number" ? body.guardianThreshold : null;
@@ -95,6 +93,11 @@ export async function POST(request: NextRequest) {
 
   const sozuTagRaw = typeof body.sozuTag === "string" ? body.sozuTag : "";
   const pollarPath = isPollarMappedUser(activeUser);
+  const type = resolveCreateOrganizationType({
+    requestedType,
+    taxEntity,
+    pollarPath,
+  });
 
   try {
     let treasuryPublicKey: string | null = null;
@@ -113,7 +116,7 @@ export async function POST(request: NextRequest) {
 
     const org = await createOrganization({
       name,
-      type: pollarPath ? "ngo" : type,
+      type,
       tax: pollarPath ? null : taxProfile,
       treasury_manager_user_id: activeUser.id,
       treasury_guardian_threshold: pollarPath ? 1 : guardianThreshold,

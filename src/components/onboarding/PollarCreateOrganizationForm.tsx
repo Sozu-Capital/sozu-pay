@@ -1,22 +1,58 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
+import { getClientSignupIntent } from "@/lib/auth/signup-intent";
+import { MerchantPollarOnboarding } from "@/components/onboarding/MerchantPollarOnboarding";
+import {
+  OrgCreateSetupProgress,
+  type OrgSetupStepKey,
+} from "@/components/onboarding/OrgCreateSetupProgress";
 
 /**
- * NGO Pollar path: name-only org create. No passkey / smart-account / PIN.
- * Server provisions Org treasury as creator-bound Staff Pollar wallet.
+ * Pollar create-org:
+ * - Merchant intent → educational onboarding + store wallet progress (no passkey smart wallet).
+ * - NGO → name-only; Org treasury wallet is provisioned automatically.
  */
 export function PollarCreateOrganizationForm() {
+  const [intent, setIntent] = useState<"loading" | "merchant" | "ngo">("loading");
+
+  useEffect(() => {
+    setIntent(getClientSignupIntent() === "merchant" ? "merchant" : "ngo");
+  }, []);
+
+  if (intent === "loading") {
+    return (
+      <DarkGradientBg>
+        <main className="flex min-h-screen items-center justify-center p-4 text-white">
+          <p className="text-sm text-gray-300">…</p>
+        </main>
+      </DarkGradientBg>
+    );
+  }
+
+  if (intent === "merchant") {
+    return <MerchantPollarOnboarding />;
+  }
+  return <NgoPollarCreateOrganizationForm />;
+}
+
+function NgoPollarCreateOrganizationForm() {
   const router = useRouter();
   const t = useTranslations("onboardingPages.createOrg");
   const tCommon = useTranslations("onboardingPages");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [busyStep, setBusyStep] = useState<OrgSetupStepKey>("org");
   const [error, setError] = useState("");
+
+  const stepLabels: Partial<Record<OrgSetupStepKey, string>> = {
+    org: t("stepsShort.org"),
+    wallet: t("stepsShort.wallet"),
+  };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,6 +63,7 @@ export function PollarCreateOrganizationForm() {
     }
     setError("");
     setBusy(true);
+    setBusyStep("org");
     try {
       const res = await fetch("/api/profile/org", {
         method: "POST",
@@ -37,8 +74,10 @@ export function PollarCreateOrganizationForm() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error ?? t("createFailed"));
+        setBusy(false);
         return;
       }
+      setBusyStep("wallet");
       const redirect =
         typeof data.redirect === "string" && data.redirect.startsWith("/")
           ? data.redirect
@@ -46,9 +85,33 @@ export function PollarCreateOrganizationForm() {
       router.replace(redirect);
     } catch {
       setError(tCommon("somethingWentWrong"));
-    } finally {
       setBusy(false);
     }
+  }
+
+  if (busy) {
+    return (
+      <DarkGradientBg>
+        <main className="flex min-h-screen flex-col items-center justify-center p-4 text-white">
+          <OrgCreateSetupProgress
+            currentStep={busyStep}
+            stepOrder={["org", "wallet"]}
+            stepLabels={stepLabels}
+            title={t("busyTitle")}
+            subtitle={
+              busyStep === "wallet" ? t("steps.pollar.wallet") : t("steps.pollar.orgNgo")
+            }
+            hint={t("busyHintPollar")}
+            spinner={
+              <div
+                className="h-10 w-10 rounded-full border-2 border-white/20 border-t-white animate-spin"
+                aria-hidden
+              />
+            }
+          />
+        </main>
+      </DarkGradientBg>
+    );
   }
 
   return (
@@ -81,7 +144,7 @@ export function PollarCreateOrganizationForm() {
             disabled={busy}
             className="mt-6 w-full rounded-md bg-white py-2.5 font-medium text-gray-900 hover:opacity-90 disabled:opacity-50"
           >
-            {busy ? tCommon("loading") : t("pollarCreateCta")}
+            {t("pollarCreateCta")}
           </button>
 
           <p className="mt-4 text-center text-xs text-gray-400">

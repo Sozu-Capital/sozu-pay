@@ -1,58 +1,33 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { HomeLandingTransitionProvider } from "@/components/HomeLandingTransition";
 import { HomeSplineBackground } from "@/components/HomeSplineBackground";
 import { HomePageIntro } from "@/components/HomePageIntro";
 import { HomeLandingFooter } from "@/components/HomeLandingFooter";
 import { ScfCommunityFundToast } from "@/components/ScfCommunityFundToast";
-import { HomeAuthUiProvider } from "@/components/HomeAuthUiContext";
-import { HomePasskeyAuth } from "@/components/HomePasskeyAuth";
+import { HomePollarAuth } from "@/components/HomePollarAuth";
 import { HomeLandingCta } from "@/components/HomeLandingCta";
 import { MerchantsBetaScreen } from "@/components/MerchantsBetaScreen";
 import {
   MerchantsLandingNav,
   type MerchantsLandingStep,
 } from "@/components/MerchantsLandingNav";
-import { useHomeAuthUi } from "@/components/HomeAuthUiContext";
-
-type AuthIntent = "login" | "register";
 
 type MerchantsLandingFlowProps = {
   returnTo?: string;
 };
 
-function MerchantsAuthStage({
-  returnTo,
-  authIntent,
-}: {
-  returnTo?: string;
-  authIntent: AuthIntent;
-}) {
-  const { openRegister } = useHomeAuthUi();
-
-  useEffect(() => {
-    if (authIntent === "register") {
-      openRegister();
-    }
-  }, [authIntent, openRegister]);
-
-  return <HomePasskeyAuth returnTo={returnTo} onBusyChange={() => {}} />;
-}
-
 function MerchantsLandingInner({ returnTo }: MerchantsLandingFlowProps) {
   const t = useTranslations("login");
   const [step, setStep] = useState<MerchantsLandingStep>("hero");
-  const [authIntent, setAuthIntent] = useState<AuthIntent>("login");
 
   function openLogin() {
-    setAuthIntent("login");
     setStep("auth");
   }
 
   function openBetaSignup() {
-    setAuthIntent("register");
     setStep("beta");
   }
 
@@ -80,7 +55,10 @@ function MerchantsLandingInner({ returnTo }: MerchantsLandingFlowProps) {
           )}
           {step === "beta" && <MerchantsBetaScreen onAcknowledge={acknowledgeBeta} />}
           {step === "auth" && (
-            <MerchantsAuthStage returnTo={returnTo} authIntent={authIntent} />
+            <div className="pointer-events-auto flex w-full max-w-sm flex-col gap-4">
+              <p className="text-sm font-light text-gray-300">{t("merchantAuthLead")}</p>
+              <HomePollarAuth returnTo={returnTo} onBusyChange={() => {}} />
+            </div>
           )}
         </div>
         <HomeLandingFooter />
@@ -93,9 +71,7 @@ function MerchantsLandingInner({ returnTo }: MerchantsLandingFlowProps) {
 export function MerchantsLandingFlow({ returnTo }: MerchantsLandingFlowProps) {
   return (
     <HomeLandingTransitionProvider>
-      <HomeAuthUiProvider>
-        <MerchantsLandingInner returnTo={returnTo} />
-      </HomeAuthUiProvider>
+      <MerchantsLandingInner returnTo={returnTo} />
     </HomeLandingTransitionProvider>
   );
 }

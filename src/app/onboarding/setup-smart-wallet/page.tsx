@@ -8,11 +8,13 @@ import {
   registerSmartAccount,
   resolvePublicKeyFromServer,
 } from "@/lib/stellar/smartAccounts/registerWalletClient";
+import { getClientSignupIntent } from "@/lib/auth/signup-intent";
 
 export default function SetupSmartWalletPage() {
   const router = useRouter();
   const t = useTranslations("onboardingPages.smartWallet");
   const tCommon = useTranslations("onboardingPages");
+  const [isMerchant, setIsMerchant] = useState(false);
   const { ready, kit, connected, contractId, credentialId, error, linkMemberWallet, connect } =
     useSmartAccountKitContext();
   const [loginCredentialId, setLoginCredentialId] = useState<string | null>(null);
@@ -23,11 +25,16 @@ export default function SetupSmartWalletPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
+    setIsMerchant(getClientSignupIntent() === "merchant");
+  }, []);
+
+  useEffect(() => {
     fetch("/api/profile", { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         const email = typeof d?.email === "string" ? d.email : "";
         if (email) setProfileEmail(email);
+        if (d?.is_pollar_user || d?.org_type === "store") setIsMerchant(true);
       })
       .catch(() => {});
 
@@ -105,8 +112,8 @@ export default function SetupSmartWalletPage() {
   return (
     <main className="min-h-screen flex items-center justify-center p-4 bg-gray-950 text-white">
       <div className="w-full max-w-md rounded-xl border border-white/10 bg-white/5 p-6">
-        <h1 className="text-lg font-semibold">{t("title")}</h1>
-        <p className="mt-2 text-sm text-gray-300">{t("subtitle")}</p>
+        <h1 className="text-lg font-semibold">{isMerchant ? t("titleMerchant") : t("title")}</h1>
+        <p className="mt-2 text-sm text-gray-300">{isMerchant ? t("subtitleMerchant") : t("subtitle")}</p>
 
         <div className="mt-5">
           <label htmlFor="full-name" className="text-xs font-medium text-gray-300">
@@ -136,7 +143,7 @@ export default function SetupSmartWalletPage() {
             onClick={() => void handleCreate()}
             className="rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium disabled:opacity-50"
           >
-            {t("linkCta")}
+            {isMerchant ? t("linkCtaMerchant") : t("linkCta")}
           </button>
           <button
             type="button"
@@ -144,7 +151,7 @@ export default function SetupSmartWalletPage() {
             onClick={() => void handleConnectExisting()}
             className="rounded-md border border-white/20 bg-white/5 py-2.5 px-4 font-medium disabled:opacity-50"
           >
-            {t("connectCta")}
+            {isMerchant ? t("connectCtaMerchant") : t("connectCta")}
           </button>
           {connected && contractId && (
             <p className="text-xs text-gray-400 break-all">

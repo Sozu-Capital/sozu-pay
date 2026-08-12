@@ -3,8 +3,6 @@
 import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { useHomeAuthUiOptional } from "@/components/HomeAuthUiContext";
-import { cn } from "@/lib/utils";
 
 const SOZU_CAPITAL_URL = "https://sozu.capital";
 
@@ -20,19 +18,8 @@ type MerchantsLandingNavProps = {
 
 export function MerchantsLandingNav({ step, onCreateAccountFromHero }: MerchantsLandingNavProps) {
   const t = useTranslations("login");
-  const authUi = useHomeAuthUiOptional();
 
-  function handleCreateAccount() {
-    if (step === "hero") {
-      onCreateAccountFromHero();
-      return;
-    }
-    if (!authUi) return;
-    if (authUi.registerOpen) authUi.closeRegister();
-    else authUi.openRegister();
-  }
-
-  const showCreateAccount = step === "hero" || step === "auth";
+  const showCreateAccount = step === "hero";
 
   return (
     <header className="pointer-events-none relative z-30 flex min-h-[var(--home-landing-nav-height,4.75rem)] items-center justify-end px-6 py-6 md:min-h-0 md:px-10 lg:px-12">
@@ -52,15 +39,11 @@ export function MerchantsLandingNav({ step, onCreateAccountFromHero }: Merchants
         />
       </a>
       <div className="relative z-10 ml-auto flex items-center gap-2 !pointer-events-auto [&_button]:pointer-events-auto">
-        {showCreateAccount && authUi ? (
+        {showCreateAccount ? (
           <button
             type="button"
-            onClick={handleCreateAccount}
-            className={cn(
-              navActionClass,
-              step === "auth" && authUi.registerOpen && "border-white/45 bg-white/20 text-white"
-            )}
-            aria-pressed={step === "auth" ? authUi.registerOpen : undefined}
+            onClick={onCreateAccountFromHero}
+            className={navActionClass}
           >
             {t("passkeyCreateAccount")}
           </button>

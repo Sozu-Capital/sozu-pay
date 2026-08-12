@@ -3,9 +3,9 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-export type OrgSetupStepKey = "org" | "passkey" | "register" | "treasury" | "sozuTag";
+export type OrgSetupStepKey = "org" | "passkey" | "register" | "treasury" | "wallet" | "sozuTag";
 
-const STEP_ORDER: OrgSetupStepKey[] = ["org", "passkey", "register", "treasury", "sozuTag"];
+const DEFAULT_STEP_ORDER: OrgSetupStepKey[] = ["org", "passkey", "register", "treasury", "sozuTag"];
 
 function StepIcon({ step, active }: { step: OrgSetupStepKey; active: boolean }) {
   const className = cn(
@@ -40,6 +40,13 @@ function StepIcon({ step, active }: { step: OrgSetupStepKey; active: boolean }) 
           <path strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" d="M12 3v18M8 7h8M7 12h10M6 17h12" />
         </svg>
       );
+    case "wallet":
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+          <path strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+          <path strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" d="M16 12h.01M3 10h18" />
+        </svg>
+      );
     case "sozuTag":
       return (
         <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
@@ -52,7 +59,8 @@ function StepIcon({ step, active }: { step: OrgSetupStepKey; active: boolean }) 
 
 type OrgCreateSetupProgressProps = {
   currentStep: OrgSetupStepKey;
-  stepLabels: Record<OrgSetupStepKey, string>;
+  stepLabels: Partial<Record<OrgSetupStepKey, string>>;
+  stepOrder?: OrgSetupStepKey[];
   spinner?: ReactNode;
   title: string;
   subtitle: string;
@@ -62,17 +70,18 @@ type OrgCreateSetupProgressProps = {
 export function OrgCreateSetupProgress({
   currentStep,
   stepLabels,
+  stepOrder = DEFAULT_STEP_ORDER,
   spinner,
   title,
   subtitle,
   hint,
 }: OrgCreateSetupProgressProps) {
-  const currentIndex = Math.max(0, STEP_ORDER.indexOf(currentStep));
+  const currentIndex = Math.max(0, stepOrder.indexOf(currentStep));
 
   return (
     <div className="w-full max-w-md rounded-xl border border-white/10 bg-black/40 backdrop-blur-sm p-8 shadow-xl text-center">
       <div className="flex items-center justify-center gap-2 sm:gap-3" aria-hidden>
-        {STEP_ORDER.map((key, index) => {
+        {stepOrder.map((key, index) => {
           const state =
             index < currentIndex ? "done" : index === currentIndex ? "active" : "pending";
           return (
@@ -93,7 +102,7 @@ export function OrgCreateSetupProgress({
                   state === "active" ? "text-white/90" : "text-white/40"
                 )}
               >
-                {stepLabels[key]}
+                {stepLabels[key] ?? key}
               </span>
             </div>
           );

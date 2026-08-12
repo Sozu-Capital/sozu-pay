@@ -264,7 +264,7 @@ function PasskeyCreateOrganizationPage() {
     return linkMemberWallet(loginId ?? undefined);
   }
 
-  const setupStepLabels: Record<OrgSetupStepKey, string> = {
+  const setupStepLabels: Partial<Record<OrgSetupStepKey, string>> = {
     org: t("stepsShort.org"),
     passkey: t("stepsShort.passkey"),
     register: t("stepsShort.register"),
@@ -495,7 +495,7 @@ function PasskeyCreateOrganizationPage() {
             stepLabels={setupStepLabels}
             title={isMerchantIntent ? t("busyTitleMerchant") : t("busyTitle")}
             subtitle={label}
-            hint={t("busyHint")}
+            hint={isMerchantIntent ? t("busyHintMerchant") : t("busyHint")}
             spinner={
               <div
                 className="h-10 w-10 rounded-full border-2 border-white/20 border-t-white animate-spin"

@@ -198,6 +198,24 @@ export default function SettingsPage() {
 
       <section className="mt-8" id="security">
         <h2 className="text-lg font-semibold">{t("security")}</h2>
+        {(user?.isPollarUser || dashboardProfile?.profile?.is_pollar_user) && (
+          <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-600 p-4 space-y-3">
+            <p className="text-sm font-medium text-gray-900 dark:text-white">{t("biometricTitle")}</p>
+            {dashboardProfile?.profile?.smart_wallet_ready ? (
+              <p className="text-sm text-gray-600 dark:text-gray-400">{t("biometricOn")}</p>
+            ) : (
+              <>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{t("biometricBody")}</p>
+                <Link
+                  href="/onboarding/setup-smart-wallet"
+                  className="inline-flex rounded-md bg-gray-900 dark:bg-gray-100 px-3 py-2 text-sm font-medium text-white dark:text-gray-900"
+                >
+                  {t("biometricCta")}
+                </Link>
+              </>
+            )}
+          </div>
+        )}
         {isPasskeyAuth() && !user?.isPollarUser && (
           <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-600 p-4 space-y-3">
             <p className="text-sm text-gray-600 dark:text-gray-400">{t("backupPinBody")}</p>

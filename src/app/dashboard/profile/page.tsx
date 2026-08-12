@@ -24,6 +24,7 @@ type ProfileData = {
   admin_level: string;
   member_smart_account_id?: string | null;
   smart_wallet_ready?: boolean;
+  is_pollar_user?: boolean;
   org_soroban_contract_id?: string | null;
   activation_requested_at: string | null;
   needsPayoutWalletSetup?: boolean;
@@ -494,6 +495,13 @@ export default function ProfilePage() {
               copiedLabel={tc("copied")}
             />
           </div>
+        ) : profile.is_pollar_user ? (
+          <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+            {t("biometricOptionalBody")}{" "}
+            <Link href="/onboarding/setup-smart-wallet" className="underline">
+              {t("biometricOptionalCta")}
+            </Link>
+          </p>
         ) : (
           <p className="mt-4 text-sm text-amber-700 dark:text-amber-300">
             {t("passkeyWalletMissing")}{" "}

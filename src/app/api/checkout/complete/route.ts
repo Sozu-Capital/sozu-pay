@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCheckoutSession, completeCheckoutSession } from "@/lib/db/checkout-sessions";
 import { verifyStellarPayment } from "@/lib/checkout/verify-stellar-payment";
+import { getAppBaseUrl } from "@/lib/app-url";
 
-const ALLOWED_ORIGIN = process.env.NEXT_PUBLIC_SOZUCREDIT_URL || "https://credit.sozu.capital";
+const ALLOWED_ORIGIN = getAppBaseUrl();
 
 function corsHeaders() {
   return {

@@ -6,6 +6,28 @@ import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 import { useTranslations } from "next-intl";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useSignOut } from "@/lib/auth/useSignOut";
+import {
+  ngoDashboardNavLinks,
+  storeDashboardNavLinks,
+  type DashboardNavKind,
+} from "@/lib/dashboard/nav-links";
+
+const NAV_LABEL_KEY: Record<DashboardNavKind, string> = {
+  overview: "overview",
+  transactions: "transactions",
+  pos: "pos",
+  "qr-codes": "qrAndNfc",
+  "pay-supplier": "paySupplier",
+  "cash-out": "cashOut",
+  settings: "settings",
+  profile: "profile",
+  admin: "admin",
+  "payments-oracle": "paymentsOracle",
+  "funding-links": "fundingLinks",
+  disbursements: "disbursements",
+  "disbursement-history": "disbursementHistory",
+  recipients: "recipients",
+};
 
 function NavLink({
   href,
@@ -48,50 +70,24 @@ export function DashboardNav({ onNavigate }: { onNavigate?: () => void } = {}) {
   const t = useTranslations("nav");
   const { signOut, signingOut } = useSignOut();
 
+  const links = isStore
+    ? storeDashboardNavLinks({ isAdmin })
+    : ngoDashboardNavLinks({ showDisbursements: showDisbursementsNav });
+
   const linkProps = { onNavigate };
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <nav className="flex-1 min-h-0 overflow-y-auto space-y-1">
-        <NavLink href="/dashboard" label={t("overview")} {...linkProps} />
-        {isStore ? (
-          <>
-            <NavLink href="/dashboard/transactions" label={t("transactions")} {...linkProps} />
-            <NavLink href="/dashboard/checkout" label={t("getPaid")} {...linkProps} />
-            <NavLink href="/dashboard/qr-codes" label={t("qrAndNfc")} {...linkProps} />
-            <NavLink href="/dashboard/recipients" label={t("paySupplier")} {...linkProps} />
-            <NavLink href="/dashboard/cashout" label={t("cashOut")} {...linkProps} />
-            <NavLink href="/dashboard/profile" label={t("profile")} {...linkProps} />
-            {isAdmin && <NavLink href="/dashboard/admin" label={t("admin")} indent {...linkProps} />}
-            {isAdmin && (
-              <NavLink
-                href="/dashboard/admin/shadow-payments"
-                label={t("paymentsOracle")}
-                indent
-                {...linkProps}
-              />
-            )}
-          </>
-        ) : (
-          <>
-            {/* NGO dashboard v1 primary nav */}
-            <NavLink href="/dashboard/checkout" label={t("fundingLinks")} {...linkProps} />
-            {showDisbursementsNav && (
-              <>
-                <NavLink href="/dashboard/disbursements" label={t("disbursements")} {...linkProps} />
-                <NavLink
-                  href="/dashboard/disbursements/history"
-                  label={t("disbursementHistory")}
-                  indent
-                  {...linkProps}
-                />
-              </>
-            )}
-            <NavLink href="/dashboard/recipients" label={t("recipients")} {...linkProps} />
-            <NavLink href="/dashboard/transactions" label={t("transactions")} {...linkProps} />
-            <NavLink href="/dashboard/settings" label={t("settings")} {...linkProps} />
-          </>
-        )}
+        {links.map((link) => (
+          <NavLink
+            key={link.href}
+            href={link.href}
+            label={t(NAV_LABEL_KEY[link.kind])}
+            indent={link.indent}
+            {...linkProps}
+          />
+        ))}
       </nav>
       <div className="mt-auto pt-4 border-t border-white/10 shrink-0">
         <LanguageSwitcher className="mb-3" />

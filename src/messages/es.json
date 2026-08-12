@@ -131,6 +131,7 @@
     "qrAndNfc": "QR y NFC",
     "offRampQueue": "Cola off-ramp",
     "qrCodes": "Códigos QR",
+    "pos": "POS",
     "posNfc": "POS y NFC"
   },
   "tagSoftPrompt": {
@@ -295,13 +296,25 @@
     "colStatus": "Estado",
     "confirmDelete": "¿Eliminar este enlace de pago?"
   },
+  "posPage": {
+    "title": "POS",
+    "subtitle": "Ingresá un monto, creá un cobro en vivo y mostrá el QR para que tu cliente escanee.",
+    "createCharge": "Crear cobro",
+    "creating": "Creando…",
+    "readyTitle": "Mostrá este QR a tu cliente",
+    "qrAlt": "Código QR de checkout",
+    "newCharge": "Nuevo cobro",
+    "emptyHint": "Ingresá un monto para previsualizar el cobro y crealo para obtener un QR escaneable.",
+    "managePoints": "¿Necesitás un código fijo de mostrador?",
+    "managePointsLink": "Administrar puntos QR y NFC"
+  },
   "storeDashboard": {
     "balanceLabel": "Balance disponible",
     "estimatedIn": "≈ {amount} {currency} hoy",
     "actionGetPaid": "Cobrar",
     "actionQrAndNfc": "QR y NFC",
     "actionQRCodes": "Códigos QR",
-    "actionPOS": "POS y NFC",
+    "actionPOS": "POS",
     "actionPaySupplier": "Pagar proveedor",
     "actionCashOut": "Retirar al banco"
   },

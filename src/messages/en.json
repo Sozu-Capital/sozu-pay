@@ -131,6 +131,7 @@
     "qrAndNfc": "QR & NFC",
     "offRampQueue": "Off-ramp queue",
     "qrCodes": "QR codes",
+    "pos": "POS",
     "posNfc": "POS & NFC"
   },
   "tagSoftPrompt": {
@@ -295,13 +296,25 @@
     "colStatus": "Status",
     "confirmDelete": "Delete this payment link?"
   },
+  "posPage": {
+    "title": "POS",
+    "subtitle": "Enter an amount, create a live charge, and show the QR for your customer to scan.",
+    "createCharge": "Create charge",
+    "creating": "Creating…",
+    "readyTitle": "Show this QR to your customer",
+    "qrAlt": "Checkout QR code",
+    "newCharge": "New charge",
+    "emptyHint": "Enter an amount to preview the charge, then create it for a scannable QR.",
+    "managePoints": "Need a permanent counter code?",
+    "managePointsLink": "Manage QR & NFC points"
+  },
   "storeDashboard": {
     "balanceLabel": "Available balance",
     "estimatedIn": "≈ {amount} {currency} today",
     "actionGetPaid": "Get paid",
     "actionQrAndNfc": "QR & NFC",
     "actionQRCodes": "QR codes",
-    "actionPOS": "POS & NFC",
+    "actionPOS": "POS",
     "actionPaySupplier": "Pay supplier",
     "actionCashOut": "Withdraw to bank"
   },

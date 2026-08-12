@@ -1,0 +1,192 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { CheckoutPreviewCard } from "@/components/CheckoutPreviewCard";
+
+type CreateResult = { checkoutUrl: string; id: string };
+
+export default function PosShell() {
+  const t = useTranslations("posPage");
+  const tc = useTranslations("checkoutPage");
+  const [amountUsd, setAmountUsd] = useState("");
+  const [reference, setReference] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<CreateResult | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setResult(null);
+    const amount = parseFloat(amountUsd);
+    if (!isFinite(amount) || amount <= 0) {
+      setError(tc("invalidAmount"));
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch("/api/checkout/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amountUsd: amountUsd.trim(),
+          reference: reference.trim() || undefined,
+          allowDebit: true,
+          allowCredit: true,
+          allowBankTransfer: true,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError((data.error as string) ?? tc("createFailed"));
+        return;
+      }
+      setResult({ checkoutUrl: data.checkoutUrl, id: data.id });
+      setAmountUsd("");
+      setReference("");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const qrSrc = result
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(result.checkoutUrl)}`
+    : null;
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-6">
+      <header>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+          {t("title")}
+        </h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("subtitle")}</p>
+      </header>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <form
+          onSubmit={handleCreate}
+          className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6 space-y-4"
+        >
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {tc("amountLabel")}
+            </label>
+            <div className="mt-1 flex items-center gap-2">
+              <span className="text-lg font-semibold text-gray-500">$</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                value={amountUsd}
+                onChange={(e) => setAmountUsd(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-lg tabular-nums"
+                placeholder="0.00"
+                autoFocus
+              />
+              <span className="text-sm font-medium text-gray-500">USD</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {tc("referenceLabel")}
+            </label>
+            <input
+              type="text"
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+              placeholder={tc("referencePlaceholder")}
+            />
+          </div>
+
+          {error && (
+            <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+              {error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold py-3 text-sm transition-colors"
+          >
+            {busy ? t("creating") : t("createCharge")}
+          </button>
+
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {t("managePoints")}{" "}
+            <Link
+              href="/dashboard/qr-codes"
+              className="font-medium text-emerald-700 dark:text-emerald-400 underline-offset-2 hover:underline"
+            >
+              {t("managePointsLink")}
+            </Link>
+          </p>
+        </form>
+
+        <div className="space-y-4">
+          {amountUsd && !result && (
+            <CheckoutPreviewCard amountUsd={amountUsd || "0.00"} reference={reference} />
+          )}
+
+          {result && qrSrc && (
+            <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-6 text-center">
+              <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+                {t("readyTitle")}
+              </p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={qrSrc}
+                alt={t("qrAlt")}
+                className="mx-auto mt-4 h-[220px] w-[220px] rounded-lg bg-white p-2"
+              />
+              <p className="mt-3 text-xs break-all text-gray-700 dark:text-gray-300">
+                {result.checkoutUrl}
+              </p>
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => copyLink(result.checkoutUrl)}
+                  className="rounded-lg border border-emerald-400 dark:border-emerald-600 px-4 py-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-800/40 transition-colors"
+                >
+                  {copied ? tc("copied") : tc("copyLink")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResult(null);
+                    setError(null);
+                  }}
+                  className="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  {t("newCharge")}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!amountUsd && !result && (
+            <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-600 p-8 text-center text-sm text-gray-500 dark:text-gray-400">
+              {t("emptyHint")}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

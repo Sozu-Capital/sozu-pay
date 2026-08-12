@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import { MerchantsLandingFlow } from "@/components/MerchantsLandingFlow";
 import { persistMerchantSignupIntent } from "@/lib/auth/signup-intent";
+import { logoutPollarBrowserClient } from "@/lib/pollar/browser-client";
 
 type MerchantsPageContentProps = {
   clearSessionOnMount?: boolean;
@@ -29,6 +30,7 @@ export function MerchantsPageContent({ clearSessionOnMount, returnTo }: Merchant
     clearedRef.current = true;
     (async () => {
       try {
+        await logoutPollarBrowserClient();
         await fetch("/api/auth/clear-session", { method: "POST", credentials: "include" });
       } catch {
         // ignore

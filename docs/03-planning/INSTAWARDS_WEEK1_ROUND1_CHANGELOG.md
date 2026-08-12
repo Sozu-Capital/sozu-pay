@@ -15,12 +15,7 @@
 
 V1.1 code polish and a published **3-frame Figma pack** (onboarding → store home → POS) are **both** required before all nine SOW bullets are marked checked.
 
-| Artifact         | Status                                                                         |
-| ---------------- | ------------------------------------------------------------------------------ |
-| V1.1 code polish | This branch (`18-v1-1-instawards-submission-polish`)                           |
-| Figma 3-pack URL | **Pending** — slot below. Do not claim “all nine checked” until a URL is here. |
-
-**Figma 3-pack:** _pending — add the published file URL (onboarding, store home, POS) here._
+**Figma 3-pack:** [https://www.figma.com/design/GckxsHxz9LAlD8C3DNFCea/Sozu-Pay---landingpage?node-id=193-2](https://www.figma.com/design/GckxsHxz9LAlD8C3DNFCea/Sozu-Pay---landingpage?node-id=193-2)
 
 ---
 
@@ -28,19 +23,17 @@ V1.1 code polish and a published **3-frame Figma pack** (onboarding → store ho
 
 Exponential feature: `cmso2a555000dkw04fqspp31a` — **Instawards Week 1 — Merchant Foundation & Onboarding**
 
-| #   | Expo # | Ticket                           | Status          | Evidence                                                     |
-| --- | ------ | -------------------------------- | --------------- | ------------------------------------------------------------ |
-| 1   | #9     | Merchant onboarding flow         | DONE            | `/merchants` → signup intent → create org (`type: "store"`)  |
-| 2   | #10    | Merchant profile creation        | DONE            | Passkey user + org profile; `/dashboard/profile`             |
-| 3   | #11    | Store creation                   | DONE            | Org-as-store; Settings `#stores` identity card               |
-| 4   | #12    | Merchant Stellar wallet creation | DONE            | Smart account + Soroban treasury                             |
-| 5   | #13    | Merchant authentication          | DONE            | Passkey / PIN; session + org picker                          |
-| 6   | #14    | POS shell                        | DONE (V1.1)     | `/dashboard/pos` amount → local QR with amount visible       |
-| 7   | #15    | Merchant dashboard foundation    | DONE (V1.1)     | Store home + nav: POS-only create-charge CTA                 |
-| 8   | #16    | Design system updates            | DONE            | Shared Tailwind + EN/ES; in-app language                     |
-| 9   | #17    | UX flows and prototypes          | **Not checked** | Live demo path is in code; Figma 3-pack URL is still pending |
-
-**All-nine-checked:** no — Figma 3-pack URL is not in this file yet.
+| #   | Expo # | Ticket                           | Status      | Evidence                                                    |
+| --- | ------ | -------------------------------- | ----------- | ----------------------------------------------------------- |
+| 1   | #9     | Merchant onboarding flow         | DONE        | `/merchants` → signup intent → create org (`type: "store"`) |
+| 2   | #10    | Merchant profile creation        | DONE        | Passkey user + org profile; `/dashboard/profile`            |
+| 3   | #11    | Store creation                   | DONE        | Org-as-store; Settings `#stores` identity card              |
+| 4   | #12    | Merchant Stellar wallet creation | DONE        | Smart account + Soroban treasury                            |
+| 5   | #13    | Merchant authentication          | DONE        | Passkey / PIN; session + org picker                         |
+| 6   | #14    | POS shell                        | DONE (V1.1) | `/dashboard/pos` amount → local QR with amount visible      |
+| 7   | #15    | Merchant dashboard foundation    | DONE (V1.1) | Store home + nav: POS-only create-charge CTA                |
+| 8   | #16    | Design system updates            | DONE        | Shared Tailwind + EN/ES; in-app language                    |
+| 9   | #17    | UX flows and prototypes          | **DONE**    | Figma ready                                                 |
 
 ---
 
@@ -86,5 +79,4 @@ POS shell replaced the `/dashboard/pos` redirect; Settings `#stores` reframed as
 
 ## External references
 
-- Kickoff: [Episode 1 Instawards](https://www.youtube.com/watch?v=H9N3xA8eRII) (2026-05-04)
-- Wrap: [Instawards Stellar Chile: SozuPay](https://blog.telluscoop.com/p/instawards-stellar-chile-sozupay) (2026-06-04)
+[https://www.youtube.com/watch?v=tRkl-kcc2-g](https://www.youtube.com/watch?v=tRkl-kcc2-g)

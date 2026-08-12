@@ -1,8 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useTranslations } from "next-intl";
-import { PollarClient } from "@pollar/core";
+import type { PollarClient } from "@pollar/core";
+import {
+  getPollarBrowserClient,
+  isPollarFakeAuth,
+  logoutPollarBrowserClient,
+} from "@/lib/pollar/browser-client";
 
 type HomePollarAuthProps = {
   returnTo?: string;
@@ -13,6 +18,37 @@ function encodeFakeEmail(email: string): string {
   return email.replace(/@/g, "_at_");
 }
 
+function accessTokenFromClient(client: PollarClient): string | null {
+  const state = client.getAuthState();
+  if (state.step === "authenticated" && state.session?.token?.accessToken) {
+    return state.session.token.accessToken;
+  }
+  return null;
+}
+
+function waitForAccessToken(client: PollarClient, fallbackMessage: string): Promise<string> {
+  const existing = accessTokenFromClient(client);
+  if (existing) return Promise.resolve(existing);
+
+  return new Promise<string>((resolve, reject) => {
+    const unsub = client.onAuthStateChange((state) => {
+      if (state.step === "authenticated" && state.session?.token?.accessToken) {
+        unsub();
+        resolve(state.session.token.accessToken);
+      } else if (state.step === "error") {
+        unsub();
+        reject(new Error(state.message || fallbackMessage));
+      }
+    });
+    try {
+      client.login({ provider: "google" });
+    } catch (err) {
+      unsub();
+      reject(err instanceof Error ? err : new Error(fallbackMessage));
+    }
+  });
+}
+
 /**
  * NGO home Google-only Pollar login. On success, bridges to SozuPay session via
  * POST /api/auth/pollar/verify. No email OTP / GitHub / passkey on this door.
@@ -21,11 +57,8 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
   const t = useTranslations("login");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const clientRef = useRef<PollarClient | null>(null);
 
-  const publishableKey = (process.env.NEXT_PUBLIC_POLLAR_PUBLISHABLE_KEY ?? "").trim();
-  const fakeAuth =
-    process.env.NEXT_PUBLIC_POLLAR_FAKE_AUTH === "true" || !publishableKey;
+  const fakeAuth = isPollarFakeAuth();
 
   const setBusyState = useCallback(
     (v: boolean) => {
@@ -34,21 +67,6 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
     },
     [onBusyChange],
   );
-
-  const client = useMemo(() => {
-    if (!publishableKey || typeof window === "undefined") return null;
-    if (!clientRef.current) {
-      clientRef.current = new PollarClient({ apiKey: publishableKey });
-    }
-    return clientRef.current;
-  }, [publishableKey]);
-
-  useEffect(() => {
-    return () => {
-      clientRef.current?.destroy();
-      clientRef.current = null;
-    };
-  }, []);
 
   async function bridgeWithToken(token: string) {
     const res = await fetch("/api/auth/pollar/verify", {
@@ -79,33 +97,36 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
         return;
       }
 
+      const client = getPollarBrowserClient();
       if (!client) {
         throw new Error(t("pollarNotConfigured"));
       }
 
       await client.ready();
 
-      const token = await new Promise<string>((resolve, reject) => {
-        const unsub = client.onAuthStateChange((state) => {
-          if (state.step === "authenticated" && state.session?.token?.accessToken) {
-            unsub();
-            resolve(state.session.token.accessToken);
-          } else if (state.step === "error") {
-            unsub();
-            reject(new Error(state.message || t("failedToSignIn")));
-          }
-        });
+      const reused = accessTokenFromClient(client);
+      if (reused) {
         try {
-          client.login({ provider: "google" });
-        } catch (err) {
-          unsub();
-          reject(err instanceof Error ? err : new Error(t("failedToSignIn")));
+          await bridgeWithToken(reused);
+          return;
+        } catch {
+          await logoutPollarBrowserClient();
         }
-      });
+      }
 
+      const fresh = getPollarBrowserClient();
+      if (!fresh) {
+        throw new Error(t("pollarNotConfigured"));
+      }
+      await fresh.ready();
+      const token = await waitForAccessToken(fresh, t("failedToSignIn"));
       await bridgeWithToken(token);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("failedToSignIn"));
+      const message = err instanceof Error ? err.message : t("failedToSignIn");
+      if (message.includes("before initialization")) {
+        await logoutPollarBrowserClient();
+      }
+      setError(message.includes("before initialization") ? t("failedToSignIn") : message);
       setBusyState(false);
     }
   }

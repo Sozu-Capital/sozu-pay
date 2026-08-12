@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import { HomeLandingShell } from "@/components/HomeLandingShell";
 import { HomePollarAuth } from "@/components/HomePollarAuth";
+import { logoutPollarBrowserClient } from "@/lib/pollar/browser-client";
 
 type LoginPageContentProps = {
   clearSessionOnMount?: boolean;
@@ -26,6 +27,7 @@ export function LoginPageContent({ clearSessionOnMount, returnTo }: LoginPageCon
     clearedRef.current = true;
     (async () => {
       try {
+        await logoutPollarBrowserClient();
         await fetch("/api/auth/clear-session", { method: "POST", credentials: "include" });
       } catch {
         // ignore

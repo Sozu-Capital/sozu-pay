@@ -214,9 +214,60 @@ export function MerchantPollarOnboarding() {
     router.replace(path);
   }
 
+  function goBack() {
+    if (phase === "busy") return;
+    if (phase === "form" || phase === "error") {
+      setPhase("intro");
+      setError("");
+      return;
+    }
+    if (phase === "wallet") {
+      setPhase("form");
+      return;
+    }
+    if (phase === "secureHow") {
+      setPhase("secure");
+      return;
+    }
+    if (phase === "secure") {
+      setPhase("done");
+      return;
+    }
+    if (phase === "intro") {
+      router.replace("/merchants");
+      return;
+    }
+    if (phase === "done") {
+      finish("/dashboard");
+    }
+  }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      goBack();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [phase]);
+
   return (
     <DarkGradientBg>
-      <main className="flex min-h-screen flex-col items-center justify-center p-4 text-white">
+      <main className="relative flex min-h-screen flex-col items-center justify-center p-4 text-white">
+        {phase !== "busy" ? (
+          <button
+            type="button"
+            onClick={goBack}
+            className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white"
+            aria-label={t("closeAria")}
+            title={t("closeAria")}
+          >
+            <span aria-hidden className="text-lg leading-none">
+              ×
+            </span>
+          </button>
+        ) : null}
         {phase === "intro" ? (
           <Card>
             <p className="text-[11px] font-medium uppercase tracking-wider text-gray-500">

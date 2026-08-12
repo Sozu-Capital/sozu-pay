@@ -181,7 +181,7 @@ export default function ReceiptModal({
     if (isPending) return;
 
     const checkoutBaseUrl =
-      process.env.NEXT_PUBLIC_SOZUCREDIT_URL?.replace(/\/$/, "") ||
+      process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
       (typeof window !== "undefined" ? window.location.origin : "");
     const shareUrl = isCheckout
       ? `${checkoutBaseUrl}/checkout/${id}`

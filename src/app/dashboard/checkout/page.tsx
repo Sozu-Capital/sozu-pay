@@ -176,7 +176,7 @@ export default function CheckoutPage() {
         : "text-amber-600 dark:text-amber-400";
 
   const checkoutBaseUrl =
-    process.env.NEXT_PUBLIC_SOZUCREDIT_URL?.replace(/\/$/, "") ||
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
     (typeof window !== "undefined" ? window.location.origin : "");
 
   return (

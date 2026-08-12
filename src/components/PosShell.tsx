@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { CheckoutPreviewCard } from "@/components/CheckoutPreviewCard";
+import { LocalQrCode } from "@/components/LocalQrCode";
 import { posPaneState } from "@/lib/dashboard/pos-pane";
 
 type CreateResult = {
@@ -80,9 +81,6 @@ export default function PosShell() {
   };
 
   const pane = posPaneState({ amountUsd, hasResult: !!result });
-  const qrSrc = result
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(result.checkoutUrl)}`
-    : null;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -162,7 +160,7 @@ export default function PosShell() {
             <CheckoutPreviewCard amountUsd={amountUsd || "0.00"} reference={reference} />
           )}
 
-          {pane === "ready" && result && qrSrc && (
+          {pane === "ready" && result && (
             <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-6 text-center">
               <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
                 {t("readyTitle")}
@@ -176,11 +174,11 @@ export default function PosShell() {
                   {t("chargedReference", { reference: result.reference })}
                 </p>
               )}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={qrSrc}
+              <LocalQrCode
+                value={result.checkoutUrl}
+                size={220}
                 alt={t("qrAlt")}
-                className="mx-auto mt-4 h-[220px] w-[220px] rounded-lg bg-white p-2"
+                className="mx-auto mt-4 rounded-lg bg-white p-2"
               />
               <p className="mt-3 text-xs break-all text-gray-700 dark:text-gray-300">
                 {result.checkoutUrl}

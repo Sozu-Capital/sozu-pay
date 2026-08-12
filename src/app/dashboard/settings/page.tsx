@@ -9,10 +9,15 @@ import { resolveAccountDisplayName } from "@/lib/display-name";
 import { isPasskeyAuth } from "@/lib/auth/provider";
 import { ProfileCollapsibleCard } from "@/components/profile/ProfileCollapsibleCard";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 
 export default function SettingsPage() {
   const t = useTranslations("settingsPage");
   const tc = useTranslations("common");
+  const dashboardProfile = useDashboardProfile();
+  const orgName = dashboardProfile?.profile?.org_name ?? null;
+  const orgType = dashboardProfile?.profile?.org_type ?? null;
+  const hasOrg = !!dashboardProfile?.profile?.org_id;
   const [user, setUser] = useState<{
     email: string;
     username?: string | null;
@@ -443,10 +448,47 @@ export default function SettingsPage() {
 
       <section className="mt-8" id="stores">
         <h2 className="text-lg font-semibold">{t("stores")}</h2>
-        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-          {t("storesBody")}
-        </p>
-        <p className="mt-2 text-sm text-gray-400 dark:text-gray-500">{t("storesDocs")}</p>
+        {hasOrg ? (
+          <div className="mt-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                {orgName || t("storesCurrentFallback")}
+              </p>
+              <span className="inline-flex rounded-full bg-gray-100 dark:bg-gray-700 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                {orgType === "store" ? t("storesTypeBadge") : t("storesTypeBadgeNgo")}
+              </span>
+            </div>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              {orgType === "store" ? t("storesBodyStore") : t("storesBodyOrg")}
+            </p>
+            {orgType === "store" && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Link
+                  href="/dashboard/pos"
+                  className="inline-flex rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-sm font-medium transition-colors"
+                >
+                  {t("storesCtaPos")}
+                </Link>
+                <Link
+                  href="/dashboard/qr-codes"
+                  className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm font-medium text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  {t("storesCtaQr")}
+                </Link>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="mt-3 space-y-2">
+            <p className="text-sm text-gray-500 dark:text-gray-400">{t("storesNoOrg")}</p>
+            <Link
+              href="/onboarding/create-organization"
+              className="inline-flex text-sm font-medium text-emerald-700 dark:text-emerald-400 underline-offset-2 hover:underline"
+            >
+              {t("storesCreateCta")}
+            </Link>
+          </div>
+        )}
       </section>
 
       <div className="mt-8">

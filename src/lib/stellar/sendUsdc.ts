@@ -6,15 +6,22 @@
  * Only import this from server code (API routes, server actions).
  */
 import {
+  Address,
   Asset,
+  Contract,
   Keypair,
   Operation,
   TransactionBuilder,
   Transaction,
   Horizon,
   Networks,
+  rpc,
+  xdr,
 } from "@stellar/stellar-sdk";
 import { getHorizon } from "./server";
+import { assertHorizonPaymentDestination, payoutRailForDestination } from "@/lib/payment/payout-rail";
+import { amountToI128, getNetworkPassphrase as getSorobanNetworkPassphrase, getSorobanRpcUrl } from "@/lib/stellar/soroban-common";
+import { getSorobanUsdcTokenId } from "@/lib/stellar/org-treasury";
 
 // Circle USDC: testnet vs public have different issuers (Issuer is invalid if mismatched).
 const USDC_ISSUER_TESTNET =
@@ -71,13 +78,14 @@ export async function buildUnsignedUsdcEnvelope(
     throw err;
   }
 
+  const classicDestination = assertHorizonPaymentDestination(destinationAccountId);
   const txBuilder = new TransactionBuilder(sourceAccount, {
     fee: "100",
     networkPassphrase,
   })
     .addOperation(
       Operation.payment({
-        destination: destinationAccountId,
+        destination: classicDestination,
         asset: usdcAsset,
         amount: String(amount),
       })
@@ -144,6 +152,84 @@ export type SendUsdcOptions = {
   server?: Horizon.Server;
 };
 
+function i128ScValFromAmount(amount: string): xdr.ScVal {
+  const amountI128 = amountToI128(amount);
+  const mask64 = BigInt("0xffffffffffffffff");
+  const lo = amountI128 & mask64;
+  const hi = amountI128 >> BigInt(64);
+  return xdr.ScVal.scvI128(
+    new xdr.Int128Parts({
+      lo: lo as unknown as xdr.Uint64,
+      hi: hi as unknown as xdr.Uint64,
+    })
+  );
+}
+
+/**
+ * Classic G treasury → Soroban C destination via Circle USDC SAC transfer.
+ * Horizon Payment ops cannot target contract IDs.
+ */
+export async function sendUsdcToSmartAccount(
+  destinationContractId: string,
+  amount: string,
+  signer: Keypair
+): Promise<string> {
+  const destination = destinationContractId.trim().toUpperCase();
+  if (payoutRailForDestination(destination) !== "sac") {
+    throw new Error("SAC transfer requires a smart-account destination (C…).");
+  }
+
+  const rpcUrl = getSorobanRpcUrl();
+  const server = new rpc.Server(rpcUrl, { allowHttp: rpcUrl.startsWith("http://") });
+  const networkPassphrase = getSorobanNetworkPassphrase();
+  const token = new Contract(getSorobanUsdcTokenId());
+
+  const account = await server.getAccount(signer.publicKey());
+  const rawTx = new TransactionBuilder(account, {
+    fee: "100000",
+    networkPassphrase,
+  })
+    .addOperation(
+      token.call(
+        "transfer",
+        Address.fromString(signer.publicKey()).toScVal(),
+        Address.fromString(destination).toScVal(),
+        i128ScValFromAmount(amount)
+      )
+    )
+    .setTimeout(60)
+    .build();
+
+  let prepared;
+  try {
+    prepared = await server.prepareTransaction(rawTx);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[sendUsdc] SAC transfer prepare failed:", {
+      destination,
+      amount,
+      from: signer.publicKey(),
+      error: msg,
+    });
+    throw new Error(
+      `Could not send USDC to smart account ${destination.slice(0, 8)}… — ${msg}`
+    );
+  }
+
+  prepared.sign(signer);
+  const result = await server.sendTransaction(prepared);
+  if (result.status === "ERROR") {
+    const detail = String(result.errorResult ?? "Soroban submit failed");
+    throw new Error(
+      /destination/i.test(detail)
+        ? `Smart account ${destination.slice(0, 8)}… cannot receive this transfer.`
+        : detail
+    );
+  }
+  if (!result.hash) throw new Error("No transaction hash from Soroban RPC");
+  return result.hash;
+}
+
 /**
  * Build, sign, and submit a USDC payment to a destination address.
  * Uses org disbursement wallet from env unless signerSecretKey is provided.
@@ -169,6 +255,11 @@ export async function sendUsdc(
   const usdcAsset = new Asset("USDC", getUsdcIssuer());
 
   const sourcePublicKey = keypair.publicKey();
+  if (payoutRailForDestination(destinationAccountId) === "sac") {
+    return sendUsdcToSmartAccount(destinationAccountId, amount, keypair);
+  }
+  const classicDestination = assertHorizonPaymentDestination(destinationAccountId);
+
   let sourceAccount;
   try {
     sourceAccount = await horizon.loadAccount(sourcePublicKey);
@@ -196,7 +287,7 @@ export async function sendUsdc(
     })
       .addOperation(
         Operation.payment({
-          destination: destinationAccountId,
+          destination: classicDestination,
           asset: usdcAsset,
           amount: String(amount),
         })

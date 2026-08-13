@@ -362,6 +362,17 @@ export async function POST(request: NextRequest) {
     }
 
     if (requirePayoutPassword && org?.stellar_disbursement_public_key) {
+      if (destination.trim().toUpperCase().startsWith("C")) {
+        failPayout(record.id);
+        return NextResponse.json(
+          {
+            error:
+              "Sending to a smart account (C…) requires the org treasury to sign a SAC transfer. Unlock the payout wallet (or use a classic G destination).",
+            code: "SAC_PAYOUT_PASSWORD_UNSUPPORTED",
+          },
+          { status: 400 }
+        );
+      }
       try {
         const { envelopeXdr, network } = await buildUnsignedUsdcEnvelope(
           org.stellar_disbursement_public_key,

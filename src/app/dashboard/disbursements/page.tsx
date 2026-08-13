@@ -22,6 +22,7 @@ import { executePasskeySorobanPayout } from "@/lib/stellar/smartAccounts/signSor
 import type { BeneficiaryLifecycleState } from "@/lib/sdp/receiverDisplay";
 import { batchRemainingUsdc } from "@/lib/disbursements/mergeDisbursementStats";
 import type { DisbursementMeta } from "@/lib/disbursements/store";
+import { isBatchFunded, pollarBatchAvailableUsdc } from "@/lib/disbursements/batch-funding";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -199,7 +200,8 @@ function formatPaymentStatus(
 export default function DisbursementsPage() {
   const t = useTranslations("disbursementsPage");
   const searchParams = useSearchParams();
-  const { profile } = useDashboardProfile() ?? { profile: null };
+  const dashboardCtx = useDashboardProfile();
+  const { profile, balance } = dashboardCtx ?? { profile: null, balance: null };
   const { ready: kitReady, kit, credentialId } = useSmartAccountKitContext();
   const isPollarPath = profile?.is_pollar_user === true;
   const isDisbursementAdmin =
@@ -264,7 +266,6 @@ export default function DisbursementsPage() {
   const [fundingId, setFundingId] = useState<string | null>(null);
   const [togglingAutoId, setTogglingAutoId] = useState<string | null>(null);
   const [distributionUsdc, setDistributionUsdc] = useState<string>("0");
-  const [orgCombinedUsdc, setOrgCombinedUsdc] = useState<string>("0");
   const [distributionConfigured, setDistributionConfigured] = useState(false);
 
   // ── Fetch list ────────────────────────────────────────────────────────────
@@ -895,11 +896,9 @@ export default function DisbursementsPage() {
       if (balRes.ok) {
         const bal = (await balRes.json()) as {
           distributionUsdc?: string;
-          orgCombinedUsdc?: string;
           configured?: boolean;
         };
         if (bal.distributionUsdc) setDistributionUsdc(bal.distributionUsdc);
-        if (bal.orgCombinedUsdc) setOrgCombinedUsdc(bal.orgCombinedUsdc);
         if (bal.configured != null) setDistributionConfigured(bal.configured);
       }
       await fetchList();
@@ -1035,7 +1034,6 @@ export default function DisbursementsPage() {
         <DistributionTreasuryPanel
           onBalancesChange={(b) => {
             setDistributionUsdc(b.distributionUsdc);
-            setOrgCombinedUsdc(b.orgCombinedUsdc);
             setDistributionConfigured(b.configured);
           }}
         />
@@ -1553,8 +1551,9 @@ export default function DisbursementsPage() {
           const hotlinkActive = Boolean(meta?.hotlinkAt ?? detailMeta?.hotlinkAt);
           const canEdit = DELETABLE_DISBURSEMENT_STATUSES.has(d.status);
           const batchRemaining = batchRemainingUsdc(d, meta);
-          const batchFunded =
-            batchRemaining <= 0 || parseFloat(distributionUsdc) >= batchRemaining;
+          const batchFunded = isPollarPath
+            ? isBatchFunded({ remaining: batchRemaining, availableUsdc: pollarBatchAvailableUsdc(balance) })
+            : isBatchFunded({ remaining: batchRemaining, availableUsdc: parseFloat(distributionUsdc) || 0 });
           const hasOutstandingPayments =
             d.status !== "COMPLETED" &&
             (d.successful_payments < d.total_payments ||
@@ -1778,10 +1777,10 @@ export default function DisbursementsPage() {
                       onClick={() => void handleSendInvites(d.id)}
                       disabled={
                         sendingId === d.id ||
-                        (!invitesSent && batchRemaining > 0 && !batchFunded)
+                        (!isPollarPath && !invitesSent && batchRemaining > 0 && !batchFunded)
                       }
                       title={
-                        !invitesSent && batchRemaining > 0 && !batchFunded
+                        !isPollarPath && !invitesSent && batchRemaining > 0 && !batchFunded
                           ? t("sendInvitesNeedsFunding", {
                               amount: formatBatchAmount(batchRemaining),
                               asset: d.asset.code,
@@ -1817,10 +1816,20 @@ export default function DisbursementsPage() {
                   )}
                 </div>
                 {!batchFunded && batchRemaining > 0 && isDisbursementAdmin ? (
-                  <p className="text-xs text-amber-700 dark:text-amber-400">{t("fundBatchHint")}</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    {isPollarPath ? t("fundBatchHintPollar", {
+                      amount: formatBatchAmount(batchRemaining),
+                      asset: d.asset.code,
+                    }) : t("fundBatchHint", {
+                      amount: formatBatchAmount(batchRemaining),
+                      asset: d.asset.code,
+                    })}
+                  </p>
                 ) : null}
                 {!invitesSent && (d.status === "READY" || d.status === "DRAFT") ? (
-                  <p className="text-xs text-amber-700 dark:text-amber-400">{t("sendInvitesHint")}</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    {isPollarPath ? t("sendInvitesHintPollar") : t("sendInvitesHint")}
+                  </p>
                 ) : null}
 
                 {/* Stats */}

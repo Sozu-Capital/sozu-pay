@@ -1290,6 +1290,7 @@
     "starting": "Distributing…",
     "sendInvites": "Send invites",
     "sendInvitesHint": "Fund the distribution wallet first, then send invites to open SozuCredit registration.",
+    "sendInvitesHintPollar": "Send invites to open SozuCredit registration for recipients.",
     "sendInvitesNeedsFunding": "Fund the distribution wallet with {amount} {asset} before sending invites.",
     "campaignPaid": "Paid",
     "disbursementStatus": {
@@ -1446,6 +1447,7 @@
     "fundBatchSigning": "Signing…",
     "fundBatchSuccess": "Funded batch with {amount} USDC (tx {hash}…).",
     "fundBatchHint": "Fund the SDP distribution wallet with {amount} {asset} before distributing or enabling auto pay.",
+    "fundBatchHintPollar": "Fund the org treasury with {amount} {asset} on Home before distributing or enabling auto pay.",
     "batchFunded": "Batch funded",
     "batchNeedsFunding": "Needs funding",
     "batchAlreadyFunded": "This batch is already fully disbursed.",

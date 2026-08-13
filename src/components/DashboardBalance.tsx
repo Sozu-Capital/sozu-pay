@@ -9,7 +9,9 @@ export default function DashboardBalance() {
   const ctx = useDashboardProfile();
   const loading = ctx?.loading ?? true;
   const data = ctx?.balance ?? null;
-  const canManageDisbursements = ctx?.profile?.can_manage_disbursements === true;
+  const profile = ctx?.profile ?? null;
+  const canManageDisbursements = profile?.can_manage_disbursements === true;
+  const isPollarUser = profile?.is_pollar_user === true;
 
   if (loading) return <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 animate-pulse h-24" />;
 
@@ -20,7 +22,7 @@ export default function DashboardBalance() {
   const inVault = data?.inVault ?? "0";
   const distributionUsdc = data?.distributionUsdc ?? "0";
   const showDistribution =
-    canManageDisbursements && (data?.sdpDistributionConfigured ?? false);
+    !isPollarUser && canManageDisbursements && (data?.sdpDistributionConfigured ?? false);
 
   return (
     <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6">

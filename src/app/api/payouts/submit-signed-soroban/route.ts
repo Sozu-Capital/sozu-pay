@@ -4,7 +4,7 @@ import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
-import { getPayoutById, completePayout, failPayout, ensurePendingPayout } from "@/lib/payouts";
+import { getPayoutById, getPayoutByIdAsync, completePayout, failPayout, ensurePendingPayout } from "@/lib/payouts";
 import { appendAuditEvent } from "@/lib/audit";
 import { submitSignedSorobanEnvelope } from "@/lib/stellar/org-treasury";
 import { formatSorobanPayoutError } from "@/lib/stellar/soroban-payout-errors";
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
   const locale = readServerLocaleCookie((await cookies()).get(LOCALE_COOKIE)?.value);
 
-  let payout = getPayoutById(payoutId, session.id);
+  let payout = (await getPayoutByIdAsync(payoutId, session.id)) ?? getPayoutById(payoutId, session.id);
   if (!payout) {
     if (!amount || !destination) {
       const msg =
@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
       type: "to_stellar",
       stellarAddress: destination,
       recipientLabel,
+      orgId: user.org_id ?? null,
     });
   }
   if (payout.status !== "pending") {

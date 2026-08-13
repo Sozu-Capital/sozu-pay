@@ -42,6 +42,9 @@ export async function GET(request: NextRequest) {
   const uniqueHolders = Array.from(new Set(additionalHoldersList))
     .filter((h) => h !== publicKey);
 
-  const list = await getTransactions(publicKey, limit, { additionalHolders: uniqueHolders });
+  const list = await getTransactions(publicKey, limit, {
+    additionalHolders: uniqueHolders,
+    orgId: org?.id ?? null,
+  });
   return NextResponse.json({ transactions: list });
 }

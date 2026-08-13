@@ -19,9 +19,10 @@ import {
   xdr,
 } from "@stellar/stellar-sdk";
 import { getHorizon } from "./server";
+import { getUsdcBalance } from "@/lib/stellar/balance";
 import { assertHorizonPaymentDestination, payoutRailForDestination } from "@/lib/payment/payout-rail";
 import { amountToI128, getNetworkPassphrase as getSorobanNetworkPassphrase, getSorobanRpcUrl } from "@/lib/stellar/soroban-common";
-import { getSorobanUsdcTokenId } from "@/lib/stellar/org-treasury";
+import { getCircleUsdcSacContractId } from "@/lib/stellar/org-treasury";
 
 // Circle USDC: testnet vs public have different issuers (Issuer is invalid if mismatched).
 const USDC_ISSUER_TESTNET =
@@ -179,10 +180,21 @@ export async function sendUsdcToSmartAccount(
     throw new Error("SAC transfer requires a smart-account destination (C…).");
   }
 
+  const amountNum = parseFloat(amount);
+  if (!Number.isFinite(amountNum) || amountNum <= 0) {
+    throw new Error(`Invalid amount: ${amount}`);
+  }
+  const horizonUsdc = parseFloat(await getUsdcBalance(signer.publicKey())) || 0;
+  if (horizonUsdc + 1e-9 < amountNum) {
+    throw new Error(
+      `Signing wallet ${signer.publicKey().slice(0, 8)}… has ${horizonUsdc.toFixed(2)} USDC (Horizon) but this send needs ${amountNum.toFixed(2)}. Fund that G address — C sends debit the same Circle USDC trustline.`
+    );
+  }
+
   const rpcUrl = getSorobanRpcUrl();
   const server = new rpc.Server(rpcUrl, { allowHttp: rpcUrl.startsWith("http://") });
   const networkPassphrase = getSorobanNetworkPassphrase();
-  const token = new Contract(getSorobanUsdcTokenId());
+  const token = new Contract(getCircleUsdcSacContractId());
 
   const account = await server.getAccount(signer.publicKey());
   const rawTx = new TransactionBuilder(account, {
@@ -211,6 +223,11 @@ export async function sendUsdcToSmartAccount(
       from: signer.publicKey(),
       error: msg,
     });
+    if (/resulting balance is not within the allowed range|#10/i.test(msg)) {
+      throw new Error(
+        `Org treasury ${signer.publicKey().slice(0, 8)}… has no Circle USDC on the SAC rail for this amount (${amount}). Classic G USDC and SAC USDC are the same Circle issuer — fund the G wallet, then retry.`
+      );
+    }
     throw new Error(
       `Could not send USDC to smart account ${destination.slice(0, 8)}… — ${msg}`
     );

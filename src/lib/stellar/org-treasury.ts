@@ -51,6 +51,16 @@ export function getSorobanUsdcTokenId(): string {
   );
 }
 
+/**
+ * Circle USDC SAC for the configured Stellar network (same issuer as Horizon USDC).
+ * Use this when a classic G account spends into a C destination so we debit the
+ * trustline the org actually holds — not a leftover / mis-set SOROBAN_USDC_TOKEN_ID.
+ */
+export function getCircleUsdcSacContractId(): string {
+  const passphrase = isPublicNetwork() ? Networks.PUBLIC : Networks.TESTNET;
+  return new Asset("USDC", getUsdcIssuer()).contractId(passphrase);
+}
+
 /** Primary on-chain disbursement target for an org. */
 export function resolveOrgDisbursementContractId(org: Organization): string | null {
   return org.soroban_contract_id?.trim() || null;

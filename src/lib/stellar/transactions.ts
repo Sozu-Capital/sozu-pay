@@ -1,7 +1,8 @@
 import { getHorizon } from "./server";
 import { Address, rpc, xdr } from "@stellar/stellar-sdk";
 import { coerceSimulateRetval, getSorobanRpcUrl } from "@/lib/stellar/soroban-common";
-import { getSorobanUsdcTokenId } from "@/lib/stellar/org-treasury";
+import { getCircleUsdcSacContractId, getSorobanUsdcTokenId } from "@/lib/stellar/org-treasury";
+import { selectCompletedStellarPayoutsForOrg } from "@/lib/db/org-payouts";
 import { resolveAddressesToSozuTags } from "@/lib/payment/resolve-address-to-tag";
 import { normalizeStellarAddressInput } from "@/lib/payment/stellar-address";
 
@@ -87,7 +88,13 @@ async function getSorobanTransferRows(params: {
   const holders = new Set(params.holders.map((h) => h.trim().toUpperCase()).filter(Boolean));
   if (holders.size === 0) return [];
 
-  const tokenId = getSorobanUsdcTokenId();
+  const tokenId = getCircleUsdcSacContractId();
+  let altTokenId: string | null = null;
+  try {
+    altTokenId = getSorobanUsdcTokenId();
+  } catch {
+    altTokenId = null;
+  }
   const rpcUrl = getSorobanRpcUrl();
   const server = new rpc.Server(rpcUrl, { allowHttp: rpcUrl.startsWith("http://") });
 
@@ -111,9 +118,12 @@ async function getSorobanTransferRows(params: {
   const latest = await server.getLatestLedger();
   const startLedger = Math.max(1, (latest.sequence ?? 1) - 4000);
 
+  const contractIds = Array.from(
+    new Set([tokenId, altTokenId].filter((id): id is string => Boolean(id)))
+  );
   const res = await (server as unknown as RpcServerWithEvents).getEvents({
     startLedger,
-    filters: [{ type: "contract", contractIds: [tokenId] }],
+    filters: [{ type: "contract", contractIds }],
     pagination: { limit: Math.min(200, Math.max(40, params.limit * 12)) },
   });
 
@@ -189,10 +199,27 @@ async function getSorobanTransferRows(params: {
     .slice(0, params.limit);
 }
 
+function payoutRecordsToRows(records: Awaited<ReturnType<typeof selectCompletedStellarPayoutsForOrg>>): RawTxRow[] {
+  return records
+    .filter((p) => p.stellarTxHash)
+    .map((p) => ({
+      id: p.stellarTxHash!,
+      date: p.createdAt,
+      amount: p.amount,
+      type: "payout" as const,
+      counterpartyAddress: (p.stellarAddress ?? "").toUpperCase(),
+      counterpartyTag: p.recipientLabel?.startsWith("$")
+        ? p.recipientLabel.replace(/^\$+/, "")
+        : null,
+      status: "completed" as const,
+      stellarExpertUrl: stellarExpertTxUrl(p.stellarTxHash!),
+    }));
+}
+
 export async function getTransactions(
   publicKey: string,
   limit: number = 20,
-  options?: { additionalHolders?: string[] }
+  options?: { additionalHolders?: string[]; orgId?: string | null }
 ): Promise<TransactionRow[]> {
   const pk = publicKey.trim().toUpperCase();
   const extra = (options?.additionalHolders ?? [])
@@ -260,7 +287,19 @@ export async function getTransactions(
     })
   ).then((results) => results.flat());
 
-  const [sorobanRows, classicRows] = await Promise.all([fetchSoroban, fetchClassic]);
+  const fetchPersisted = options?.orgId
+    ? selectCompletedStellarPayoutsForOrg(options.orgId, limit).catch((err) => {
+        console.warn("[getTransactions] persisted payouts failed:", err);
+        return [] as Awaited<ReturnType<typeof selectCompletedStellarPayoutsForOrg>>;
+      })
+    : Promise.resolve([]);
+
+  const [sorobanRows, classicRows, persisted] = await Promise.all([
+    fetchSoroban,
+    fetchClassic,
+    fetchPersisted,
+  ]);
+  const persistedRows = payoutRecordsToRows(persisted);
 
   // Merge, deduplicate by transaction hash (id), and sort by date descending
   const mergedMap = new Map<string, RawTxRow>();
@@ -270,6 +309,11 @@ export async function getTransactions(
     mergedMap.set(row.id, row);
   }
   for (const row of classicRows) {
+    if (!mergedMap.has(row.id)) {
+      mergedMap.set(row.id, row);
+    }
+  }
+  for (const row of persistedRows) {
     if (!mergedMap.has(row.id)) {
       mergedMap.set(row.id, row);
     }

@@ -121,6 +121,7 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
       getUsdToLocalRate(),
       getTransactions(publicKey, 10, {
         additionalHolders: disbursementHolder ? [disbursementHolder] : undefined,
+        orgId: org?.id ?? null,
       }),
       distributionPk ? getUsdcBalance(distributionPk) : Promise.resolve("0"),
     ]);

@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
   }
   const { searchParams } = new URL(request.url);
   const limit = Math.min(Number(searchParams.get("limit")) || 50, 100);
-  const payouts = listPayouts(session.id, limit);
+  const payouts = await listPayouts(session.id, limit);
   return NextResponse.json({ payouts });
 }
 
@@ -245,6 +245,7 @@ export async function POST(request: NextRequest) {
         bankAccountId: n.bankAccountId,
         stellarAddress: n.stellarAddress,
         recipientLabel: n.recipientLabel,
+        orgId: user?.org_id ?? null,
       });
       if (n.type === "to_stellar" && n.stellarAddress) {
         try {
@@ -330,6 +331,7 @@ export async function POST(request: NextRequest) {
       type: "to_stellar",
       stellarAddress: destination,
       recipientLabel,
+      orgId: user?.org_id ?? null,
     });
 
     /** Soroban treasury: passkey signs disbursement_wallet.payout on client. */
@@ -465,6 +467,7 @@ export async function POST(request: NextRequest) {
     type: "to_bank",
     bankAccountId,
     recipientLabel,
+    orgId: user?.org_id ?? null,
   });
   appendAuditEvent("payout", `Payout to bank: ${recipientLabel ?? bankAccountId}`, session.id);
   return NextResponse.json({ payout: record });

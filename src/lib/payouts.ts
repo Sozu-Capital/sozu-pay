@@ -6,6 +6,7 @@
 export interface PayoutRecord {
   id: string;
   userId: string;
+  orgId?: string | null;
   amount: string;
   type: "to_bank" | "to_stellar";
   bankAccountId?: string;
@@ -41,6 +42,7 @@ export function createPayout(
     bankAccountId?: string;
     stellarAddress?: string;
     recipientLabel?: string;
+    orgId?: string | null;
   }
 ): PayoutRecord {
   const id = `payout-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -57,6 +59,7 @@ export function ensurePendingPayout(
     bankAccountId?: string;
     stellarAddress?: string;
     recipientLabel?: string;
+    orgId?: string | null;
   }
 ): PayoutRecord {
   const store = getStore();
@@ -67,6 +70,7 @@ export function ensurePendingPayout(
       existing.amount = amount;
       existing.stellarAddress = opts.stellarAddress ?? existing.stellarAddress;
       existing.recipientLabel = opts.recipientLabel ?? existing.recipientLabel;
+      existing.orgId = opts.orgId ?? existing.orgId;
     }
     return existing;
   }
@@ -74,6 +78,7 @@ export function ensurePendingPayout(
   const record: PayoutRecord = {
     id,
     userId,
+    orgId: opts.orgId ?? null,
     amount,
     type: opts.type,
     bankAccountId: opts.bankAccountId,
@@ -83,6 +88,9 @@ export function ensurePendingPayout(
     createdAt: new Date().toISOString(),
   };
   store.push(record);
+  void import("@/lib/db/org-payouts")
+    .then((db) => db.insertOrgPayout(record))
+    .catch((e) => console.error("[payouts] persist insert:", e));
   return record;
 }
 
@@ -92,14 +100,27 @@ export function completePayout(id: string, stellarTxHash?: string): void {
     r.status = "completed";
     if (stellarTxHash) r.stellarTxHash = stellarTxHash;
   }
+  void import("@/lib/db/org-payouts")
+    .then((db) => db.updateOrgPayout(id, { status: "completed", stellarTxHash }))
+    .catch((e) => console.error("[payouts] persist complete:", e));
 }
 
 export function failPayout(id: string): void {
   const r = getStore().find((x) => x.id === id);
   if (r) r.status = "failed";
+  void import("@/lib/db/org-payouts")
+    .then((db) => db.updateOrgPayout(id, { status: "failed" }))
+    .catch((e) => console.error("[payouts] persist fail:", e));
 }
 
-export function listPayouts(userId: string, limit: number = 50): PayoutRecord[] {
+export async function listPayouts(userId: string, limit: number = 50): Promise<PayoutRecord[]> {
+  try {
+    const { selectOrgPayoutsForUser } = await import("@/lib/db/org-payouts");
+    const persisted = await selectOrgPayoutsForUser(userId, limit);
+    if (persisted && persisted.length > 0) return persisted;
+  } catch (e) {
+    console.error("[payouts] persist list:", e);
+  }
   return getStore()
     .filter((r) => r.userId === userId)
     .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1))
@@ -109,6 +130,18 @@ export function listPayouts(userId: string, limit: number = 50): PayoutRecord[] 
 export function getPayoutById(id: string, userId: string): PayoutRecord | null {
   const r = getStore().find((x) => x.id === id && x.userId === userId);
   return r ?? null;
+}
+
+export async function getPayoutByIdAsync(id: string, userId: string): Promise<PayoutRecord | null> {
+  const mem = getPayoutById(id, userId);
+  if (mem) return mem;
+  try {
+    const { selectOrgPayoutById } = await import("@/lib/db/org-payouts");
+    return await selectOrgPayoutById(id, userId);
+  } catch (e) {
+    console.error("[payouts] persist get:", e);
+    return null;
+  }
 }
 
 export function stellarExpertTxUrl(hash: string): string {

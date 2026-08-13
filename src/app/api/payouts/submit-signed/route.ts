@@ -3,7 +3,7 @@ import { Transaction } from "@stellar/stellar-sdk";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
-import { getPayoutById, completePayout, failPayout } from "@/lib/payouts";
+import { getPayoutById, getPayoutByIdAsync, completePayout, failPayout } from "@/lib/payouts";
 import { appendAuditEvent } from "@/lib/audit";
 import { submitSignedEnvelope } from "@/lib/stellar/sendUsdc";
 import { Networks } from "@stellar/stellar-sdk";
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const payout = getPayoutById(payoutId, session.id);
+  const payout = (await getPayoutByIdAsync(payoutId, session.id)) ?? getPayoutById(payoutId, session.id);
   if (!payout) {
     return NextResponse.json(
       { error: "Payout not found or access denied." },

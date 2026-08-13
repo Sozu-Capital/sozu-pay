@@ -152,6 +152,7 @@ export async function GET() {
       getUsdToLocalRate(),
       getTransactions(publicKey, 10, {
         additionalHolders: uniqueHolders,
+        orgId: org?.id ?? null,
       }),
       distributionPk ? getUsdcBalance(distributionPk) : Promise.resolve("0"),
     ]);

@@ -11,7 +11,7 @@ import { getSession } from "@/lib/auth/session";
  * When authenticated but no wallet yet, returns zeros so the dashboard still loads.
  */
 export async function GET() {
-  const { publicKey } = await getDashboardWalletContext();
+  const { publicKey, org } = await getDashboardWalletContext();
   if (!publicKey) {
     const session = await getSession();
     if (session) {
@@ -32,7 +32,7 @@ export async function GET() {
     publicKey.startsWith("C")
       ? getSorobanUsdcBalance(publicKey)
       : getUsdcBalance(publicKey),
-    getTransactions(publicKey, 10),
+    getTransactions(publicKey, 10, { orgId: org?.id ?? null }),
   ]);
 
   const balanceNum = parseFloat(balance) || 0;

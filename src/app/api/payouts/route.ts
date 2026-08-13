@@ -11,25 +11,33 @@ import { appendAuditEvent } from "@/lib/audit";
 import { sendUsdc, getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
 import { fundClassicAccount } from "@/lib/stellar/fund";
 import { invokeSorobanPayout } from "@/lib/stellar/sorobanPayout";
-import {
-  getUnlockedKey,
-  getUnlockedKeyFromCookie,
-  UNLOCK_COOKIE_NAME,
-} from "@/lib/auth/wallet-unlock";
+import { UNLOCK_COOKIE_NAME, getUnlockedKey, getUnlockedKeyFromCookie } from "@/lib/auth/wallet-unlock";
 import { decryptOrgSecret } from "@/lib/org-secret";
 import { isUserDerivedEncrypted } from "@/lib/org-wallet-encryption";
 import { buildUnsignedUsdcEnvelope } from "@/lib/stellar/sendUsdc";
 import type { Organization } from "@/lib/db/organizations";
 import { resolvePaymentRecipient } from "@/lib/payment/resolve-recipient";
 import { isValidStellarReceiveAddress } from "@/lib/payment/stellar-address";
+import { payoutRailForDestination } from "@/lib/payment/payout-rail";
+import { getCircleUsdcSacContractId } from "@/lib/stellar/org-treasury";
+import { createOrgSpendExecutor } from "@/lib/pollar/spend";
+import {
+  resolveHomeTreasurySigner,
+  usesPollarHomeTreasury,
+  type HomeTreasurySignerResult,
+} from "@/lib/payouts/home-treasury-signer";
 
 /** Derive signer public key for audit log. */
-function getSignerPublicKey(signerSecretKey: string | undefined, org: Organization | null): string | undefined {
+function getSignerPublicKey(
+  signerSecretKey: string | undefined,
+  org: Organization | null,
+  fromAddress?: string,
+): string | undefined {
   if (signerSecretKey) return Keypair.fromSecret(signerSecretKey).publicKey();
+  if (fromAddress?.startsWith("G")) return fromAddress;
   return org?.stellar_disbursement_public_key ?? getOrgDisbursementPublicKey() ?? undefined;
 }
 
-/** If the org has a stored encrypted disbursement secret (legacy only), decrypt and return it; else undefined. */
 function getOrgStoredSignerSecret(org: Organization | null): string | undefined {
   if (!org?.stellar_disbursement_secret_encrypted) return undefined;
   if (isUserDerivedEncrypted(org.stellar_disbursement_secret_encrypted)) return undefined;
@@ -40,32 +48,62 @@ function getOrgStoredSignerSecret(org: Organization | null): string | undefined 
   }
 }
 
-/**
- * Resolve signer secret for Stellar payout:
- * 1) Org's stored encrypted key (legacy only), 2) unlocked super_admin key (memory then cookie), 3) undefined (sendUsdc uses env org key).
- * For user-derived encrypted orgs, server cannot decrypt; returns requirePayoutPassword so client signs.
- */
-function resolveStellarSigner(
+function resolveSignerForRequest(
   sessionId: string,
   cookieValue: string | null | undefined,
-  org: Organization | null
-): {
-  signerSecretKey: string | undefined;
-  requireUnlock: boolean;
-  requirePayoutPassword: boolean;
-} {
-  if (org?.stellar_disbursement_secret_encrypted && isUserDerivedEncrypted(org.stellar_disbursement_secret_encrypted)) {
-    return { signerSecretKey: undefined, requireUnlock: true, requirePayoutPassword: true };
-  }
-  const orgStored = getOrgStoredSignerSecret(org);
-  if (orgStored) return { signerSecretKey: orgStored, requireUnlock: false, requirePayoutPassword: false };
-  const fromMemory = getUnlockedKey(sessionId);
-  if (fromMemory) return { signerSecretKey: fromMemory, requireUnlock: false, requirePayoutPassword: false };
-  const fromCookie = getUnlockedKeyFromCookie(cookieValue);
-  if (fromCookie) return { signerSecretKey: fromCookie, requireUnlock: false, requirePayoutPassword: false };
-  const hasOrgKey = !!getOrgDisbursementPublicKey();
-  if (hasOrgKey) return { signerSecretKey: undefined, requireUnlock: false, requirePayoutPassword: false };
-  return { signerSecretKey: undefined, requireUnlock: true, requirePayoutPassword: false };
+  org: Organization | null,
+  user: { privy_user_id: string } | null,
+): HomeTreasurySignerResult {
+  const unlocked =
+    getUnlockedKey(sessionId) ?? getUnlockedKeyFromCookie(cookieValue) ?? undefined;
+  return resolveHomeTreasurySigner({
+    org,
+    pollarHomeTreasury: usesPollarHomeTreasury(user, org),
+    orgStoredSecret: getOrgStoredSignerSecret(org),
+    unlockedSecret: unlocked,
+  });
+}
+
+async function executePollarFakePayout(
+  fromAddress: string,
+  destination: string,
+  amount: string,
+  actingUserId: string,
+  paymentId: string,
+): Promise<string> {
+  const executor = createOrgSpendExecutor();
+  const result = await executor.execute({
+    fromAddress,
+    actingUserId,
+    payments: [{ paymentId, toAddress: destination, amount }],
+  });
+  const hash = result.txHashes[0];
+  if (!hash) throw new Error("Org treasury spend returned no transaction hash");
+  return hash;
+}
+
+function pollarClientTxResponse(params: {
+  payoutId: string;
+  amount: string;
+  destination: string;
+  recipientLabel?: string;
+  fromAddress: string;
+}) {
+  const rail = payoutRailForDestination(params.destination);
+  return NextResponse.json(
+    {
+      error: "Confirm this payout with your Pollar session (Home treasury).",
+      requirePollarClientTx: true,
+      payoutId: params.payoutId,
+      amount: params.amount,
+      destination: params.destination,
+      recipientLabel: params.recipientLabel,
+      fromAddress: params.fromAddress,
+      rail: rail ?? "classic",
+      sacContractId: rail === "sac" ? getCircleUsdcSacContractId() : undefined,
+    },
+    { status: 403 },
+  );
 }
 
 /** Try sendUsdc from org wallet; if org wallet doesn't exist on network, fund it (when STELLAR_FUNDER_SECRET is set) and retry once. */
@@ -188,6 +226,8 @@ export async function POST(request: NextRequest) {
     let stellarSignerSecretKey: string | undefined;
     let orgSorobanContractId: string | null = null;
     let batchOrg: Organization | null = null;
+    let batchSignerMode: HomeTreasurySignerResult["mode"] | undefined;
+    let batchFromAddress: string | undefined;
     if (hasStellarInBatch) {
       if (!canStellarPayout) {
         return NextResponse.json(
@@ -210,34 +250,54 @@ export async function POST(request: NextRequest) {
       }
       const cookieStore = await cookies();
       const unlockCookie = cookieStore.get(UNLOCK_COOKIE_NAME)?.value;
-      const { signerSecretKey, requireUnlock, requirePayoutPassword } = resolveStellarSigner(session.id, unlockCookie, org);
-      if (requirePayoutPassword) {
+      const signer = resolveSignerForRequest(session.id, unlockCookie, org, user);
+      if (signer.requirePayoutPassword) {
         return NextResponse.json(
           { error: "Your org wallet uses a payout password. Send Stellar payouts one at a time from Recipients or Payouts; you will be prompted for your payout password.", requireUnlock: true },
           { status: 403 }
         );
       }
-      if (orgSorobanContractId && !signerSecretKey) {
+      if (signer.mode === "pollar_client") {
+        return NextResponse.json(
+          {
+            error:
+              "Pollar Home treasury payouts must be sent one at a time so the treasury owner can confirm in Pollar.",
+            code: "POLLAR_BATCH_CLIENT_TX",
+          },
+          { status: 400 },
+        );
+      }
+      if (orgSorobanContractId && !signer.signerSecretKey) {
         return NextResponse.json(
           { error: "Unlock your payout wallet to send Soroban payouts.", requireUnlock: true },
           { status: 403 }
         );
       }
-      if (requireUnlock) {
+      if (signer.requireUnlock) {
         return NextResponse.json(
           { error: "Unlock your payout wallet to send Stellar payouts.", requireUnlock: true },
           { status: 403 }
         );
       }
-      stellarSignerSecretKey = signerSecretKey;
-      if (!stellarSignerSecretKey && !org?.stellar_disbursement_public_key && !getOrgDisbursementPublicKey()) {
+      stellarSignerSecretKey = signer.signerSecretKey;
+      batchSignerMode = signer.mode;
+      batchFromAddress = signer.fromAddress;
+      if (
+        !stellarSignerSecretKey &&
+        signer.mode !== "legacy_env" &&
+        signer.mode !== "pollar_fake" &&
+        !org?.stellar_disbursement_public_key &&
+        !getOrgDisbursementPublicKey()
+      ) {
         return NextResponse.json(
           { error: "Org disbursement wallet not configured. Create an organization with a wallet or set ORG_DISBURSEMENT_SECRET in env." },
           { status: 503 }
         );
       }
     }
-    const batchSignerWallet = hasStellarInBatch ? getSignerPublicKey(stellarSignerSecretKey, batchOrg) : undefined;
+    const batchSignerWallet = hasStellarInBatch
+      ? getSignerPublicKey(stellarSignerSecretKey, batchOrg, batchFromAddress)
+      : undefined;
     for (const n of normalized) {
       if (!n) continue;
       const record = createPayout(session.id, n.amount, {
@@ -249,12 +309,23 @@ export async function POST(request: NextRequest) {
       });
       if (n.type === "to_stellar" && n.stellarAddress) {
         try {
-          const txHash = await executeStellarPayout(
-            n.stellarAddress,
-            n.amount,
-            stellarSignerSecretKey,
-            orgSorobanContractId
-          );
+          let txHash: string;
+          if (batchSignerMode === "pollar_fake" && batchFromAddress) {
+            txHash = await executePollarFakePayout(
+              batchFromAddress,
+              n.stellarAddress,
+              n.amount,
+              String(user?.id ?? session.id),
+              record.id,
+            );
+          } else {
+            txHash = await executeStellarPayout(
+              n.stellarAddress,
+              n.amount,
+              stellarSignerSecretKey,
+              orgSorobanContractId
+            );
+          }
           completePayout(record.id, txHash);
           appendAuditEvent(
             "payout_approved",
@@ -299,7 +370,8 @@ export async function POST(request: NextRequest) {
     const sorobanContractId = org?.soroban_contract_id ?? null;
     const cookieStore = await cookies();
     const unlockCookie = cookieStore.get(UNLOCK_COOKIE_NAME)?.value;
-    const { signerSecretKey, requireUnlock, requirePayoutPassword } = resolveStellarSigner(session.id, unlockCookie, org);
+    const signer = resolveSignerForRequest(session.id, unlockCookie, org, user);
+    const { signerSecretKey, requireUnlock, requirePayoutPassword } = signer;
 
     let destination = body.destination.trim();
     let recipientLabel =
@@ -405,6 +477,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (signer.mode === "pollar_client" && signer.fromAddress) {
+      // Keep pending record; client signs with Pollar session then POST /complete-client.
+      return pollarClientTxResponse({
+        payoutId: record.id,
+        amount,
+        destination,
+        recipientLabel,
+        fromAddress: signer.fromAddress,
+      });
+    }
+
     if (requireUnlock) {
       failPayout(record.id);
       return NextResponse.json(
@@ -412,7 +495,13 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       );
     }
-    if (!signerSecretKey && !org?.stellar_disbursement_public_key && !getOrgDisbursementPublicKey()) {
+    if (
+      !signerSecretKey &&
+      signer.mode !== "legacy_env" &&
+      signer.mode !== "pollar_fake" &&
+      !org?.stellar_disbursement_public_key &&
+      !getOrgDisbursementPublicKey()
+    ) {
       failPayout(record.id);
       return NextResponse.json(
         { error: "Org disbursement wallet not configured. Create an organization with a treasury or set ORG_DISBURSEMENT_SECRET in env." },
@@ -420,14 +509,25 @@ export async function POST(request: NextRequest) {
       );
     }
     try {
-      const txHash = await executeStellarPayout(
-        destination,
-        amount,
-        signerSecretKey,
-        sorobanContractId
-      );
+      let txHash: string;
+      if (signer.mode === "pollar_fake" && signer.fromAddress) {
+        txHash = await executePollarFakePayout(
+          signer.fromAddress,
+          destination,
+          amount,
+          String(user?.id ?? session.id),
+          record.id,
+        );
+      } else {
+        txHash = await executeStellarPayout(
+          destination,
+          amount,
+          signerSecretKey,
+          sorobanContractId
+        );
+      }
       completePayout(record.id, txHash);
-      const signerWallet = getSignerPublicKey(signerSecretKey, org);
+      const signerWallet = getSignerPublicKey(signerSecretKey, org, signer.fromAddress);
       appendAuditEvent(
         "payout_approved",
         `Payout ${amount} USDC to ${destination} (approved by ${session.email ?? session.id})`,

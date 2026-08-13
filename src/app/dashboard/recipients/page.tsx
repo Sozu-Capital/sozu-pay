@@ -6,6 +6,10 @@ import { useTranslations } from "next-intl";
 import PayoutStatusModal, { type PayoutModalSuccess } from "@/components/PayoutStatusModal";
 import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
 import { executePasskeySorobanPayout } from "@/lib/stellar/smartAccounts/signSorobanPayout";
+import {
+  executeAndCompletePollarClientPayout,
+  isPollarClientTxChallenge,
+} from "@/lib/pollar/complete-client-payout";
 
 const STELLAR_EXPERT_BASE =
   process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_STELLAR_NETWORK === "public"
@@ -314,6 +318,24 @@ export default function RecipientsPage() {
           const bodyAmount = typeof body.amount === "string" ? body.amount : "";
           const bodyRecipientLabel =
             typeof body.recipientLabel === "string" ? body.recipientLabel : recipient.name;
+          if (isPollarClientTxChallenge(data)) {
+            try {
+              const result = await executeAndCompletePollarClientPayout(data);
+              const successPayload = {
+                amount: result.payout.amount ?? bodyAmount,
+                stellarTxHash: result.stellarTxHash,
+                recipientLabel: result.payout.recipientLabel ?? recipient.name,
+                destination: result.payout.stellarAddress ?? recipient.stellarAddress,
+              };
+              setPayoutModalStatus("success");
+              setPayoutModalSuccess(successPayload);
+              setPayoutSuccess(successPayload);
+            } catch (err) {
+              setPayoutModalStatus("failed");
+              setPayoutModalError(err instanceof Error ? err.message : t("payoutRequestFailed"));
+            }
+            return;
+          }
           if (data.requirePasskeySign && data.payoutId && data.destination) {
             if (!kit) {
               setPayoutModalStatus("failed");

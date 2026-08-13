@@ -7,6 +7,10 @@ import PayoutStatusModal, { type PayoutModalSuccess } from "@/components/PayoutS
 import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
 import { executePasskeySorobanPayout } from "@/lib/stellar/smartAccounts/signSorobanPayout";
 import Link from "next/link";
+import {
+  executeAndCompletePollarClientPayout,
+  isPollarClientTxChallenge,
+} from "@/lib/pollar/complete-client-payout";
 
 interface Payout {
   id: string;
@@ -208,7 +212,30 @@ export default function PayoutsPage() {
       setPendingConfirmBody(null);
       submitPayoutBody(body)
         .then(async ({ ok, data: d }) => {
-          const data = d as { payout?: { amount?: string; stellarTxHash?: string; stellarAddress?: string; recipientLabel?: string }; error?: string; requireUnlock?: boolean; requirePayoutPassword?: boolean; requirePasskeySign?: boolean; unsignedEnvelopeXdr?: string; payoutId?: string; network?: string; amount?: string; destination?: string; recipientLabel?: string };
+          const data = d as { payout?: { amount?: string; stellarTxHash?: string; stellarAddress?: string; recipientLabel?: string }; error?: string; requireUnlock?: boolean; requirePayoutPassword?: boolean; requirePasskeySign?: boolean; requirePollarClientTx?: boolean; fromAddress?: string; sacContractId?: string; unsignedEnvelopeXdr?: string; payoutId?: string; network?: string; amount?: string; destination?: string; recipientLabel?: string };
+          if (isPollarClientTxChallenge(data)) {
+            try {
+              const result = await executeAndCompletePollarClientPayout(data);
+              setPayoutModalStatus("success");
+              setPayoutModalSuccess({
+                amount: result.payout.amount ?? body.amount,
+                destination: result.payout.stellarAddress ?? body.destination,
+                recipientLabel: result.payout.recipientLabel ?? body.recipientLabel,
+                stellarTxHash: result.stellarTxHash,
+              });
+              setLastSuccess({
+                amount: body.amount,
+                destination: body.destination,
+                recipientLabel: body.recipientLabel,
+                stellarTxHash: result.stellarTxHash,
+              });
+              loadPayouts();
+            } catch (err) {
+              setPayoutModalStatus("failed");
+              setPayoutModalError(err instanceof Error ? err.message : t("alertPayoutFailed"));
+            }
+            return;
+          }
           if (data.requirePasskeySign && data.payoutId && data.destination) {
             if (!kit) {
               setPayoutModalStatus("failed");

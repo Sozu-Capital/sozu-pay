@@ -6,6 +6,10 @@ import {
   isValidStellarReceiveAddress,
   normalizeStellarAddressInput,
 } from "@/lib/payment/stellar-address";
+import {
+  executeAndCompletePollarClientPayout,
+  isPollarClientTxChallenge,
+} from "@/lib/pollar/complete-client-payout";
 
 export type StellarPayoutBody = {
   amount: string;
@@ -207,9 +211,29 @@ export default function SendUsdcForm({
         }
         return { ok: r.ok, data: d };
       })
-      .then(({ ok, data: d }) => {
+      .then(async ({ ok, data: d }) => {
         if (d.requireUnlock && d.error && onRequireUnlock) {
           onRequireUnlock(body);
+          return;
+        }
+        if (isPollarClientTxChallenge(d)) {
+          try {
+            const result = await executeAndCompletePollarClientPayout(d);
+            setRecipientInput("");
+            setAmount("");
+            setResolvedAddress(null);
+            setResolvedTag(null);
+            onSent?.({
+              amount: typeof result.payout.amount === "string" ? result.payout.amount : amount,
+              destination: result.payout.stellarAddress ?? body.destination,
+              recipientLabel: result.payout.recipientLabel ?? body.recipientLabel,
+              stellarTxHash: result.stellarTxHash,
+            });
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : "Pollar payout failed.";
+            if (onFailed) onFailed(msg);
+            else alert(msg);
+          }
           return;
         }
         if (ok && d.payout) {

@@ -188,20 +188,34 @@ export async function sendUsdc(
     throw err;
   }
 
-  const txBuilder = new TransactionBuilder(sourceAccount, {
-    fee: "100",
-    networkPassphrase,
-  })
-    .addOperation(
-      Operation.payment({
-        destination: destinationAccountId,
-        asset: usdcAsset,
-        amount: String(amount),
-      })
-    )
-    .setTimeout(30);
+  let transaction: Transaction;
+  try {
+    const txBuilder = new TransactionBuilder(sourceAccount, {
+      fee: "100",
+      networkPassphrase,
+    })
+      .addOperation(
+        Operation.payment({
+          destination: destinationAccountId,
+          asset: usdcAsset,
+          amount: String(amount),
+        })
+      )
+      .setTimeout(30);
 
-  const transaction = txBuilder.build();
+    transaction = txBuilder.build();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[sendUsdc] Transaction build failed:", {
+      destination: destinationAccountId,
+      destinationLength: destinationAccountId?.length,
+      destinationValid: /^[GC][A-Z0-9]{55}$/.test(destinationAccountId || ""),
+      amount,
+      error: msg,
+    });
+    throw new Error(`Invalid payment parameters: ${msg}. Check destination address format.`);
+  }
+
   transaction.sign(keypair);
 
   let result: { successful?: boolean; hash?: string; result_codes?: unknown };

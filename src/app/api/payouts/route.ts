@@ -305,10 +305,21 @@ export async function POST(request: NextRequest) {
       typeof body.recipientLabel === "string" ? body.recipientLabel.trim() : undefined;
 
     if (!isValidStellarReceiveAddress(destination)) {
+      console.log("[payouts] Resolving recipient:", { raw: destination });
       const resolved = await resolvePaymentRecipient(destination);
       if (!resolved.ok) {
+        console.error("[payouts] Resolution failed:", {
+          raw: destination,
+          error: resolved.error,
+          status: resolved.status,
+        });
         return NextResponse.json({ error: resolved.error }, { status: resolved.status });
       }
+      console.log("[payouts] Resolved to:", {
+        walletAddress: resolved.recipient.walletAddress,
+        tag: resolved.recipient.tag,
+        rail: resolved.recipient.paymentRail,
+      });
       destination = resolved.recipient.walletAddress;
       if (!recipientLabel && resolved.recipient.tag) {
         recipientLabel = `$${resolved.recipient.tag.replace(/^\$+/, "")}`;

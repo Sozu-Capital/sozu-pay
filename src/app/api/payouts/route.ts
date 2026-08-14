@@ -9,7 +9,7 @@ import { createPayout, listPayouts, completePayout, failPayout } from "@/lib/pay
 import { getRecipient } from "@/lib/recipients";
 import { appendAuditEvent } from "@/lib/audit";
 import { sendUsdc, getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
-import { fundClassicAccount } from "@/lib/stellar/fund";
+import { fundClassicAccount, ensureSpendableXlmForFees } from "@/lib/stellar/fund";
 import { invokeSorobanPayout } from "@/lib/stellar/sorobanPayout";
 import { UNLOCK_COOKIE_NAME, getUnlockedKey, getUnlockedKeyFromCookie } from "@/lib/auth/wallet-unlock";
 import { decryptOrgSecret } from "@/lib/org-secret";
@@ -82,13 +82,26 @@ async function executePollarFakePayout(
   return hash;
 }
 
-function pollarClientTxResponse(params: {
+async function pollarClientTxResponse(params: {
   payoutId: string;
   amount: string;
   destination: string;
   recipientLabel?: string;
   fromAddress: string;
 }) {
+  // Pollar custodial wallets often have USDC but 0 spendable XLM (reserves / deferred funding).
+  // Top up from STELLAR_FUNDER before asking the client to sign.
+  const feeEnsure = await ensureSpendableXlmForFees(params.fromAddress);
+  if (feeEnsure.error) {
+    console.warn("[payouts] ensure fee XLM failed:", feeEnsure.error, params.fromAddress);
+  } else if (feeEnsure.toppedUp) {
+    console.log("[payouts] topped up fee XLM:", {
+      address: params.fromAddress.slice(0, 8),
+      method: feeEnsure.method,
+      spendableAfter: feeEnsure.xlmSpendableAfter,
+    });
+  }
+
   const rail = payoutRailForDestination(params.destination);
   return NextResponse.json(
     {
@@ -101,6 +114,11 @@ function pollarClientTxResponse(params: {
       fromAddress: params.fromAddress,
       rail: rail ?? "classic",
       sacContractId: rail === "sac" ? getCircleUsdcSacContractId() : undefined,
+      feeXlm: {
+        toppedUp: feeEnsure.toppedUp,
+        spendable: feeEnsure.xlmSpendableAfter,
+        error: feeEnsure.error,
+      },
     },
     { status: 403 },
   );
@@ -479,7 +497,7 @@ export async function POST(request: NextRequest) {
 
     if (signer.mode === "pollar_client" && signer.fromAddress) {
       // Keep pending record; client signs with Pollar session then POST /complete-client.
-      return pollarClientTxResponse({
+      return await pollarClientTxResponse({
         payoutId: record.id,
         amount,
         destination,

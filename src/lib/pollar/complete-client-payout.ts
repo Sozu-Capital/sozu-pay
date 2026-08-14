@@ -40,6 +40,19 @@ export async function executeAndCompletePollarClientPayout(
   };
   stellarTxHash: string;
 }> {
+  // Belt-and-suspenders: server also tops up on requirePollarClientTx, but
+  // cover older deploys / race where spendable XLM is still too low.
+  try {
+    await fetch("/api/payouts/ensure-fee-xlm", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address: challenge.fromAddress }),
+    });
+  } catch {
+    // non-fatal — Pollar may still succeed if sponsorship covers fees
+  }
+
   const { stellarTxHash } = await sendUsdcViaPollarClient({
     destination: challenge.destination,
     amount: challenge.amount,

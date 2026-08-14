@@ -160,6 +160,18 @@ export async function POST(request: NextRequest) {
       sozuTag = { username: tagRes.username, tag: `$${tagRes.username}` };
     }
 
+    if (pollarPath && treasuryPublicKey?.startsWith("G")) {
+      try {
+        const { ensureSpendableXlmForFees } = await import("@/lib/stellar/fund");
+        const fee = await ensureSpendableXlmForFees(treasuryPublicKey);
+        if (fee.error) {
+          console.warn("[profile/org] fee XLM ensure failed:", fee.error);
+        }
+      } catch (e) {
+        console.warn("[profile/org] fee XLM ensure error:", e);
+      }
+    }
+
     return attachSessionCookie(
       NextResponse.json({
         ok: true,

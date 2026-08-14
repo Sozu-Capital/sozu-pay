@@ -16,6 +16,7 @@ import {
   parseWholeClpAmount,
 } from "@/lib/pos/clp-pricing";
 import { isCheckoutExpired } from "@/lib/checkout/expiration";
+import { amountClpForRegeneration } from "@/lib/dashboard/pos-regenerate";
 
 type CreateResult = {
   checkoutUrl: string;
@@ -116,11 +117,15 @@ export default function PosShell() {
     );
   };
 
-  const handleCreate = async () => {
+  const handleCreate = async (overrideAmountClp?: string) => {
     setError(null);
-    if (parseWholeClpAmount(amountClp) == null) {
+    const amountToCharge = (overrideAmountClp ?? amountClp).trim();
+    if (parseWholeClpAmount(amountToCharge) == null) {
       setError(tc("invalidAmount"));
       return;
+    }
+    if (overrideAmountClp != null && overrideAmountClp.trim() !== amountClp.trim()) {
+      setAmountClp(overrideAmountClp.trim());
     }
     setBusy(true);
     try {
@@ -135,7 +140,7 @@ export default function PosShell() {
           "Idempotency-Key": idempotencyKey,
         },
         body: JSON.stringify({
-          amountClp: amountClp.trim(),
+          amountClp: amountToCharge,
           reference: reference.trim() || undefined,
           allowDebit: true,
           allowCredit: true,
@@ -155,7 +160,7 @@ export default function PosShell() {
       const chargedClp =
         typeof data.amountClp === "string" && data.amountClp.trim()
           ? data.amountClp.trim()
-          : amountClp.trim();
+          : amountToCharge;
       const chargedReference =
         typeof data.reference === "string" && data.reference.trim()
           ? data.reference.trim()
@@ -174,6 +179,14 @@ export default function PosShell() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleRegenerate = async () => {
+    const nextAmount = amountClpForRegeneration({
+      keypadAmountClp: amountClp,
+      lastChargedClp: result?.amountClp,
+    });
+    await handleCreate(nextAmount);
   };
 
   const copyLink = async (url: string) => {
@@ -300,7 +313,7 @@ export default function PosShell() {
               {!result && (
                 <button
                   type="button"
-                  onClick={handleCreate}
+                  onClick={() => void handleCreate()}
                   disabled={busy}
                   className="w-full rounded-[28px] bg-[#050505] py-5 text-xl font-extrabold text-white shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.2)] transition-opacity disabled:opacity-50"
                 >
@@ -386,6 +399,14 @@ export default function PosShell() {
                     >
                       {copied ? tc("copied") : tc("copyLink")}
                     </button>
+                    <button
+                      type="button"
+                      onClick={handleRegenerate}
+                      disabled={busy}
+                      className="flex-1 rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      {busy ? t("regenerating") : t("regenerateQr")}
+                    </button>
                   </div>
 
                   <button
@@ -421,11 +442,24 @@ export default function PosShell() {
                   </div>
                 </div>
 
-                <div className="mt-8">
+                <div className="mt-8 flex flex-col gap-3">
+                  {error && (
+                    <p className="text-center text-sm text-red-600" role="alert">
+                      {error}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleRegenerate}
+                    disabled={busy}
+                    className="w-full rounded-[28px] bg-[#050505] py-6 text-xl font-extrabold text-white shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.2)] disabled:opacity-50"
+                  >
+                    {busy ? t("regenerating") : t("regenerateQr")}
+                  </button>
                   <button
                     type="button"
                     onClick={resetCharge}
-                    className="w-full rounded-[28px] bg-[#050505] py-6 text-xl font-extrabold text-white shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.2)]"
+                    className="w-full rounded-2xl border border-gray-200 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
                   >
                     {t("newCharge")}
                   </button>

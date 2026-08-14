@@ -16,3 +16,7 @@ COMMENT ON COLUMN checkout_sessions.pricing_currency IS 'Display currency for am
 COMMENT ON COLUMN checkout_sessions.fx_rate_clp_per_usdc IS 'CLP per 1 USDC used when deriving amount_usd';
 COMMENT ON COLUMN checkout_sessions.fx_source IS 'Where fx_rate_clp_per_usdc came from (env / Frankfurter / fallback)';
 COMMENT ON COLUMN checkout_sessions.idempotency_key IS 'Optional client Idempotency-Key for safe POS retries';
+
+-- Explicit payment TTL (Instawards Week 2 expiration)
+ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+COMMENT ON COLUMN checkout_sessions.expires_at IS 'When a pending payment request stops being payable';

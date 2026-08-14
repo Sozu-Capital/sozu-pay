@@ -23,6 +23,7 @@ import { checkoutSessionUrl, checkoutSuccessUrl } from "@/lib/checkout-url";
 import { rampProvider } from "@/lib/ramp/provider";
 import { getUsdToLocalRate } from "@/lib/fx";
 import { buildClpPricingQuote } from "@/lib/pos/clp-pricing";
+import { computeCheckoutExpiresAt } from "@/lib/checkout/expiration";
 
 /**
  * POST /api/checkout/create
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest) {
             fxSource: existing.fx_source,
             reference: existing.reference,
             providerSessionId: existing.provider_session_id,
-            expiresAt: null,
+            expiresAt: existing.expires_at,
             idempotentReplay: true,
           }),
         );
@@ -137,6 +138,7 @@ export async function POST(request: NextRequest) {
   }
 
   const id = `cs_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  const expiresAt = computeCheckoutExpiresAt();
   const redirectUrl = checkoutSuccessUrl(id, request);
 
   let depositSession;
@@ -169,6 +171,7 @@ export async function POST(request: NextRequest) {
       providerSessionId: depositSession.sessionId,
       providerUrl: depositSession.url,
       providerExpiresAt: depositSession.expiresAt,
+      expiresAt,
       paymentMethod: parsed.paymentMethod,
       allowDebit: parsed.allowDebit,
       allowCredit: parsed.allowCredit,
@@ -193,7 +196,7 @@ export async function POST(request: NextRequest) {
       fxSource: fxSource ?? null,
       reference: parsed.reference ?? null,
       providerSessionId: depositSession.sessionId,
-      expiresAt: depositSession.expiresAt ?? null,
+      expiresAt,
       idempotentReplay: false,
     }),
   );

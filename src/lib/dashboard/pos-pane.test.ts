@@ -22,4 +22,16 @@ describe("posPaneState", () => {
       "expired",
     );
   });
+
+  it("is paid when settlement is detected (wins over expired)", () => {
+    assert.equal(
+      posPaneState({
+        amountUsd: "4.50",
+        hasResult: true,
+        isExpired: true,
+        isPaid: true,
+      }),
+      "paid",
+    );
+  });
 });

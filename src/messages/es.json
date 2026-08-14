@@ -310,6 +310,8 @@
     "creating": "Creando…",
     "readyTitle": "Mostrá este QR a tu cliente",
     "waitingForCustomer": "Esperando al cliente…",
+    "paidStatus": "Pago recibido",
+    "paidHint": "El pago del cliente fue confirmado. Ya podés cobrar el siguiente.",
     "expiredStatus": "Pago expirado",
     "expiredHint": "Este QR ya no se puede pagar. Regeneralo para crear uno nuevo con el mismo monto.",
     "regenerateQr": "Regenerar QR",

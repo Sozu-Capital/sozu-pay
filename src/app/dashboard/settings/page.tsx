@@ -10,6 +10,7 @@ import { isPasskeyAuth } from "@/lib/auth/provider";
 import { ProfileCollapsibleCard } from "@/components/profile/ProfileCollapsibleCard";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
+import { isFakePollarStaffWallet } from "@/lib/pollar/types";
 
 export default function SettingsPage() {
   const t = useTranslations("settingsPage");
@@ -37,6 +38,7 @@ export default function SettingsPage() {
   const [orgTagError, setOrgTagError] = useState<string | null>(null);
   const [orgTagSaved, setOrgTagSaved] = useState(false);
   const [linkedTreasuryAddress, setLinkedTreasuryAddress] = useState<string | null>(null);
+  const [orgTagStubTreasury, setOrgTagStubTreasury] = useState(false);
   const [inviteRole, setInviteRole] = useState("member");
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
@@ -51,16 +53,25 @@ export default function SettingsPage() {
         username?: string | null;
         receive?: { tagReceiveAddress?: string | null };
         tag_directory_public_key?: string | null;
+        warnings?: string[];
       } | null) => {
         if (!d) return;
         const username = typeof d.username === "string" ? d.username : null;
         setOrgTag(username);
         setOrgTagInput(username ? `$${username}` : "");
-        const linked =
+        const rawLinked =
           (typeof d.receive?.tagReceiveAddress === "string" && d.receive.tagReceiveAddress) ||
           (typeof d.tag_directory_public_key === "string" && d.tag_directory_public_key) ||
           null;
-        setLinkedTreasuryAddress(linked);
+        // Never display the fake Pollar sentinel as a working treasury.
+        setLinkedTreasuryAddress(
+          rawLinked && !isFakePollarStaffWallet(rawLinked) ? rawLinked : null,
+        );
+        setOrgTagStubTreasury(
+          Array.isArray(d.warnings) &&
+            (d.warnings.includes("fake_pollar_treasury") ||
+              d.warnings.includes("tag_directory_fake_wallet")),
+        );
       })
       .catch(() => {});
   }
@@ -315,7 +326,11 @@ export default function SettingsPage() {
               setOrgTag(username);
               setOrgTagInput(username ? `$${username}` : orgTagInput);
               if (typeof data.tag_receive_address === "string") {
-                setLinkedTreasuryAddress(data.tag_receive_address);
+                setLinkedTreasuryAddress(
+                  isFakePollarStaffWallet(data.tag_receive_address)
+                    ? null
+                    : data.tag_receive_address,
+                );
               }
               setOrgTagSaved(true);
               loadSozuTagInfo();
@@ -350,7 +365,9 @@ export default function SettingsPage() {
           </button>
           {orgTagSaved && <p className="text-xs text-emerald-600 dark:text-emerald-400">{t("sozuTagSaved")}</p>}
         </form>
-        {orgTag && linkedTreasuryAddress ? (
+        {orgTagStubTreasury ? (
+          <p className="mt-3 max-w-md text-xs text-amber-700 dark:text-amber-400">{t("sozuTagStubTreasury")}</p>
+        ) : orgTag && linkedTreasuryAddress ? (
           <div className="mt-4 max-w-md rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4">
             <p className="text-xs text-gray-500 dark:text-gray-400">{t("sozuTagLinkedHint", { tag: `$${orgTag}` })}</p>
             <code className="mt-2 block font-mono text-xs break-all text-gray-800 dark:text-gray-200">

@@ -178,6 +178,15 @@ export default function CheckoutPage() {
   const checkoutBaseUrl =
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
     (typeof window !== "undefined" ? window.location.origin : "");
+  const fundingLinkUrl = (id: string) => {
+    const base =
+      checkoutBaseUrl && !/credit\.sozu\.capital/i.test(checkoutBaseUrl)
+        ? checkoutBaseUrl
+        : typeof window !== "undefined"
+          ? window.location.origin
+          : "";
+    return `${base}/checkout/${id}`;
+  };
 
   return (
     <div className="max-w-5xl">
@@ -411,7 +420,7 @@ export default function CheckoutPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={(e) => { e.stopPropagation(); copyLink(`${checkoutBaseUrl}/checkout/${s.id}`); }}
+                        onClick={(e) => { e.stopPropagation(); copyLink(fundingLinkUrl(s.id)); }}
                         className="rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700"
                       >
                         Copy link

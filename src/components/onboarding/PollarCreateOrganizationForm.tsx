@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import { getClientSignupIntent } from "@/lib/auth/signup-intent";
 import { MerchantPollarOnboarding } from "@/components/onboarding/MerchantPollarOnboarding";
+import { suggestOrgTagFromOrgName } from "@/lib/sozu-tag-suggest";
 import {
   OrgCreateSetupProgress,
   type OrgSetupStepKey,
@@ -49,9 +50,12 @@ function NgoPollarCreateOrganizationForm() {
   const [busyStep, setBusyStep] = useState<OrgSetupStepKey>("org");
   const [error, setError] = useState("");
 
+  const suggestedTag = name.trim() ? suggestOrgTagFromOrgName(name) : "";
+
   const stepLabels: Partial<Record<OrgSetupStepKey, string>> = {
     org: t("stepsShort.org"),
     wallet: t("stepsShort.wallet"),
+    sozuTag: t("stepsShort.sozuTag"),
   };
 
   async function handleSubmit(e: React.FormEvent) {
@@ -65,11 +69,12 @@ function NgoPollarCreateOrganizationForm() {
     setBusy(true);
     setBusyStep("org");
     try {
+      const sozuTag = suggestOrgTagFromOrgName(trimmed);
       const res = await fetch("/api/profile/org", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: trimmed, type: "ngo" }),
+        body: JSON.stringify({ name: trimmed, type: "ngo", sozuTag }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -78,6 +83,9 @@ function NgoPollarCreateOrganizationForm() {
         return;
       }
       setBusyStep("wallet");
+      if (data.sozu_tag?.username || !data.sozu_tag_error) {
+        setBusyStep("sozuTag");
+      }
       const redirect =
         typeof data.redirect === "string" && data.redirect.startsWith("/")
           ? data.redirect
@@ -95,11 +103,15 @@ function NgoPollarCreateOrganizationForm() {
         <main className="flex min-h-screen flex-col items-center justify-center p-4 text-white">
           <OrgCreateSetupProgress
             currentStep={busyStep}
-            stepOrder={["org", "wallet"]}
+            stepOrder={["org", "wallet", "sozuTag"]}
             stepLabels={stepLabels}
             title={t("busyTitle")}
             subtitle={
-              busyStep === "wallet" ? t("steps.pollar.wallet") : t("steps.pollar.orgNgo")
+              busyStep === "sozuTag"
+                ? t("steps.pollar.sozuTag")
+                : busyStep === "wallet"
+                  ? t("steps.pollar.wallet")
+                  : t("steps.pollar.orgNgo")
             }
             hint={t("busyHintPollar")}
             spinner={
@@ -136,6 +148,12 @@ function NgoPollarCreateOrganizationForm() {
             autoComplete="organization"
             disabled={busy}
           />
+
+          {suggestedTag ? (
+            <p className="mt-2 text-xs text-emerald-200/90">
+              {t("pollarSozuTagPreview", { tag: `$${suggestedTag}` })}
+            </p>
+          ) : null}
 
           {error ? <p className="mt-3 text-sm text-red-400">{error}</p> : null}
 

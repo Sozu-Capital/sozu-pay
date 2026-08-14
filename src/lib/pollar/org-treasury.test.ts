@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { Keypair } from "@stellar/stellar-sdk";
 import {
   CreatorBoundPollarTreasuryProvisioner,
   FakeOrgTreasuryProvisioner,
 } from "./org-treasury.js";
+import { FAKE_POLLAR_STAFF_WALLET } from "./types.js";
 
 type MiniUser = {
   id: number;
@@ -24,7 +26,7 @@ function user(overrides: Partial<MiniUser> = {}): MiniUser {
     id: 1,
     privy_user_id: "pollar:creator-1",
     email: "creator@example.com",
-    stellar_public_key: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    stellar_public_key: Keypair.random().publicKey(),
     stellar_payout_public_key: null,
     allowed: true,
     admin_level: "super_admin",
@@ -60,6 +62,17 @@ describe("Org treasury provisioner (NO-GO fallback)", () => {
       () =>
         provisioner.provisionForCreator(user({ stellar_public_key: null }) as never),
       /wallet address missing/,
+    );
+  });
+
+  it("rejects fake Pollar sentinel as creator wallet", async () => {
+    const provisioner = new CreatorBoundPollarTreasuryProvisioner();
+    await assert.rejects(
+      () =>
+        provisioner.provisionForCreator(
+          user({ stellar_public_key: FAKE_POLLAR_STAFF_WALLET }) as never,
+        ),
+      /stub|local stub|real Stellar/,
     );
   });
 

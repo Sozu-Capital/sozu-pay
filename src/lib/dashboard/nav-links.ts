@@ -12,7 +12,9 @@ export type DashboardNavKind =
   | "funding-links"
   | "disbursements"
   | "disbursement-history"
-  | "recipients";
+  | "recipients"
+  | "send"
+  | "people";
 
 export type DashboardNavLink = {
   href: string;
@@ -48,11 +50,16 @@ export function storeDashboardNavLinks(options: { isAdmin?: boolean } = {}): Das
   return links;
 }
 
-/** NGO primary nav. Funding link at `/dashboard/checkout` stays. */
+/**
+ * NGO primary nav — Send-first (format A):
+ * Fund → Send (ad-hoc payouts) → People (address book) → optional Disbursements (SDP programs).
+ */
 export function ngoDashboardNavLinks(options: { showDisbursements?: boolean } = {}): DashboardNavLink[] {
   const links: DashboardNavLink[] = [
     { href: "/dashboard", kind: "overview" },
     { href: "/dashboard/checkout", kind: "funding-links" },
+    { href: "/dashboard/payouts", kind: "send" },
+    { href: "/dashboard/recipients", kind: "people", indent: true },
   ];
   if (options.showDisbursements) {
     links.push(
@@ -61,7 +68,6 @@ export function ngoDashboardNavLinks(options: { showDisbursements?: boolean } = 
     );
   }
   links.push(
-    { href: "/dashboard/recipients", kind: "recipients" },
     { href: "/dashboard/transactions", kind: "transactions" },
     { href: "/dashboard/settings", kind: "settings" },
   );

@@ -27,6 +27,8 @@ const NAV_LABEL_KEY: Record<DashboardNavKind, string> = {
   disbursements: "disbursements",
   "disbursement-history": "disbursementHistory",
   recipients: "recipients",
+  send: "send",
+  people: "people",
 };
 
 function NavLink({

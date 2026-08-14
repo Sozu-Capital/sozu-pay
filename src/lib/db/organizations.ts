@@ -251,6 +251,28 @@ export async function updateOrganizationSozuTagAuthUserId(
   return data as Organization;
 }
 
+/** Pollar org treasury is a public G only (no encrypted secret on our side). */
+export async function updateOrganizationDisbursementPublicKey(
+  orgId: string,
+  publicKey: string
+): Promise<Organization | null> {
+  const { data, error } = await getSupabase()
+    .from("organizations")
+    .update({
+      stellar_disbursement_public_key: publicKey,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", orgId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[organizations] updateOrganizationDisbursementPublicKey:", error.message);
+    return null;
+  }
+  return data as Organization;
+}
+
 export async function updateOrganizationSorobanContract(
   orgId: string,
   sorobanContractId: string

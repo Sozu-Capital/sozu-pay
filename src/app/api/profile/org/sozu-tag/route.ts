@@ -1,13 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, setSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
-import { getOrganizationById } from "@/lib/db/organizations";
+import {
+  getOrganizationById,
+  updateOrganizationDisbursementPublicKey,
+} from "@/lib/db/organizations";
 import {
   applyOrganizationSozuTag,
   getOrganizationSozuTag,
   resyncOrganizationSozuTagDirectory,
 } from "@/lib/org-sozu-tag";
 import { getOrgReceiveDiagnostics } from "@/lib/org-receive-address";
+import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
+import {
+  isFakePollarStaffWallet,
+  usableClassicTreasuryPublicKey,
+} from "@/lib/pollar/types";
+
+/** Replace stub Pollar treasury G with the creator's real Staff wallet when available. */
+async function repairFakePollarTreasuryIfNeeded(
+  orgId: string,
+  creatorStellarPublicKey: string | null | undefined,
+) {
+  const org = await getOrganizationById(orgId);
+  if (!org || !isFakePollarStaffWallet(org.stellar_disbursement_public_key)) {
+    return org;
+  }
+  const real = usableClassicTreasuryPublicKey(creatorStellarPublicKey);
+  if (!real) return org;
+  return (await updateOrganizationDisbursementPublicKey(orgId, real)) ?? org;
+}
 
 export async function GET() {
   const session = await getSession();
@@ -28,6 +50,10 @@ export async function GET() {
 
   let org = await getOrganizationById(orgId);
   if (!org) return NextResponse.json({ error: "Organization not found." }, { status: 404 });
+
+  if (user && isPollarMappedUser(user)) {
+    org = (await repairFakePollarTreasuryIfNeeded(orgId, user.stellar_public_key)) ?? org;
+  }
 
   const resync = await resyncOrganizationSozuTagDirectory(orgId);
   if (resync.resynced) {
@@ -72,6 +98,10 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  if (isPollarMappedUser(user)) {
+    await repairFakePollarTreasuryIfNeeded(orgId, user.stellar_public_key);
+  }
+
   const body = await request.json().catch(() => ({}));
   const usernameRaw = typeof body.username === "string" ? body.username : "";
   await resyncOrganizationSozuTagDirectory(orgId);
@@ -92,4 +122,3 @@ export async function POST(request: NextRequest) {
     warnings: diagnostics?.warnings ?? [],
   });
 }
-

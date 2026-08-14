@@ -6,6 +6,10 @@ import { getUsdcBalance, getUsdcIssuer } from "@/lib/stellar/balance";
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
 import { resolveOrgTreasuryContractId } from "@/lib/stellar/org-treasury";
 import { getSupabase } from "@/lib/supabase/server";
+import {
+  isFakePollarStaffWallet,
+  usableClassicTreasuryPublicKey,
+} from "@/lib/pollar/types";
 
 function stellarWalletUserColumn(): string {
   return process.env.SOZUPAY_STELLAR_WALLET_USER_ID_COLUMN?.trim() || "user_id";
@@ -30,7 +34,9 @@ export function resolveOrgReceiveAddress(org: Organization): {
   /** Address the dashboard balance API uses. */
   dashboardBalanceAddress: string | null;
 } {
-  const classicG = org.stellar_disbursement_public_key?.trim() || null;
+  const rawClassic = org.stellar_disbursement_public_key?.trim() || null;
+  /** Never expose the fake Pollar sentinel as a receivable treasury. */
+  const classicG = usableClassicTreasuryPublicKey(rawClassic);
   const sorobanC = resolveOrgTreasuryContractId(org);
   const treasurySmartAccountAddress = org.treasury_smart_account_address?.trim() || null;
   /** Org $tag → smart account (C) by default; classic G is legacy fallback. */
@@ -112,8 +118,18 @@ export async function getOrgReceiveDiagnostics(org: Organization): Promise<{
   if (!receive.tagReceiveAddress) {
     warnings.push("no_receive_address");
   }
+  if (isFakePollarStaffWallet(org.stellar_disbursement_public_key)) {
+    warnings.push("fake_pollar_treasury");
+  }
   if (sozuTag && !tagDirectoryPublicKey) {
     warnings.push("tag_without_stellar_wallets_row");
+  }
+  if (
+    sozuTag &&
+    tagDirectoryPublicKey &&
+    isFakePollarStaffWallet(tagDirectoryPublicKey)
+  ) {
+    warnings.push("tag_directory_fake_wallet");
   }
   if (sozuTag && tagDirectoryPublicKey && receive.tagReceiveAddress && tagDirectoryPublicKey !== receive.tagReceiveAddress) {
     warnings.push("tag_directory_address_mismatch");

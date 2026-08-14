@@ -6,6 +6,20 @@ import { getAppBaseUrl } from "@/lib/app-url";
  * SozuCredit (`credit.sozu.capital`) is the recipient wallet, not the payment-link host.
  */
 export function getCheckoutBaseUrl(request?: NextRequest): string {
+  const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+  // Guard against misconfigured env pointing funding links at SozuCredit.
+  if (fromEnv && !/credit\.sozu\.capital/i.test(fromEnv)) {
+    return fromEnv;
+  }
+  if (request?.url) {
+    try {
+      const origin = new URL(request.url).origin;
+      if (!/credit\.sozu\.capital/i.test(origin)) return origin;
+    } catch {
+      // fall through
+    }
+  }
+  if (fromEnv) return fromEnv;
   return getAppBaseUrl(request);
 }
 

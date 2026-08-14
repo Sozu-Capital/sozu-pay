@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { Keypair } from "@stellar/stellar-sdk";
 import { resolveCheckoutSettleToAddress } from "./settle-to.js";
 import type { Organization } from "../db/organizations.js";
+import { FAKE_POLLAR_STAFF_WALLET } from "../pollar/types.js";
 
 function org(overrides: Partial<Organization> = {}): Organization {
   return {
@@ -26,7 +28,7 @@ function org(overrides: Partial<Organization> = {}): Organization {
 
 describe("resolveCheckoutSettleToAddress", () => {
   it("NGO Funding link settles to Org treasury classic G", () => {
-    const treasury = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
+    const treasury = Keypair.random().publicKey();
     const address = resolveCheckoutSettleToAddress(
       org({
         type: "ngo",
@@ -38,13 +40,24 @@ describe("resolveCheckoutSettleToAddress", () => {
     assert.equal(address, treasury);
   });
 
+  it("rejects fake Pollar sentinel as settle-to", () => {
+    assert.equal(
+      resolveCheckoutSettleToAddress(
+        org({
+          type: "ngo",
+          stellar_disbursement_public_key: FAKE_POLLAR_STAFF_WALLET,
+        }),
+      ),
+      null,
+    );
+  });
+
   it("merchant prefers treasury smart account when present", () => {
     const sa = "CXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
     const address = resolveCheckoutSettleToAddress(
       org({
         type: "store",
-        stellar_disbursement_public_key:
-          "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+        stellar_disbursement_public_key: Keypair.random().publicKey(),
         treasury_smart_account_address: sa,
       }),
     );

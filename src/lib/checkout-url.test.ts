@@ -21,4 +21,19 @@ describe("getCheckoutBaseUrl", () => {
       else process.env.SOZUCREDIT_URL = prevCreditServer;
     }
   });
+
+  it("does not use credit.sozu.capital as checkout host when misconfigured", () => {
+    const prevApp = process.env.NEXT_PUBLIC_APP_URL;
+    process.env.NEXT_PUBLIC_APP_URL = "https://credit.sozu.capital";
+    try {
+      // Falls through to request origin when env is the wallet host.
+      assert.equal(
+        getCheckoutBaseUrl({ url: "https://pay.sozu.capital/api/checkout/create" } as never),
+        "https://pay.sozu.capital",
+      );
+    } finally {
+      if (prevApp === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
+      else process.env.NEXT_PUBLIC_APP_URL = prevApp;
+    }
+  });
 });

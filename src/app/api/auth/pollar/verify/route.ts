@@ -7,7 +7,7 @@ import {
 import { setSession, type SessionUser } from "@/lib/auth/session";
 import { createPollarTokenVerifier } from "@/lib/pollar/adapter";
 import { resolvePollarPostAuthRedirect } from "@/lib/pollar/session-bridge";
-import { PollarTokenVerifyError } from "@/lib/pollar/types";
+import { isFakePollarStaffWallet, PollarTokenVerifyError } from "@/lib/pollar/types";
 import { getOrCreateUserByPollar, updateUserStellarPublicKey } from "@/lib/db/users";
 
 
@@ -42,7 +42,13 @@ export async function POST(request: NextRequest) {
     let user = await getOrCreateUserByPollar(identity.subject, identity.email);
 
     const wallet = (identity.walletAddress ?? "").trim();
-    if (wallet.startsWith("G") && wallet.length >= 56 && user.stellar_public_key !== wallet) {
+    const allowFakeWallet = process.env.POLLAR_FAKE_AUTH === "true";
+    if (
+      wallet.startsWith("G") &&
+      wallet.length >= 56 &&
+      user.stellar_public_key !== wallet &&
+      (allowFakeWallet || !isFakePollarStaffWallet(wallet))
+    ) {
       const updated = await updateUserStellarPublicKey(String(user.id), wallet);
       if (updated) user = updated;
     }

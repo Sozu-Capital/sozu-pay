@@ -41,4 +41,15 @@ describe("ngoDashboardNavLinks", () => {
     assert.ok(links.some((l) => l.href === "/dashboard/checkout" && l.kind === "funding-links"));
     assert.ok(!links.some((l) => l.kind === "pos"));
   });
+
+  it("is Send-first: payouts before recipients, people indented", () => {
+    const links = ngoDashboardNavLinks({ showDisbursements: true });
+    const sendIdx = links.findIndex((l) => l.kind === "send");
+    const peopleIdx = links.findIndex((l) => l.kind === "people");
+    assert.ok(sendIdx >= 0);
+    assert.equal(links[sendIdx]!.href, "/dashboard/payouts");
+    assert.ok(peopleIdx > sendIdx);
+    assert.equal(links[peopleIdx]!.href, "/dashboard/recipients");
+    assert.equal(links[peopleIdx]!.indent, true);
+  });
 });

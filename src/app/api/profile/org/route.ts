@@ -6,7 +6,10 @@ export const dynamic = "force-dynamic";
 import { clearUserOrgId, getUserBySessionId, promoteOrgCreator } from "@/lib/db/users";
 import { createOrganization, getOrganizationById } from "@/lib/db/organizations";
 import { createOrgInvites, type OrgInviteRole } from "@/lib/db/org-invites";
-import { applyOrganizationSozuTag } from "@/lib/org-sozu-tag";
+import {
+  applyOrganizationSozuTag,
+  resolveAvailableOrgSozuTagFromName,
+} from "@/lib/org-sozu-tag";
 import {
   parseTaxEntityType,
   trimOrNull,
@@ -14,6 +17,7 @@ import {
 } from "@/lib/org-tax";
 import { createOrgTreasuryProvisioner } from "@/lib/pollar/org-treasury";
 import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
+import { usableClassicTreasuryPublicKey } from "@/lib/pollar/types";
 import { resolveCreateOrganizationType } from "@/lib/org/resolve-create-type";
 import { randomUUID } from "crypto";
 
@@ -105,12 +109,25 @@ export async function POST(request: NextRequest) {
       // Optional client-supplied G (from Pollar session); else provisioner uses creator.stellar_public_key
       const bodyTreasury =
         typeof body.treasuryPublicKey === "string" ? body.treasuryPublicKey.trim() : "";
-      if (bodyTreasury.startsWith("G") && bodyTreasury.length >= 56) {
-        treasuryPublicKey = bodyTreasury;
+      const fromBody = usableClassicTreasuryPublicKey(bodyTreasury);
+      if (fromBody) {
+        treasuryPublicKey = fromBody;
       } else {
         const provisioner = createOrgTreasuryProvisioner();
         const provisioned = await provisioner.provisionForCreator(activeUser);
-        treasuryPublicKey = provisioned.publicKey;
+        // Production path never persists the fake sentinel as receivable treasury.
+        treasuryPublicKey =
+          usableClassicTreasuryPublicKey(provisioned.publicKey) ??
+          (process.env.POLLAR_FAKE_AUTH === "true" ? provisioned.publicKey : null);
+        if (!treasuryPublicKey) {
+          return NextResponse.json(
+            {
+              error:
+                "Could not bind a real Org treasury wallet. Sign in again with Pollar so your Staff wallet is linked.",
+            },
+            { status: 422 },
+          );
+        }
       }
     }
 
@@ -152,18 +169,47 @@ export async function POST(request: NextRequest) {
     }
 
     let sozuTag: { username: string; tag: string } | null = null;
-    if (sozuTagRaw.trim()) {
-      const tagRes = await applyOrganizationSozuTag({ orgId: org.id, usernameRaw: sozuTagRaw });
+    const explicitTag = sozuTagRaw.trim();
+    let tagToApply = explicitTag;
+    // Pollar onboarding: org display name becomes the Sozu tag when the client omits one.
+    if (!tagToApply && pollarPath) {
+      tagToApply = (await resolveAvailableOrgSozuTagFromName(name)) ?? "";
+    }
+    if (tagToApply) {
+      const tagRes = await applyOrganizationSozuTag({ orgId: org.id, usernameRaw: tagToApply });
       if (!tagRes.ok) {
-        return NextResponse.json({ error: tagRes.error }, { status: tagRes.status });
+        const stubTreasuryFailure =
+          tagRes.status === 422 &&
+          /stub|Cannot publish \$tag|no receive address/i.test(tagRes.error);
+        // Explicit tag + real treasury errors (taken/invalid) fail the request.
+        // Stub-treasury / missing-receive soft-fails so org create still completes.
+        if (explicitTag && !stubTreasuryFailure) {
+          return NextResponse.json({ error: tagRes.error }, { status: tagRes.status });
+        }
+        console.warn("[profile/org] sozu tag apply failed:", tagRes.error);
+        return attachSessionCookie(
+          NextResponse.json({
+            ok: true,
+            organization: { id: org.id, name: org.name, type: org.type },
+            guardianThreshold: pollarPath ? 1 : guardianThreshold,
+            invitesCount: invites.length,
+            sozu_tag_error: tagRes.error,
+            ...(treasuryPublicKey && {
+              org_treasury_wallet: treasuryPublicKey,
+              treasury_source: "creator_staff_pollar_wallet",
+            }),
+            redirect: pollarPath ? "/dashboard" : undefined,
+          }),
+          nextSession,
+        );
       }
       sozuTag = { username: tagRes.username, tag: `$${tagRes.username}` };
     }
 
-    if (pollarPath && treasuryPublicKey?.startsWith("G")) {
+    if (pollarPath && usableClassicTreasuryPublicKey(treasuryPublicKey)) {
       try {
         const { ensureSpendableXlmForFees } = await import("@/lib/stellar/fund");
-        const fee = await ensureSpendableXlmForFees(treasuryPublicKey);
+        const fee = await ensureSpendableXlmForFees(treasuryPublicKey!);
         if (fee.error) {
           console.warn("[profile/org] fee XLM ensure failed:", fee.error);
         }

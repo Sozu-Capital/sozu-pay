@@ -10,6 +10,8 @@ import {
 } from "@/lib/db/organizations";
 import { resolveOrgReceiveAddress } from "@/lib/org-receive-address";
 import { getUserByUsername } from "@/lib/db/users";
+import { suggestOrgTagFromOrgName } from "@/lib/sozu-tag-suggest";
+import { isFakePollarStaffWallet } from "@/lib/pollar/types";
 
 function stellarWalletUserColumn(): string {
   return process.env.SOZUPAY_STELLAR_WALLET_USER_ID_COLUMN?.trim() || "user_id";
@@ -128,6 +130,24 @@ export async function isOrgSozuTagAvailable(usernameRaw: string): Promise<{
   return { available: true };
 }
 
+/**
+ * Pick an available org $tag from a display name (base, then base_2 …).
+ * Used when onboarding only collects org name.
+ */
+export async function resolveAvailableOrgSozuTagFromName(orgName: string): Promise<string | null> {
+  const base = suggestOrgTagFromOrgName(orgName);
+  for (let i = 0; i < 25; i++) {
+    let candidate = base;
+    if (i > 0) {
+      const suffix = `_${i + 1}`;
+      candidate = `${base.slice(0, Math.max(3, 30 - suffix.length))}${suffix}`;
+    }
+    const avail = await isOrgSozuTagAvailable(candidate);
+    if (avail.available) return candidate;
+  }
+  return null;
+}
+
 export async function applyOrganizationSozuTag(params: {
   orgId: string;
   usernameRaw: string;
@@ -147,6 +167,15 @@ export async function applyOrganizationSozuTag(params: {
   const org = await getOrganizationById(params.orgId);
   if (!org) return { ok: false, status: 404, error: "Organization not found." };
 
+  if (isFakePollarStaffWallet(org.stellar_disbursement_public_key) && !resolveOrgReceiveAddress(org).sorobanC) {
+    return {
+      ok: false,
+      status: 422,
+      error:
+        "Organization treasury is still a local stub wallet (not receivable). Sign in again with Pollar so a real Staff wallet is linked, then retry the $tag.",
+    };
+  }
+
   const receive = resolveOrgReceiveAddress(org);
   const destination = receive.tagReceiveAddress;
   if (!destination) {
@@ -155,6 +184,14 @@ export async function applyOrganizationSozuTag(params: {
       status: 422,
       error:
         "Organization has no receive address yet. Provision treasury (Soroban) or a classic G wallet on Profile first.",
+    };
+  }
+  if (isFakePollarStaffWallet(destination)) {
+    return {
+      ok: false,
+      status: 422,
+      error:
+        "Cannot publish $tag to a stub treasury address. Link a real Pollar Staff wallet first.",
     };
   }
   const sb = getSupabase();

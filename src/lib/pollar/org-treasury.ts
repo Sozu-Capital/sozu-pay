@@ -1,5 +1,9 @@
 import type { User } from "@/lib/db/users";
-import { FAKE_POLLAR_STAFF_WALLET } from "@/lib/pollar/types";
+import {
+  FAKE_POLLAR_STAFF_WALLET,
+  isFakePollarStaffWallet,
+  usableClassicTreasuryPublicKey,
+} from "@/lib/pollar/types";
 import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
 
 export type OrgTreasuryProvisionResult = {
@@ -20,16 +24,22 @@ export class CreatorBoundPollarTreasuryProvisioner implements OrgTreasuryProvisi
     if (!isPollarMappedUser(creator)) {
       throw new Error("Org treasury provisioner requires a Pollar-mapped creator");
     }
-    const key = (creator.stellar_public_key ?? "").trim();
-    if (!key.startsWith("G") || key.length < 56) {
+    const key = usableClassicTreasuryPublicKey(creator.stellar_public_key);
+    if (!key) {
       throw new Error(
-        "Creator Staff Pollar wallet address missing. Sign in again so the wallet can be linked.",
+        isFakePollarStaffWallet(creator.stellar_public_key)
+          ? "Creator wallet is a local stub, not a real Stellar account. Sign in again with Pollar so a funded Staff wallet can be linked."
+          : "Creator Staff Pollar wallet address missing. Sign in again so the wallet can be linked.",
       );
     }
     return { publicKey: key, source: "creator_staff_pollar_wallet" };
   }
 }
 
+/**
+ * Test / POLLAR_FAKE_AUTH only. May return the sentinel G for offline flows —
+ * production code must never treat that address as receivable (see usableClassicTreasuryPublicKey).
+ */
 export class FakeOrgTreasuryProvisioner implements OrgTreasuryProvisioner {
   constructor(private readonly publicKey: string = FAKE_POLLAR_STAFF_WALLET) {}
 
@@ -37,9 +47,9 @@ export class FakeOrgTreasuryProvisioner implements OrgTreasuryProvisioner {
     if (!isPollarMappedUser(creator)) {
       throw new Error("Fake provisioner requires Pollar-mapped creator");
     }
-    const fromUser = (creator.stellar_public_key ?? "").trim();
+    const fromUser = usableClassicTreasuryPublicKey(creator.stellar_public_key);
     return {
-      publicKey: fromUser.startsWith("G") ? fromUser : this.publicKey,
+      publicKey: fromUser ?? this.publicKey,
       source: "creator_staff_pollar_wallet",
     };
   }

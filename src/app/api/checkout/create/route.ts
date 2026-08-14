@@ -53,7 +53,12 @@ export async function POST(request: NextRequest) {
   );
   if (!destinationAddress) {
     return NextResponse.json(
-      { error: CHECKOUT_NO_SETTLE_TO_ERROR },
+      {
+        error: CHECKOUT_NO_SETTLE_TO_ERROR,
+        code: "NO_SETTLE_TO",
+        hint:
+          "Org treasury must be a real Stellar G or Soroban C — the local Pollar stub wallet cannot receive funding-link deposits.",
+      },
       { status: 422 },
     );
   }

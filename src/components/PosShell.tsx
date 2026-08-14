@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { LocalQrCode } from "@/components/LocalQrCode";
+import { PosPaymentQrCard } from "@/components/PosPaymentQrCard";
 import {
   CHECKOUT_SETUP_WALLET_PATH,
   isCheckoutWalletNotReadyHttpStatus,
@@ -344,18 +344,11 @@ export default function PosShell() {
                     )}
                   </div>
 
-                  <div className="w-full rounded-[48px] border border-[#f3f4f6] bg-[#f9fafb] px-8 pb-8 pt-10">
-                    <div className="mx-auto flex size-64 items-center justify-center rounded-3xl border border-[#e5e7eb] bg-white shadow-lg">
-                      <LocalQrCode
-                        value={result.checkoutUrl}
-                        size={180}
-                        alt={t("qrAlt")}
-                      />
-                    </div>
-                    <p className="mt-4 text-center text-sm font-bold leading-5 text-[#6b7280]">
-                      {t("scanCaption")}
-                    </p>
-                  </div>
+                  <PosPaymentQrCard
+                    checkoutUrl={result.checkoutUrl}
+                    alt={t("qrAlt")}
+                    caption={t("scanCaption")}
+                  />
                 </div>
 
                 <div className="mt-8 flex flex-col gap-4">

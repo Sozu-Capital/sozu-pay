@@ -2,9 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
-import { CHECKOUT_NO_SETTLE_TO_ERROR } from "@/lib/checkout/ready";
+import {
+  CHECKOUT_NO_SETTLE_TO_ERROR,
+  CHECKOUT_SETUP_WALLET_PATH,
+  isCheckoutSettleReady,
+} from "@/lib/checkout/ready";
 import { resolveCheckoutSettleToAddress } from "@/lib/checkout/settle-to";
-import { createCheckoutSession, expirePendingCheckoutSessionsForOrg } from "@/lib/db/checkout-sessions";
+import {
+  buildPaymentRequestResponse,
+  decideIdempotentReplay,
+  parsePaymentRequestBody,
+} from "@/lib/checkout/create-payment-request";
+import {
+  createCheckoutSession,
+  expirePendingCheckoutSessionsForOrg,
+  getCheckoutSessionByIdempotencyKey,
+} from "@/lib/db/checkout-sessions";
 import { syncLiveCheckoutForOrg } from "@/lib/db/merchant-qr-points";
 import { checkoutSessionUrl, checkoutSuccessUrl } from "@/lib/checkout-url";
 import { rampProvider } from "@/lib/ramp/provider";
@@ -13,11 +26,13 @@ import { buildClpPricingQuote } from "@/lib/pos/clp-pricing";
 
 /**
  * POST /api/checkout/create
- * Creates a checkout session: persists to DB, calls ramp provider, returns URL.
+ * Merchant payment-request API used by POS (and legacy funding links).
  *
- * POS (Chile pilot) may send `amountClp` (whole pesos). The server derives
- * `amountUsd` for USDC/Testnet settlement via {@link buildClpPricingQuote}.
- * Legacy callers may still send `amountUsd` directly.
+ * - Auth required
+ * - POS sends `amountClp` (whole pesos); USDC settlement amount is derived server-side
+ * - Idempotency: optional `Idempotency-Key` header (or body `idempotencyKey`)
+ *   replays the same pending session when the amount matches; mismatches → 409
+ * - Wallet-not-ready → 422 with setup URL (same gate as GET /api/checkout/ready)
  */
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -25,48 +40,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await request.json().catch(() => ({}));
-  const amountClpRaw = typeof body.amountClp === "string" ? body.amountClp.trim() : "";
-  const amountUsdRaw = typeof body.amountUsd === "string" ? body.amountUsd.trim() : "";
-  const reference = typeof body.reference === "string" ? body.reference.trim() : undefined;
-  const paymentMethod =
-    body.paymentMethod === "card" || body.paymentMethod === "bank_transfer"
-      ? body.paymentMethod
-      : undefined;
-  const allowDebit = typeof body.allowDebit === "boolean" ? body.allowDebit : true;
-  const allowCredit = typeof body.allowCredit === "boolean" ? body.allowCredit : true;
-  const allowBankTransfer = typeof body.allowBankTransfer === "boolean" ? body.allowBankTransfer : true;
-
-  let amountUsd = amountUsdRaw;
-  let amountClp: string | undefined;
-  let pricingCurrency: string | undefined;
-  let fxRateClpPerUsdc: number | undefined;
-  let fxSource: string | undefined;
-
-  if (amountClpRaw) {
-    let frankfurterClpPerUsd: number | null = null;
-    try {
-      const fx = await getUsdToLocalRate();
-      if (fx.currency === "CLP" && fx.rate > 0) frankfurterClpPerUsd = fx.rate;
-    } catch {
-      /* quote helper applies fallback */
-    }
-    const quote = buildClpPricingQuote(amountClpRaw, { frankfurterClpPerUsd });
-    if (!quote) {
-      return NextResponse.json(
-        { error: "amountClp must be a positive whole-peso amount" },
-        { status: 400 },
-      );
-    }
-    amountUsd = quote.amountUsd;
-    amountClp = quote.amountClp;
-    pricingCurrency = quote.currency;
-    fxRateClpPerUsdc = quote.clpPerUsdc;
-    fxSource = quote.fxSource;
-  } else if (!amountUsd || isNaN(parseFloat(amountUsd)) || parseFloat(amountUsd) <= 0) {
+  const body = await request.json().catch(() => null);
+  const parsed = parsePaymentRequestBody(body, request.headers.get("Idempotency-Key"));
+  if ("status" in parsed) {
     return NextResponse.json(
-      { error: "amountClp or amountUsd must be a positive number" },
-      { status: 400 },
+      { error: parsed.error, code: parsed.code },
+      { status: parsed.status },
     );
   }
 
@@ -77,26 +56,84 @@ export async function POST(request: NextRequest) {
   }
 
   const org = await getOrganizationForUser(orgId);
-  const destinationAddress = org ? resolveCheckoutSettleToAddress(org) : null;
-
-  console.log(
-    "[checkout/create] Organization:",
-    orgId,
-    "type:",
-    org?.type,
-    "selected destination:",
-    destinationAddress,
-  );
-  if (!destinationAddress) {
+  if (!isCheckoutSettleReady(org)) {
     return NextResponse.json(
       {
         error: CHECKOUT_NO_SETTLE_TO_ERROR,
         code: "NO_SETTLE_TO",
+        setupUrl: CHECKOUT_SETUP_WALLET_PATH,
         hint:
           "Org treasury must be a real Stellar G or Soroban C — the local Pollar stub wallet cannot receive funding-link deposits.",
       },
       { status: 422 },
     );
+  }
+  const destinationAddress = resolveCheckoutSettleToAddress(org!);
+
+  let amountUsd: string;
+  let amountClp: string | undefined;
+  let pricingCurrency: string | undefined;
+  let fxRateClpPerUsdc: number | undefined;
+  let fxSource: string | undefined;
+  let pricedQuote = null as ReturnType<typeof buildClpPricingQuote>;
+
+  if (parsed.amount.kind === "clp") {
+    let frankfurterClpPerUsd: number | null = null;
+    try {
+      const fx = await getUsdToLocalRate();
+      if (fx.currency === "CLP" && fx.rate > 0) frankfurterClpPerUsd = fx.rate;
+    } catch {
+      /* quote helper applies fallback */
+    }
+    pricedQuote = buildClpPricingQuote(parsed.amount.amountClp, { frankfurterClpPerUsd });
+    if (!pricedQuote) {
+      return NextResponse.json(
+        { error: "amountClp must be a positive whole-peso amount", code: "INVALID_AMOUNT" },
+        { status: 400 },
+      );
+    }
+    amountUsd = pricedQuote.amountUsd;
+    amountClp = pricedQuote.amountClp;
+    pricingCurrency = pricedQuote.currency;
+    fxRateClpPerUsdc = pricedQuote.clpPerUsdc;
+    fxSource = pricedQuote.fxSource;
+  } else {
+    amountUsd = parsed.amount.amountUsd;
+  }
+
+  if (parsed.idempotencyKey) {
+    const existing = await getCheckoutSessionByIdempotencyKey(orgId, parsed.idempotencyKey);
+    if (existing) {
+      const decision = decideIdempotentReplay({
+        existingAmountClp: existing.amount_clp,
+        existingAmountUsd: existing.amount_usd,
+        request: parsed,
+        priced: pricedQuote,
+      });
+      if (decision.action === "conflict") {
+        return NextResponse.json(
+          { error: decision.error, code: decision.code },
+          { status: 409 },
+        );
+      }
+      if (decision.action === "replay") {
+        return NextResponse.json(
+          buildPaymentRequestResponse({
+            id: existing.id,
+            checkoutUrl: checkoutSessionUrl(existing.id, request),
+            amountUsd: existing.amount_usd,
+            amountClp: existing.amount_clp,
+            pricingCurrency: existing.pricing_currency,
+            clpPerUsdc: existing.fx_rate_clp_per_usdc,
+            fxSource: existing.fx_source,
+            reference: existing.reference,
+            providerSessionId: existing.provider_session_id,
+            expiresAt: null,
+            idempotentReplay: true,
+          }),
+        );
+      }
+    }
   }
 
   const id = `cs_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
@@ -107,10 +144,10 @@ export async function POST(request: NextRequest) {
     depositSession = await rampProvider.createDepositSession({
       orgId,
       amountUsd,
-      destinationStellarAddress: destinationAddress,
+      destinationStellarAddress: destinationAddress!,
       externalRef: id,
       redirectUrl,
-      paymentMethod,
+      paymentMethod: parsed.paymentMethod,
     });
   } catch (err) {
     console.error("[checkout/create] ramp provider error:", err);
@@ -126,15 +163,16 @@ export async function POST(request: NextRequest) {
       pricingCurrency,
       fxRateClpPerUsdc,
       fxSource,
-      reference,
-      destinationStellarAddress: destinationAddress,
+      idempotencyKey: parsed.idempotencyKey,
+      reference: parsed.reference,
+      destinationStellarAddress: destinationAddress!,
       providerSessionId: depositSession.sessionId,
       providerUrl: depositSession.url,
       providerExpiresAt: depositSession.expiresAt,
-      paymentMethod,
-      allowDebit,
-      allowCredit,
-      allowBankTransfer,
+      paymentMethod: parsed.paymentMethod,
+      allowDebit: parsed.allowDebit,
+      allowCredit: parsed.allowCredit,
+      allowBankTransfer: parsed.allowBankTransfer,
     });
   } catch (err) {
     console.error("[checkout/create] DB persist error:", err);
@@ -144,18 +182,19 @@ export async function POST(request: NextRequest) {
   await expirePendingCheckoutSessionsForOrg(orgId, id);
   await syncLiveCheckoutForOrg(orgId, id);
 
-  const checkoutUrl = checkoutSessionUrl(id, request);
-
-  return NextResponse.json({
-    id,
-    checkoutUrl,
-    amountUsd,
-    amountClp: amountClp ?? null,
-    pricingCurrency: pricingCurrency ?? null,
-    clpPerUsdc: fxRateClpPerUsdc ?? null,
-    fxSource: fxSource ?? null,
-    reference: reference ?? null,
-    providerSessionId: depositSession.sessionId,
-    expiresAt: depositSession.expiresAt ?? null,
-  });
+  return NextResponse.json(
+    buildPaymentRequestResponse({
+      id,
+      checkoutUrl: checkoutSessionUrl(id, request),
+      amountUsd,
+      amountClp: amountClp ?? null,
+      pricingCurrency: pricingCurrency ?? null,
+      clpPerUsdc: fxRateClpPerUsdc ?? null,
+      fxSource: fxSource ?? null,
+      reference: parsed.reference ?? null,
+      providerSessionId: depositSession.sessionId,
+      expiresAt: depositSession.expiresAt ?? null,
+      idempotentReplay: false,
+    }),
+  );
 }

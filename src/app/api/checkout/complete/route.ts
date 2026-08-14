@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCheckoutSession, completeCheckoutSession } from "@/lib/db/checkout-sessions";
+import {
+  getCheckoutSession,
+  completeCheckoutSession,
+  markCheckoutSessionExpired,
+} from "@/lib/db/checkout-sessions";
 import { verifyStellarPayment } from "@/lib/checkout/verify-stellar-payment";
 import { getAppBaseUrl } from "@/lib/app-url";
+import { effectiveCheckoutStatus } from "@/lib/checkout/expiration";
 
 const ALLOWED_ORIGIN = getAppBaseUrl();
 
@@ -79,9 +84,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (session.status !== "pending") {
+    const status = effectiveCheckoutStatus({
+      status: session.status,
+      expiresAt: session.expires_at,
+    });
+    if (status === "expired") {
+      if (session.status === "pending") await markCheckoutSessionExpired(session.id);
       return NextResponse.json(
-        { error: `Session is ${session.status}` },
+        { error: "Session expired", code: "EXPIRED", status: "expired" },
+        { status: 410, headers: corsHeaders() }
+      );
+    }
+
+    if (status !== "pending") {
+      return NextResponse.json(
+        { error: `Session is ${status}` },
         { status: 400, headers: corsHeaders() }
       );
     }

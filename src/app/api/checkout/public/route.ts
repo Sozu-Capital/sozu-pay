@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCheckoutSession } from "@/lib/db/checkout-sessions";
+import {
+  getCheckoutSession,
+  markCheckoutSessionExpired,
+} from "@/lib/db/checkout-sessions";
 import { getOrganizationById } from "@/lib/db/organizations";
 import { getAppBaseUrl } from "@/lib/app-url";
+import { effectiveCheckoutStatus } from "@/lib/checkout/expiration";
 
 const ALLOWED_ORIGIN = getAppBaseUrl();
 
@@ -46,16 +50,26 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const status = effectiveCheckoutStatus({
+    status: session.status,
+    expiresAt: session.expires_at,
+  });
+  if (status === "expired" && session.status === "pending") {
+    await markCheckoutSessionExpired(session.id);
+  }
+
   // Return 410 Gone if session is not pending (with status so payer can show receipt)
-  if (session.status !== "pending") {
+  if (status !== "pending") {
     return NextResponse.json(
       {
-        error: "Session not pending",
-        status: session.status,
+        error: status === "expired" ? "Session expired" : "Session not pending",
+        status,
         id: session.id,
         amountUsd: session.amount_usd,
+        amountClp: session.amount_clp,
         reference: session.reference,
         createdAt: session.created_at,
+        expiresAt: session.expires_at,
         stellarTxHash: session.stellar_tx_hash,
         completedPaymentMethod: session.completed_payment_method,
       },
@@ -79,6 +93,7 @@ export async function GET(request: NextRequest) {
       id: session.id,
       status: session.status,
       amountUsd: session.amount_usd,
+      amountClp: session.amount_clp,
       reference: session.reference,
       merchantName,
       destinationStellarAddress: session.destination_stellar_address,
@@ -86,6 +101,7 @@ export async function GET(request: NextRequest) {
       allowCredit: session.allow_credit,
       allowBankTransfer: session.allow_bank_transfer,
       createdAt: session.created_at,
+      expiresAt: session.expires_at,
     },
     { headers: corsHeaders() }
   );

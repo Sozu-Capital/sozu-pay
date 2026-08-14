@@ -310,6 +310,8 @@
     "creating": "Creando…",
     "readyTitle": "Mostrá este QR a tu cliente",
     "waitingForCustomer": "Esperando al cliente…",
+    "expiredStatus": "Pago expirado",
+    "expiredHint": "Este QR ya no se puede pagar. Creá un nuevo cobro cuando estés listo.",
     "totalCharge": "Total a cobrar",
     "previewHint": "Creá el cobro para mostrar un QR en vivo a tu cliente.",
     "scanCaption": "Escaneá con cualquier wallet o cámara del teléfono para pagar al instante",

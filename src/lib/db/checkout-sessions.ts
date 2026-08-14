@@ -24,6 +24,7 @@ export type CheckoutSession = {
   stellar_tx_hash: string | null;
   completed_payment_method: string | null;
   deleted_at: string | null;
+  expires_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -42,6 +43,7 @@ export async function createCheckoutSession(params: {
   providerSessionId: string;
   providerUrl: string;
   providerExpiresAt?: string;
+  expiresAt?: string;
   paymentMethod?: string;
   allowDebit?: boolean;
   allowCredit?: boolean;
@@ -68,6 +70,7 @@ export async function createCheckoutSession(params: {
       allow_debit: params.allowDebit ?? true,
       allow_credit: params.allowCredit ?? true,
       allow_bank_transfer: params.allowBankTransfer ?? true,
+      expires_at: params.expiresAt ?? null,
       created_at: now,
       updated_at: now,
     })
@@ -76,6 +79,20 @@ export async function createCheckoutSession(params: {
 
   if (error) throw new Error(error.message);
   return data as CheckoutSession;
+}
+
+export async function markCheckoutSessionExpired(id: string): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await getSupabase()
+    .from("checkout_sessions")
+    .update({ status: "expired", updated_at: now })
+    .eq("id", id)
+    .eq("status", "pending")
+    .is("deleted_at", null);
+
+  if (error) {
+    console.error("[checkout-sessions] markExpired error:", error.message);
+  }
 }
 
 export async function getCheckoutSessionByIdempotencyKey(
@@ -268,6 +285,7 @@ export function mapCheckoutSessionForApi(session: CheckoutSession) {
     organizationId: session.org_id,
     stellarTxHash: session.stellar_tx_hash,
     completedPaymentMethod: session.completed_payment_method,
+    expiresAt: session.expires_at,
   };
 }
 

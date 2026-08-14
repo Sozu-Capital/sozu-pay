@@ -15,4 +15,11 @@ describe("posPaneState", () => {
   it("is ready when a charge exists, even if amount is still in the form", () => {
     assert.equal(posPaneState({ amountUsd: "4.50", hasResult: true }), "ready");
   });
+
+  it("is expired when the charge TTL has elapsed", () => {
+    assert.equal(
+      posPaneState({ amountUsd: "4.50", hasResult: true, isExpired: true }),
+      "expired",
+    );
+  });
 });

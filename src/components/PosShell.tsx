@@ -15,12 +15,14 @@ import {
   formatClpDisplay,
   parseWholeClpAmount,
 } from "@/lib/pos/clp-pricing";
+import { isCheckoutExpired } from "@/lib/checkout/expiration";
 
 type CreateResult = {
   checkoutUrl: string;
   id: string;
   amountClp: string;
   reference: string | null;
+  expiresAt: string | null;
 };
 
 const KEYPAD_KEYS: PosKeypadKey[] = [
@@ -76,6 +78,7 @@ export default function PosShell() {
   const [copied, setCopied] = useState(false);
   const [walletReady, setWalletReady] = useState<boolean | null>(null);
   const [setupUrl, setSetupUrl] = useState(CHECKOUT_SETUP_WALLET_PATH);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
     let cancelled = false;
@@ -100,6 +103,13 @@ export default function PosShell() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!result?.expiresAt) return;
+    const tick = () => setNowMs(Date.now());
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [result?.expiresAt]);
   const pressKey = (key: PosKeypadKey) => {
     setAmountClp((prev) =>
       applyPosKeypadKey(prev, key, { maxFractionDigits: POS_CLP_FRACTION_DIGITS }),
@@ -156,6 +166,10 @@ export default function PosShell() {
         id: data.id,
         amountClp: chargedClp,
         reference: chargedReference,
+        expiresAt:
+          typeof data.expiresAt === "string" && data.expiresAt.trim()
+            ? data.expiresAt.trim()
+            : null,
       });
     } finally {
       setBusy(false);
@@ -177,7 +191,14 @@ export default function PosShell() {
     setError(null);
   };
 
-  const pane = posPaneState({ amountUsd: amountClp, hasResult: !!result });
+  const chargeExpired = !!(
+    result && isCheckoutExpired(result.expiresAt, nowMs)
+  );
+  const pane = posPaneState({
+    amountUsd: amountClp,
+    hasResult: !!result,
+    isExpired: chargeExpired,
+  });
   const displayAmount = formatClpDisplay(amountClp);
   const sideTotal = formatClpDisplay(result?.amountClp ?? amountClp);
 
@@ -367,6 +388,40 @@ export default function PosShell() {
                     </button>
                   </div>
 
+                  <button
+                    type="button"
+                    onClick={resetCharge}
+                    className="w-full rounded-[28px] bg-[#050505] py-6 text-xl font-extrabold text-white shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.2)]"
+                  >
+                    {t("newCharge")}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {pane === "expired" && result && (
+              <>
+                <div className="flex flex-col items-center gap-10">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-5 py-2">
+                    <span className="size-2 rounded-full bg-amber-500" aria-hidden />
+                    <span className="text-xs font-extrabold text-amber-700">
+                      {t("expiredStatus")}
+                    </span>
+                  </div>
+
+                  <div className="text-center">
+                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#9ca3af]">
+                      {t("totalCharge")}
+                    </p>
+                    <p className="mt-2 text-5xl font-extrabold tabular-nums text-[#050505]">
+                      {formatClpDisplay(result.amountClp)}
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-[#9ca3af]">{t("currencyLabel")}</p>
+                    <p className="mt-4 max-w-xs text-sm text-amber-800">{t("expiredHint")}</p>
+                  </div>
+                </div>
+
+                <div className="mt-8">
                   <button
                     type="button"
                     onClick={resetCharge}

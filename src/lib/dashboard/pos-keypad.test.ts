@@ -43,6 +43,11 @@ describe("applyPosKeypadKey", () => {
     }
     assert.equal(amount, "24.50");
   });
+
+  it("rejects decimals when maxFractionDigits is 0 (CLP whole pesos)", () => {
+    assert.equal(applyPosKeypadKey("24", ".", { maxFractionDigits: 0 }), "24");
+    assert.equal(applyPosKeypadKey("24", "5", { maxFractionDigits: 0 }), "245");
+  });
 });
 
 describe("formatPosKeypadDisplay", () => {

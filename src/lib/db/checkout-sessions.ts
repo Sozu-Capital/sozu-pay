@@ -6,6 +6,10 @@ export type CheckoutSession = {
   id: string;
   org_id: string;
   amount_usd: string;
+  amount_clp: string | null;
+  pricing_currency: string | null;
+  fx_rate_clp_per_usdc: number | null;
+  fx_source: string | null;
   reference: string | null;
   status: CheckoutSessionStatus;
   destination_stellar_address: string;
@@ -27,6 +31,10 @@ export async function createCheckoutSession(params: {
   id: string;
   orgId: string;
   amountUsd: string;
+  amountClp?: string;
+  pricingCurrency?: string;
+  fxRateClpPerUsdc?: number;
+  fxSource?: string;
   reference?: string;
   destinationStellarAddress: string;
   providerSessionId: string;
@@ -44,6 +52,10 @@ export async function createCheckoutSession(params: {
       id: params.id,
       org_id: params.orgId,
       amount_usd: params.amountUsd,
+      amount_clp: params.amountClp ?? null,
+      pricing_currency: params.pricingCurrency ?? null,
+      fx_rate_clp_per_usdc: params.fxRateClpPerUsdc ?? null,
+      fx_source: params.fxSource ?? null,
       reference: params.reference ?? null,
       status: "pending",
       destination_stellar_address: params.destinationStellarAddress,
@@ -219,6 +231,10 @@ export function mapCheckoutSessionForApi(session: CheckoutSession) {
     id: session.id,
     status: session.status,
     amountUsd: session.amount_usd,
+    amountClp: session.amount_clp,
+    pricingCurrency: session.pricing_currency,
+    fxRateClpPerUsdc: session.fx_rate_clp_per_usdc,
+    fxSource: session.fx_source,
     reference: session.reference,
     createdAt: session.created_at,
     paymentMethod: session.payment_method,

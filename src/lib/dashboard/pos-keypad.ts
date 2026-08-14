@@ -13,14 +13,26 @@ export type PosKeypadKey =
   | "."
   | "backspace";
 
-const MAX_FRACTION_DIGITS = 2;
-const MAX_INTEGER_DIGITS = 9;
+export type ApplyPosKeypadOptions = {
+  /** Max digits after decimal. Use 0 for whole-peso CLP (rejects `.`). Default 2. */
+  maxFractionDigits?: number;
+  maxIntegerDigits?: number;
+};
+
+const DEFAULT_MAX_FRACTION_DIGITS = 2;
+const DEFAULT_MAX_INTEGER_DIGITS = 9;
 
 /**
  * Apply one keypad press to the current amount string.
  * Rejects a second decimal and caps fraction digits so the hero display stays valid money input.
  */
-export function applyPosKeypadKey(current: string, key: PosKeypadKey): string {
+export function applyPosKeypadKey(
+  current: string,
+  key: PosKeypadKey,
+  options: ApplyPosKeypadOptions = {},
+): string {
+  const maxFractionDigits = options.maxFractionDigits ?? DEFAULT_MAX_FRACTION_DIGITS;
+  const maxIntegerDigits = options.maxIntegerDigits ?? DEFAULT_MAX_INTEGER_DIGITS;
   const raw = current.trim();
 
   if (key === "backspace") {
@@ -28,6 +40,7 @@ export function applyPosKeypadKey(current: string, key: PosKeypadKey): string {
   }
 
   if (key === ".") {
+    if (maxFractionDigits <= 0) return raw;
     if (raw.includes(".")) return raw;
     return raw.length === 0 ? "0." : `${raw}.`;
   }
@@ -39,14 +52,15 @@ export function applyPosKeypadKey(current: string, key: PosKeypadKey): string {
 
   const dot = raw.indexOf(".");
   if (dot >= 0) {
+    if (maxFractionDigits <= 0) return raw;
     const fraction = raw.slice(dot + 1);
-    if (fraction.length >= MAX_FRACTION_DIGITS) return raw;
+    if (fraction.length >= maxFractionDigits) return raw;
     return `${raw}${key}`;
   }
 
   // Avoid a leading zero run like "00"
   if (raw === "" && key === "0") return "0";
-  if (raw.length >= MAX_INTEGER_DIGITS) return raw;
+  if (raw.length >= maxIntegerDigits) return raw;
   return `${raw}${key}`;
 }
 

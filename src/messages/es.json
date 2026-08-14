@@ -302,9 +302,10 @@
   "posPage": {
     "title": "POS",
     "subtitle": "Ingresá un monto, creá un cobro en vivo y mostrá el QR para que tu cliente escanee.",
-    "currencyLabel": "USD",
+    "currencyLabel": "CLP",
     "keypadAria": "Teclado de monto",
     "backspaceAria": "Borrar",
+    "decimalDisabledAria": "Los decimales no se usan en CLP",
     "createCharge": "Crear cobro",
     "creating": "Creando…",
     "readyTitle": "Mostrá este QR a tu cliente",

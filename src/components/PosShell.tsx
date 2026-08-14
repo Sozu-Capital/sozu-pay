@@ -9,16 +9,17 @@ import {
   isCheckoutWalletNotReadyHttpStatus,
 } from "@/lib/checkout/ready";
 import { posPaneState } from "@/lib/dashboard/pos-pane";
+import { applyPosKeypadKey, type PosKeypadKey } from "@/lib/dashboard/pos-keypad";
 import {
-  applyPosKeypadKey,
-  formatPosKeypadDisplay,
-  type PosKeypadKey,
-} from "@/lib/dashboard/pos-keypad";
+  POS_CLP_FRACTION_DIGITS,
+  formatClpDisplay,
+  parseWholeClpAmount,
+} from "@/lib/pos/clp-pricing";
 
 type CreateResult = {
   checkoutUrl: string;
   id: string;
-  amountUsd: string;
+  amountClp: string;
   reference: string | null;
 };
 
@@ -46,7 +47,7 @@ function BackspaceIcon() {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
-      className="size-[34px] h-[30px]"
+      className="h-[30px] w-[34px]"
     >
       <path
         d="M12.5 4H29a3 3 0 0 1 3 3v16a3 3 0 0 1-3 3H12.5L3 15l9.5-11Z"
@@ -67,7 +68,7 @@ function BackspaceIcon() {
 export default function PosShell() {
   const t = useTranslations("posPage");
   const tc = useTranslations("checkoutPage");
-  const [amountUsd, setAmountUsd] = useState("");
+  const [amountClp, setAmountClp] = useState("");
   const [reference, setReference] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,13 +101,14 @@ export default function PosShell() {
   }, []);
 
   const pressKey = (key: PosKeypadKey) => {
-    setAmountUsd((prev) => applyPosKeypadKey(prev, key));
+    setAmountClp((prev) =>
+      applyPosKeypadKey(prev, key, { maxFractionDigits: POS_CLP_FRACTION_DIGITS }),
+    );
   };
 
   const handleCreate = async () => {
     setError(null);
-    const amount = parseFloat(amountUsd);
-    if (!isFinite(amount) || amount <= 0) {
+    if (parseWholeClpAmount(amountClp) == null) {
       setError(tc("invalidAmount"));
       return;
     }
@@ -116,7 +118,7 @@ export default function PosShell() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amountUsd: amountUsd.trim(),
+          amountClp: amountClp.trim(),
           reference: reference.trim() || undefined,
           allowDebit: true,
           allowCredit: true,
@@ -133,10 +135,10 @@ export default function PosShell() {
         setError((data.error as string) ?? tc("createFailed"));
         return;
       }
-      const chargedAmount =
-        typeof data.amountUsd === "string" && data.amountUsd.trim()
-          ? data.amountUsd.trim()
-          : amountUsd.trim();
+      const chargedClp =
+        typeof data.amountClp === "string" && data.amountClp.trim()
+          ? data.amountClp.trim()
+          : amountClp.trim();
       const chargedReference =
         typeof data.reference === "string" && data.reference.trim()
           ? data.reference.trim()
@@ -145,7 +147,7 @@ export default function PosShell() {
       setResult({
         checkoutUrl: data.checkoutUrl,
         id: data.id,
-        amountUsd: chargedAmount,
+        amountClp: chargedClp,
         reference: chargedReference,
       });
     } finally {
@@ -168,9 +170,9 @@ export default function PosShell() {
     setError(null);
   };
 
-  const pane = posPaneState({ amountUsd, hasResult: !!result });
-  const displayAmount = formatPosKeypadDisplay(amountUsd);
-  const sideTotal = result?.amountUsd ?? (amountUsd.trim() || "0");
+  const pane = posPaneState({ amountUsd: amountClp, hasResult: !!result });
+  const displayAmount = formatClpDisplay(amountClp);
+  const sideTotal = formatClpDisplay(result?.amountClp ?? amountClp);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -200,7 +202,6 @@ export default function PosShell() {
 
       {walletReady !== false && (
         <div className="overflow-hidden rounded-[48px] border border-[#f3f4f6] bg-white shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] lg:flex">
-          {/* Left: amount + keypad — stays visible while charge/QR is active */}
           <div className="flex flex-1 flex-col items-center justify-center bg-[rgba(249,250,251,0.3)] px-6 py-10 sm:px-12 lg:px-16 lg:py-16">
             <div className="mb-10 flex w-full max-w-md flex-col items-center gap-4">
               <p className="text-center text-2xl font-bold tracking-wide text-[#9ca3af]">
@@ -222,16 +223,26 @@ export default function PosShell() {
             >
               {KEYPAD_KEYS.map((key) => {
                 const isBackspace = key === "backspace";
+                const isDecimalDisabled = key === "." && POS_CLP_FRACTION_DIGITS <= 0;
                 return (
                   <button
                     key={key}
                     type="button"
                     onClick={() => pressKey(key)}
-                    aria-label={isBackspace ? t("backspaceAria") : undefined}
+                    disabled={isDecimalDisabled}
+                    aria-label={
+                      isBackspace
+                        ? t("backspaceAria")
+                        : isDecimalDisabled
+                          ? t("decimalDisabledAria")
+                          : undefined
+                    }
                     className={
                       isBackspace
                         ? "flex items-center justify-center rounded-3xl border border-[#e5e7eb] bg-[#f3f4f6] px-4 py-6 text-[#050505] transition-transform active:scale-[0.98]"
-                        : "flex items-center justify-center rounded-3xl border border-[#f3f4f6] bg-white px-4 py-6 text-3xl font-extrabold tracking-widest text-[#050505] shadow-sm transition-transform active:scale-[0.98]"
+                        : isDecimalDisabled
+                          ? "flex items-center justify-center rounded-3xl border border-[#f3f4f6] bg-[#f9fafb] px-4 py-6 text-3xl font-extrabold tracking-widest text-[#d1d5db]"
+                          : "flex items-center justify-center rounded-3xl border border-[#f3f4f6] bg-white px-4 py-6 text-3xl font-extrabold tracking-widest text-[#050505] shadow-sm transition-transform active:scale-[0.98]"
                     }
                   >
                     {isBackspace ? <BackspaceIcon /> : key}
@@ -281,7 +292,6 @@ export default function PosShell() {
             </div>
           </div>
 
-          {/* Right: preview / waiting + QR */}
           <div className="relative flex w-full flex-col justify-between border-t border-[#f3f4f6] bg-white p-8 lg:w-[426px] lg:shrink-0 lg:border-l lg:border-t-0 lg:p-12">
             {pane === "empty" && (
               <div className="flex flex-1 items-center justify-center text-center text-sm text-gray-500">
@@ -295,8 +305,9 @@ export default function PosShell() {
                   {t("totalCharge")}
                 </p>
                 <p className="text-5xl font-extrabold tabular-nums text-[#050505]">
-                  ${sideTotal}
+                  {sideTotal}
                 </p>
+                <p className="text-sm font-bold text-[#9ca3af]">{t("currencyLabel")}</p>
                 <p className="mt-4 max-w-xs text-sm text-gray-500">{t("previewHint")}</p>
               </div>
             )}
@@ -316,8 +327,9 @@ export default function PosShell() {
                       {t("totalCharge")}
                     </p>
                     <p className="mt-2 text-5xl font-extrabold tabular-nums text-[#050505]">
-                      ${result.amountUsd}
+                      {formatClpDisplay(result.amountClp)}
                     </p>
+                    <p className="mt-1 text-sm font-bold text-[#9ca3af]">{t("currencyLabel")}</p>
                     {result.reference && (
                       <p className="mt-2 text-xs text-gray-500">
                         {t("chargedReference", { reference: result.reference })}

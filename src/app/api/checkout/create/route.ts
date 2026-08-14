@@ -8,10 +8,16 @@ import { createCheckoutSession, expirePendingCheckoutSessionsForOrg } from "@/li
 import { syncLiveCheckoutForOrg } from "@/lib/db/merchant-qr-points";
 import { checkoutSessionUrl, checkoutSuccessUrl } from "@/lib/checkout-url";
 import { rampProvider } from "@/lib/ramp/provider";
+import { getUsdToLocalRate } from "@/lib/fx";
+import { buildClpPricingQuote } from "@/lib/pos/clp-pricing";
 
 /**
  * POST /api/checkout/create
  * Creates a checkout session: persists to DB, calls ramp provider, returns URL.
+ *
+ * POS (Chile pilot) may send `amountClp` (whole pesos). The server derives
+ * `amountUsd` for USDC/Testnet settlement via {@link buildClpPricingQuote}.
+ * Legacy callers may still send `amountUsd` directly.
  */
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -20,7 +26,8 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const amountUsd = typeof body.amountUsd === "string" ? body.amountUsd.trim() : "";
+  const amountClpRaw = typeof body.amountClp === "string" ? body.amountClp.trim() : "";
+  const amountUsdRaw = typeof body.amountUsd === "string" ? body.amountUsd.trim() : "";
   const reference = typeof body.reference === "string" ? body.reference.trim() : undefined;
   const paymentMethod =
     body.paymentMethod === "card" || body.paymentMethod === "bank_transfer"
@@ -30,8 +37,37 @@ export async function POST(request: NextRequest) {
   const allowCredit = typeof body.allowCredit === "boolean" ? body.allowCredit : true;
   const allowBankTransfer = typeof body.allowBankTransfer === "boolean" ? body.allowBankTransfer : true;
 
-  if (!amountUsd || isNaN(parseFloat(amountUsd)) || parseFloat(amountUsd) <= 0) {
-    return NextResponse.json({ error: "amountUsd must be a positive number" }, { status: 400 });
+  let amountUsd = amountUsdRaw;
+  let amountClp: string | undefined;
+  let pricingCurrency: string | undefined;
+  let fxRateClpPerUsdc: number | undefined;
+  let fxSource: string | undefined;
+
+  if (amountClpRaw) {
+    let frankfurterClpPerUsd: number | null = null;
+    try {
+      const fx = await getUsdToLocalRate();
+      if (fx.currency === "CLP" && fx.rate > 0) frankfurterClpPerUsd = fx.rate;
+    } catch {
+      /* quote helper applies fallback */
+    }
+    const quote = buildClpPricingQuote(amountClpRaw, { frankfurterClpPerUsd });
+    if (!quote) {
+      return NextResponse.json(
+        { error: "amountClp must be a positive whole-peso amount" },
+        { status: 400 },
+      );
+    }
+    amountUsd = quote.amountUsd;
+    amountClp = quote.amountClp;
+    pricingCurrency = quote.currency;
+    fxRateClpPerUsdc = quote.clpPerUsdc;
+    fxSource = quote.fxSource;
+  } else if (!amountUsd || isNaN(parseFloat(amountUsd)) || parseFloat(amountUsd) <= 0) {
+    return NextResponse.json(
+      { error: "amountClp or amountUsd must be a positive number" },
+      { status: 400 },
+    );
   }
 
   const user = await getUserBySessionId(session.id);
@@ -86,6 +122,10 @@ export async function POST(request: NextRequest) {
       id,
       orgId,
       amountUsd,
+      amountClp,
+      pricingCurrency,
+      fxRateClpPerUsdc,
+      fxSource,
       reference,
       destinationStellarAddress: destinationAddress,
       providerSessionId: depositSession.sessionId,
@@ -110,6 +150,10 @@ export async function POST(request: NextRequest) {
     id,
     checkoutUrl,
     amountUsd,
+    amountClp: amountClp ?? null,
+    pricingCurrency: pricingCurrency ?? null,
+    clpPerUsdc: fxRateClpPerUsdc ?? null,
+    fxSource: fxSource ?? null,
     reference: reference ?? null,
     providerSessionId: depositSession.sessionId,
     expiresAt: depositSession.expiresAt ?? null,

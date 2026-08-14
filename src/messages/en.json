@@ -302,9 +302,10 @@
   "posPage": {
     "title": "POS",
     "subtitle": "Enter an amount, create a live charge, and show the QR for your customer to scan.",
-    "currencyLabel": "USD",
+    "currencyLabel": "CLP",
     "keypadAria": "Amount keypad",
     "backspaceAria": "Backspace",
+    "decimalDisabledAria": "Decimals not used for CLP",
     "createCharge": "Create charge",
     "creating": "Creating…",
     "readyTitle": "Show this QR to your customer",

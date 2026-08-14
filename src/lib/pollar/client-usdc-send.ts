@@ -84,7 +84,9 @@ export async function sendUsdcViaPollarClient(
       },
     });
     if (outcome.status === "error") {
-      throw new Error(outcome.message ?? outcome.details ?? "Pollar USDC payment failed");
+      const detail = outcome.message ?? outcome.details ?? "Pollar USDC payment failed";
+      const code = outcome.code ? ` [${outcome.code}]` : "";
+      throw new Error(`${detail}${code} (signing ${input.fromAddress.slice(0, 8)}…)`);
     }
     if (!outcome.hash) throw new Error("Pollar payment returned no transaction hash");
     return { stellarTxHash: outcome.hash };
@@ -106,7 +108,9 @@ export async function sendUsdcViaPollarClient(
   });
 
   if (outcome.status === "error") {
-    throw new Error(outcome.message ?? outcome.details ?? "Pollar SAC transfer failed");
+    const detail = outcome.message ?? outcome.details ?? "Pollar SAC transfer failed";
+    const code = outcome.code ? ` [${outcome.code}]` : "";
+    throw new Error(`${detail}${code} (signing ${input.fromAddress.slice(0, 8)}…)`);
   }
   if (!outcome.hash) throw new Error("Pollar SAC transfer returned no transaction hash");
   return { stellarTxHash: outcome.hash };

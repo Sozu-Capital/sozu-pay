@@ -3,13 +3,17 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { CheckoutPreviewCard } from "@/components/CheckoutPreviewCard";
 import { LocalQrCode } from "@/components/LocalQrCode";
 import {
   CHECKOUT_SETUP_WALLET_PATH,
   isCheckoutWalletNotReadyHttpStatus,
 } from "@/lib/checkout/ready";
 import { posPaneState } from "@/lib/dashboard/pos-pane";
+import {
+  applyPosKeypadKey,
+  formatPosKeypadDisplay,
+  type PosKeypadKey,
+} from "@/lib/dashboard/pos-keypad";
 
 type CreateResult = {
   checkoutUrl: string;
@@ -17,6 +21,48 @@ type CreateResult = {
   amountUsd: string;
   reference: string | null;
 };
+
+const KEYPAD_KEYS: PosKeypadKey[] = [
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+  ".",
+  "0",
+  "backspace",
+];
+
+function BackspaceIcon() {
+  return (
+    <svg
+      width="34"
+      height="30"
+      viewBox="0 0 34 30"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      className="size-[34px] h-[30px]"
+    >
+      <path
+        d="M12.5 4H29a3 3 0 0 1 3 3v16a3 3 0 0 1-3 3H12.5L3 15l9.5-11Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M16 10.5 23.5 18M23.5 10.5 16 18"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
 
 export default function PosShell() {
   const t = useTranslations("posPage");
@@ -53,10 +99,12 @@ export default function PosShell() {
     };
   }, []);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const pressKey = (key: PosKeypadKey) => {
+    setAmountUsd((prev) => applyPosKeypadKey(prev, key));
+  };
+
+  const handleCreate = async () => {
     setError(null);
-    setResult(null);
     const amount = parseFloat(amountUsd);
     if (!isFinite(amount) || amount <= 0) {
       setError(tc("invalidAmount"));
@@ -93,6 +141,7 @@ export default function PosShell() {
         typeof data.reference === "string" && data.reference.trim()
           ? data.reference.trim()
           : reference.trim() || null;
+      // Keep keypad amount visible while the QR / waiting panel shows.
       setResult({
         checkoutUrl: data.checkoutUrl,
         id: data.id,
@@ -114,10 +163,17 @@ export default function PosShell() {
     }
   };
 
+  const resetCharge = () => {
+    setResult(null);
+    setError(null);
+  };
+
   const pane = posPaneState({ amountUsd, hasResult: !!result });
+  const displayAmount = formatPosKeypadDisplay(amountUsd);
+  const sideTotal = result?.amountUsd ?? (amountUsd.trim() || "0");
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <header>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
           {t("title")}
@@ -143,129 +199,174 @@ export default function PosShell() {
       )}
 
       {walletReady !== false && (
-      <div className="grid gap-6 lg:grid-cols-2">
-        <form
-          onSubmit={handleCreate}
-          className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6 space-y-4"
-        >
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              {tc("amountLabel")}
-            </label>
-            <div className="mt-1 flex items-center gap-2">
-              <span className="text-lg font-semibold text-gray-500">$</span>
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
-                value={amountUsd}
-                onChange={(e) => setAmountUsd(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-lg tabular-nums"
-                placeholder="0.00"
-                autoFocus
-              />
-              <span className="text-sm font-medium text-gray-500">USD</span>
+        <div className="overflow-hidden rounded-[48px] border border-[#f3f4f6] bg-white shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] lg:flex">
+          {/* Left: amount + keypad — stays visible while charge/QR is active */}
+          <div className="flex flex-1 flex-col items-center justify-center bg-[rgba(249,250,251,0.3)] px-6 py-10 sm:px-12 lg:px-16 lg:py-16">
+            <div className="mb-10 flex w-full max-w-md flex-col items-center gap-4">
+              <p className="text-center text-2xl font-bold tracking-wide text-[#9ca3af]">
+                {t("currencyLabel")}
+              </p>
+              <p
+                className="max-w-full truncate text-center text-6xl font-extrabold tracking-tighter text-[#050505] sm:text-7xl lg:text-[7.5rem] lg:leading-none"
+                data-testid="pos-amount-display"
+                aria-live="polite"
+              >
+                {displayAmount}
+              </p>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              {tc("referenceLabel")}
-            </label>
-            <input
-              type="text"
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
-              placeholder={tc("referencePlaceholder")}
-            />
-          </div>
-
-          {error && (
-            <p className="text-sm text-red-600 dark:text-red-400" role="alert">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold py-3 text-sm transition-colors"
-          >
-            {busy ? t("creating") : t("createCharge")}
-          </button>
-
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {t("managePoints")}{" "}
-            <Link
-              href="/dashboard/qr-codes"
-              className="font-medium text-emerald-700 dark:text-emerald-400 underline-offset-2 hover:underline"
+            <div
+              className="grid w-full max-w-md grid-cols-3 gap-3 sm:gap-4"
+              role="group"
+              aria-label={t("keypadAria")}
             >
-              {t("managePointsLink")}
-            </Link>
-          </p>
-        </form>
+              {KEYPAD_KEYS.map((key) => {
+                const isBackspace = key === "backspace";
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => pressKey(key)}
+                    aria-label={isBackspace ? t("backspaceAria") : undefined}
+                    className={
+                      isBackspace
+                        ? "flex items-center justify-center rounded-3xl border border-[#e5e7eb] bg-[#f3f4f6] px-4 py-6 text-[#050505] transition-transform active:scale-[0.98]"
+                        : "flex items-center justify-center rounded-3xl border border-[#f3f4f6] bg-white px-4 py-6 text-3xl font-extrabold tracking-widest text-[#050505] shadow-sm transition-transform active:scale-[0.98]"
+                    }
+                  >
+                    {isBackspace ? <BackspaceIcon /> : key}
+                  </button>
+                );
+              })}
+            </div>
 
-        <div className="space-y-4">
-          {pane === "preview" && (
-            <CheckoutPreviewCard amountUsd={amountUsd || "0.00"} reference={reference} />
-          )}
+            <div className="mt-8 w-full max-w-md space-y-3">
+              <label className="block text-sm font-medium text-gray-600">
+                {tc("referenceLabel")}
+                <input
+                  type="text"
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                  placeholder={tc("referencePlaceholder")}
+                />
+              </label>
 
-          {pane === "ready" && result && (
-            <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-6 text-center">
-              <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
-                {t("readyTitle")}
-              </p>
-              <p className="mt-3 text-3xl font-bold tabular-nums text-gray-900 dark:text-white">
-                ${result.amountUsd}
-              </p>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">USD</p>
-              {result.reference && (
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {t("chargedReference", { reference: result.reference })}
+              {error && (
+                <p className="text-sm text-red-600" role="alert">
+                  {error}
                 </p>
               )}
-              <LocalQrCode
-                value={result.checkoutUrl}
-                size={220}
-                alt={t("qrAlt")}
-                className="mx-auto mt-4 rounded-lg bg-white p-2"
-              />
-              <p className="mt-3 text-xs break-all text-gray-700 dark:text-gray-300">
-                {result.checkoutUrl}
-              </p>
-              <div className="mt-4 flex flex-wrap justify-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => copyLink(result.checkoutUrl)}
-                  className="rounded-lg border border-emerald-400 dark:border-emerald-600 px-4 py-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-800/40 transition-colors"
-                >
-                  {copied ? tc("copied") : tc("copyLink")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setResult(null);
-                    setAmountUsd("");
-                    setReference("");
-                    setError(null);
-                  }}
-                  className="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                >
-                  {t("newCharge")}
-                </button>
-              </div>
-            </div>
-          )}
 
-          {pane === "empty" && (
-            <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-600 p-8 text-center text-sm text-gray-500 dark:text-gray-400">
-              {t("emptyHint")}
+              {!result && (
+                <button
+                  type="button"
+                  onClick={handleCreate}
+                  disabled={busy}
+                  className="w-full rounded-[28px] bg-[#050505] py-5 text-xl font-extrabold text-white shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.2)] transition-opacity disabled:opacity-50"
+                >
+                  {busy ? t("creating") : t("createCharge")}
+                </button>
+              )}
+
+              <p className="text-center text-xs text-gray-500">
+                {t("managePoints")}{" "}
+                <Link
+                  href="/dashboard/qr-codes"
+                  className="font-medium text-emerald-700 underline-offset-2 hover:underline"
+                >
+                  {t("managePointsLink")}
+                </Link>
+              </p>
             </div>
-          )}
+          </div>
+
+          {/* Right: preview / waiting + QR */}
+          <div className="relative flex w-full flex-col justify-between border-t border-[#f3f4f6] bg-white p-8 lg:w-[426px] lg:shrink-0 lg:border-l lg:border-t-0 lg:p-12">
+            {pane === "empty" && (
+              <div className="flex flex-1 items-center justify-center text-center text-sm text-gray-500">
+                {t("emptyHint")}
+              </div>
+            )}
+
+            {pane === "preview" && (
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#9ca3af]">
+                  {t("totalCharge")}
+                </p>
+                <p className="text-5xl font-extrabold tabular-nums text-[#050505]">
+                  ${sideTotal}
+                </p>
+                <p className="mt-4 max-w-xs text-sm text-gray-500">{t("previewHint")}</p>
+              </div>
+            )}
+
+            {pane === "ready" && result && (
+              <>
+                <div className="flex flex-col items-center gap-10">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-[#dcfce7] bg-[#f0fdf4] px-5 py-2">
+                    <span className="size-2 rounded-full bg-[#22c55e]" aria-hidden />
+                    <span className="text-xs font-extrabold text-[#16a34a]">
+                      {t("waitingForCustomer")}
+                    </span>
+                  </div>
+
+                  <div className="text-center">
+                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#9ca3af]">
+                      {t("totalCharge")}
+                    </p>
+                    <p className="mt-2 text-5xl font-extrabold tabular-nums text-[#050505]">
+                      ${result.amountUsd}
+                    </p>
+                    {result.reference && (
+                      <p className="mt-2 text-xs text-gray-500">
+                        {t("chargedReference", { reference: result.reference })}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="w-full rounded-[48px] border border-[#f3f4f6] bg-[#f9fafb] px-8 pb-8 pt-10">
+                    <div className="mx-auto flex size-64 items-center justify-center rounded-3xl border border-[#e5e7eb] bg-white shadow-lg">
+                      <LocalQrCode
+                        value={result.checkoutUrl}
+                        size={180}
+                        alt={t("qrAlt")}
+                      />
+                    </div>
+                    <p className="mt-4 text-center text-sm font-bold leading-5 text-[#6b7280]">
+                      {t("scanCaption")}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-8 flex flex-col gap-4">
+                  <div className="flex items-center justify-center gap-3 rounded-3xl border border-[#dbeafe] bg-[rgba(239,246,255,0.5)] py-5 text-sm font-extrabold tracking-tight text-[#2563eb]">
+                    <span aria-hidden className="inline-block size-4 rounded-sm bg-[#2563eb]/opacity-80" />
+                    {t("nfcStrip")}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => copyLink(result.checkoutUrl)}
+                      className="flex-1 rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      {copied ? tc("copied") : tc("copyLink")}
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={resetCharge}
+                    className="w-full rounded-[28px] bg-[#050505] py-6 text-xl font-extrabold text-white shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.2)]"
+                  >
+                    {t("newCharge")}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
-      </div>
       )}
     </div>
   );

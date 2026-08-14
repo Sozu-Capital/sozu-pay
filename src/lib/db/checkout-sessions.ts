@@ -10,6 +10,7 @@ export type CheckoutSession = {
   pricing_currency: string | null;
   fx_rate_clp_per_usdc: number | null;
   fx_source: string | null;
+  idempotency_key: string | null;
   reference: string | null;
   status: CheckoutSessionStatus;
   destination_stellar_address: string;
@@ -35,6 +36,7 @@ export async function createCheckoutSession(params: {
   pricingCurrency?: string;
   fxRateClpPerUsdc?: number;
   fxSource?: string;
+  idempotencyKey?: string;
   reference?: string;
   destinationStellarAddress: string;
   providerSessionId: string;
@@ -56,6 +58,7 @@ export async function createCheckoutSession(params: {
       pricing_currency: params.pricingCurrency ?? null,
       fx_rate_clp_per_usdc: params.fxRateClpPerUsdc ?? null,
       fx_source: params.fxSource ?? null,
+      idempotency_key: params.idempotencyKey ?? null,
       reference: params.reference ?? null,
       status: "pending",
       destination_stellar_address: params.destinationStellarAddress,
@@ -73,6 +76,27 @@ export async function createCheckoutSession(params: {
 
   if (error) throw new Error(error.message);
   return data as CheckoutSession;
+}
+
+export async function getCheckoutSessionByIdempotencyKey(
+  orgId: string,
+  idempotencyKey: string,
+): Promise<CheckoutSession | null> {
+  const { data, error } = await getSupabase()
+    .from("checkout_sessions")
+    .select("*")
+    .eq("org_id", orgId)
+    .eq("idempotency_key", idempotencyKey)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[checkout-sessions] getByIdempotencyKey error:", error.message);
+    return null;
+  }
+  return (data as CheckoutSession) ?? null;
 }
 
 /** Latest non-deleted pending checkout for an org (live payment link). */

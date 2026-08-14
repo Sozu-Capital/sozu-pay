@@ -114,9 +114,16 @@ export default function PosShell() {
     }
     setBusy(true);
     try {
+      const idempotencyKey =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `pos_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
       const res = await fetch("/api/checkout/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
         body: JSON.stringify({
           amountClp: amountClp.trim(),
           reference: reference.trim() || undefined,

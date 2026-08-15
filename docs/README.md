@@ -33,7 +33,7 @@ For architecture, contracts, or integrations, use the folders below.
 | **00-overview** | Strategy and product: onepager, technical spec, roadmap. Start here. |
 | **01-architecture** | System design: microcredit disbursement E2E, self-custodial auth, org wallet, smart accounts (G vs C), login flow. |
 | **02-contracts** | Soroban: disbursement wallet contract, yield router spec, testnet contract addresses (USDC, Blend, factory). |
-| **03-planning** | Execution: 30-day sprint plan, NGO disbursement dev plan (MUJERES 2000), production-disbursements tasks, todo. |
+| **03-planning** | Execution: 30-day sprint plan, Instawards Week 1 / Week 2 changelogs, NGO disbursement dev plan (MUJERES 2000), production-disbursements tasks, todo. |
 | **04-integrations** | SDP wallet registration (readiness, operator checklist, local E2E, **testnet + prod domain E2E**, passkey spec); e-commerce widget/API; E2E payout test (recipients persistence, multi-recipient, Classic vs Soroban). |
 | **05-requirements** | Non-functional requirements (performance, availability, compliance), partner PDF (MUJERES 2000 functional requirements). |
 | **06-operations** | Runbooks: local dev, env vars, out-of-scope plug-in points; **repository naming**; SDP NGO deploy overview linked from integrations. |
@@ -44,6 +44,8 @@ For architecture, contracts, or integrations, use the folders below.
 ## Key references
 
 - **First NGO partner:** [05-requirements/Requerimientos_funcionales_MUJERES_2000.pdf](05-requirements/Requerimientos_funcionales_MUJERES_2000.pdf)
+- **Instawards Week 1 (merchant foundation):** [03-planning/INSTAWARDS_WEEK1_ROUND1_CHANGELOG.md](03-planning/INSTAWARDS_WEEK1_ROUND1_CHANGELOG.md)
+- **Instawards Week 2 (POS & dynamic payments, prod):** [03-planning/INSTAWARDS_WEEK2_POS_CHANGELOG.md](03-planning/INSTAWARDS_WEEK2_POS_CHANGELOG.md)
 - **NGO dev plan and milestones:** [03-planning/ngo-disbursement-wallet-dev-plan.md](03-planning/ngo-disbursement-wallet-dev-plan.md)
 - **Batch disbursement and persistence:** [03-planning/production-disbursements-tasks.md](03-planning/production-disbursements-tasks.md)
 - **E2E architecture:** [01-architecture/architecture-microcredit-disbursement.md](01-architecture/architecture-microcredit-disbursement.md)

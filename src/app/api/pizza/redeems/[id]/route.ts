@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPizzaRedeem, markPizzaRedeemSubmitted } from "@/lib/db/pizza-redeems";
-import { getWalletOrigin } from "@/lib/pizza/redeem";
+import { pizzaRedeemTxSucceeded } from "@/lib/pizza/redeem-tx";
+import {
+  getWalletOrigin,
+  parseStellarTxHash,
+  pizzaRedeemClientView,
+} from "@/lib/pizza/redeem";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -22,7 +27,7 @@ export async function OPTIONS() {
 
 /**
  * GET /api/pizza/redeems/[id]
- * Public poll for claimed UI. Intent id is the capability token.
+ * Public poll + wallet sign payload. Intent id is the capability token.
  */
 export async function GET(_request: NextRequest, { params }: Params) {
   const { id } = await params;
@@ -31,12 +36,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
     return json({ error: "Not found" }, 404);
   }
   return json({
-    redeem: {
-      id: redeem.id,
-      status: redeem.status,
-      amount: redeem.amount,
-      txHash: redeem.txHash,
-    },
+    redeem: pizzaRedeemClientView(redeem),
     completesCheckoutSession: false,
   });
 }
@@ -53,9 +53,20 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const txHash = typeof body.txHash === "string" ? body.txHash.trim() : "";
+  const txHash = parseStellarTxHash(typeof body.txHash === "string" ? body.txHash : "");
   if (!txHash) {
-    return json({ error: "txHash is required" }, 400);
+    return json({ error: "txHash must be a 64-character transaction hash" }, 400);
+  }
+
+  let succeeded = false;
+  try {
+    succeeded = await pizzaRedeemTxSucceeded(txHash);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Soroban lookup failed";
+    return json({ error: message }, 502);
+  }
+  if (!succeeded) {
+    return json({ error: "Transaction is not SUCCESS on-chain" }, 409);
   }
 
   const redeem = await markPizzaRedeemSubmitted(id, txHash);
@@ -64,12 +75,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 
   return json({
-    redeem: {
-      id: redeem.id,
-      status: redeem.status,
-      amount: redeem.amount,
-      txHash: redeem.txHash,
-    },
+    redeem: pizzaRedeemClientView(redeem),
     completesCheckoutSession: false,
   });
 }

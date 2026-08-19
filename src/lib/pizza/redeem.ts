@@ -108,3 +108,38 @@ export function nextPizzaSkuGuestAction(
 
   return { kind: "hop", url: pizzaWalletHopUrl(ctx) };
 }
+
+export function parseStellarTxHash(raw: string): string | null {
+  const hash = raw.trim();
+  if (!/^[a-fA-F0-9]{64}$/.test(hash)) return null;
+  return hash.toLowerCase();
+}
+
+/** Wallet origin needs the SEP-41 transfer (guest → store, 1 PIZZA) to sign. */
+export function pizzaRedeemClientView(redeem: {
+  id: string;
+  status: string;
+  amount: number;
+  txHash: string | null;
+  guestAddress: string;
+  storeAddress: string;
+  tokenId: string;
+}) {
+  return {
+    id: redeem.id,
+    status: redeem.status,
+    amount: redeem.amount,
+    txHash: redeem.txHash,
+    guestAddress: redeem.guestAddress,
+    storeAddress: redeem.storeAddress,
+    tokenId: redeem.tokenId,
+    transfer: {
+      contractId: redeem.tokenId,
+      method: "transfer" as const,
+      from: redeem.guestAddress,
+      to: redeem.storeAddress,
+      amount: String(redeem.amount),
+    },
+    completesCheckoutSession: false as const,
+  };
+}

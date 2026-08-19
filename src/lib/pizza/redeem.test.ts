@@ -7,6 +7,8 @@ import {
   PIZZA_REDEEM_AMOUNT,
   buildPizzaRedeemTransfer,
   nextPizzaSkuGuestAction,
+  parseStellarTxHash,
+  pizzaRedeemClientView,
   pizzaRedeemCompletesCheckoutSession,
   pizzaRedeemWalletSignUrl,
 } from "./redeem.js";
@@ -134,6 +136,37 @@ describe("nextPizzaSkuGuestAction", () => {
       { payUrl: PAY, walletOrigin: WALLET },
     );
     assert.equal(next.kind, "chrome");
+  });
+});
+
+describe("pizzaRedeemClientView", () => {
+  it("exposes the SEP-41 transfer so the wallet can sign 1 PIZZA to settle-to", () => {
+    const view = pizzaRedeemClientView({
+      id: "intent-1",
+      status: "pending",
+      amount: 1,
+      txHash: null,
+      guestAddress: GUEST_G,
+      storeAddress: "CXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      tokenId: PIZZA_ID,
+    });
+    assert.equal(view.transfer.method, "transfer");
+    assert.equal(view.transfer.from, GUEST_G);
+    assert.equal(view.transfer.to, "CXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
+    assert.equal(view.transfer.contractId, PIZZA_ID);
+    assert.equal(view.transfer.amount, "1");
+    assert.equal(view.completesCheckoutSession, false);
+  });
+});
+
+describe("parseStellarTxHash", () => {
+  it("accepts a 64-char hex hash and rejects placeholders", () => {
+    assert.equal(
+      parseStellarTxHash("54ee25857cbfa942a2e826fbf2c1d7f9b18f4bf3acc4e89aacf2f695b85d3281"),
+      "54ee25857cbfa942a2e826fbf2c1d7f9b18f4bf3acc4e89aacf2f695b85d3281",
+    );
+    assert.equal(parseStellarTxHash("not-a-hash"), null);
+    assert.equal(parseStellarTxHash(""), null);
   });
 });
 

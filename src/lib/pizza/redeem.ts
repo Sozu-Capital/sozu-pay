@@ -62,3 +62,49 @@ export function getWalletOrigin(): string {
     "https://app.sozu.capital"
   );
 }
+
+export type PizzaSkuSearch = {
+  intent?: string;
+  hopped?: string;
+  pizza?: string;
+  guest?: string;
+};
+
+export type PizzaSkuGuestNext =
+  | { kind: "intent"; intentId: string }
+  | { kind: "hop"; url: string }
+  | { kind: "auto_redeem"; guestAddress: string }
+  | { kind: "chrome" };
+
+export function pizzaWalletHopUrl(params: {
+  walletOrigin: string;
+  payUrl: string;
+}): string {
+  const returnTo = new URL(params.payUrl);
+  returnTo.searchParams.set("hopped", "1");
+  const url = new URL("/auth", params.walletOrigin.replace(/\/$/, ""));
+  url.searchParams.set("return_to", returnTo.toString());
+  return url.toString();
+}
+
+/** Pay.sozu.capital never prompts passkey/PIN — hop or chrome only. */
+export function nextPizzaSkuGuestAction(
+  search: PizzaSkuSearch,
+  ctx: { payUrl: string; walletOrigin: string },
+): PizzaSkuGuestNext {
+  const intentId = search.intent?.trim();
+  if (intentId) return { kind: "intent", intentId };
+
+  if (search.pizza?.trim() === "0") return { kind: "chrome" };
+
+  const guest = search.guest?.trim().toUpperCase();
+  const pizzaRaw = search.pizza?.trim();
+  const pizzaCount = pizzaRaw === undefined || pizzaRaw === "" ? null : Number(pizzaRaw);
+  if (guest && (pizzaCount === null || pizzaCount >= 1)) {
+    return { kind: "auto_redeem", guestAddress: guest };
+  }
+
+  if (search.hopped === "1") return { kind: "chrome" };
+
+  return { kind: "hop", url: pizzaWalletHopUrl(ctx) };
+}

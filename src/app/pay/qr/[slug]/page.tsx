@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import MargheritaSkuPage from "@/components/pizza/MargheritaSkuPage";
+import { PizzaAutoRedeem } from "@/components/pizza/PizzaAutoRedeem";
 import {
   PizzaClaimedConfirmation,
   PizzaRedeemPoller,
@@ -11,12 +12,18 @@ import {
 } from "@/lib/db/checkout-sessions";
 import { getQRPointBySlug } from "@/lib/db/merchant-qr-points";
 import { getPizzaRedeem } from "@/lib/db/pizza-redeems";
-import { checkoutSessionUrl } from "@/lib/checkout-url";
+import { checkoutSessionUrl, merchantQrPayUrl } from "@/lib/checkout-url";
 import { routePayQrPoint } from "@/lib/dashboard/merchant-qr";
+import { getWalletOrigin, nextPizzaSkuGuestAction } from "@/lib/pizza/redeem";
 
 type Props = {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ intent?: string }>;
+  searchParams: Promise<{
+    intent?: string;
+    hopped?: string;
+    pizza?: string;
+    guest?: string;
+  }>;
 };
 
 async function resolveLiveCheckoutId(
@@ -76,16 +83,35 @@ export default async function PayQRPage({ params, searchParams }: Props) {
 
   if (route.kind === "pizza_sku") {
     const sp = await searchParams;
-    const intentId = typeof sp.intent === "string" ? sp.intent.trim() : "";
-    if (intentId) {
-      const redeem = await getPizzaRedeem(intentId);
+    const next = nextPizzaSkuGuestAction(
+      {
+        intent: sp.intent,
+        hopped: sp.hopped,
+        pizza: sp.pizza,
+        guest: sp.guest,
+      },
+      { payUrl: merchantQrPayUrl(slug), walletOrigin: getWalletOrigin() },
+    );
+
+    if (next.kind === "intent") {
+      const redeem = await getPizzaRedeem(next.intentId);
       if (redeem && redeem.qrPointId === qr.id && redeem.status === "submitted") {
         return <PizzaClaimedConfirmation pointName={route.name} />;
       }
       if (redeem && redeem.qrPointId === qr.id) {
-        return <PizzaRedeemPoller intentId={intentId} pointName={route.name} />;
+        return <PizzaRedeemPoller intentId={next.intentId} pointName={route.name} />;
       }
+      return <MargheritaSkuPage pointName={route.name} />;
     }
+
+    if (next.kind === "hop") {
+      redirect(next.url);
+    }
+
+    if (next.kind === "auto_redeem") {
+      return <PizzaAutoRedeem slug={slug} guestAddress={next.guestAddress} />;
+    }
+
     return <MargheritaSkuPage pointName={route.name} />;
   }
 

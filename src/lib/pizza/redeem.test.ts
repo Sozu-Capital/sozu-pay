@@ -6,6 +6,7 @@ import { resolveCheckoutSettleToAddress } from "../checkout/settle-to.js";
 import {
   PIZZA_REDEEM_AMOUNT,
   buildPizzaRedeemTransfer,
+  nextPizzaSkuGuestAction,
   pizzaRedeemCompletesCheckoutSession,
   pizzaRedeemWalletSignUrl,
 } from "./redeem.js";
@@ -93,3 +94,46 @@ describe("pizzaRedeemWalletSignUrl", () => {
     assert.doesNotMatch(url, /pay\.sozu\.capital\/sign/);
   });
 });
+
+const PAY = "https://pay.sozu.capital/pay/qr/margherita-nfc";
+const WALLET = "https://app.sozu.capital";
+const GUEST_G = "GDW4KDAKWDXTTXKBJ3EPUCXQ47JOURDM3QXV623QIBNFFOO7SJT2ZQ3A";
+
+describe("nextPizzaSkuGuestAction", () => {
+  it("hops once to the wallet origin with return_to when there is no session", () => {
+    const next = nextPizzaSkuGuestAction({}, { payUrl: PAY, walletOrigin: WALLET });
+    assert.equal(next.kind, "hop");
+    if (next.kind !== "hop") return;
+    const hopped = new URL(next.url);
+    assert.equal(hopped.origin, WALLET);
+    assert.equal(hopped.pathname, "/auth");
+    const returnTo = hopped.searchParams.get("return_to") ?? "";
+    assert.match(returnTo, /hopped=1/);
+    assert.match(returnTo, /pay\.sozu\.capital/);
+  });
+
+  it("stays on Margherita chrome when pizza balance is 0", () => {
+    const next = nextPizzaSkuGuestAction(
+      { hopped: "1", pizza: "0", guest: GUEST_G },
+      { payUrl: PAY, walletOrigin: WALLET },
+    );
+    assert.equal(next.kind, "chrome");
+  });
+
+  it("auto-starts redeem when signed-in balance is at least 1", () => {
+    const next = nextPizzaSkuGuestAction(
+      { hopped: "1", pizza: "1", guest: GUEST_G },
+      { payUrl: PAY, walletOrigin: WALLET },
+    );
+    assert.deepEqual(next, { kind: "auto_redeem", guestAddress: GUEST_G });
+  });
+
+  it("does not hop again after the wallet bounce-back", () => {
+    const next = nextPizzaSkuGuestAction(
+      { hopped: "1" },
+      { payUrl: PAY, walletOrigin: WALLET },
+    );
+    assert.equal(next.kind, "chrome");
+  });
+});
+

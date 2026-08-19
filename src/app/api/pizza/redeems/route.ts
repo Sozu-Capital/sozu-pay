@@ -15,6 +15,22 @@ function isStellarAddress(raw: string): boolean {
   return /^[GC][A-Z0-9]{55}$/.test(raw.trim().toUpperCase());
 }
 
+function corsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": getWalletOrigin(),
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  };
+}
+
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, { status, headers: corsHeaders() });
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: corsHeaders() });
+}
+
 /**
  * POST /api/pizza/redeems
  * Create a standing pizza SKU redeem intent (1 PIZZA → store treasury).
@@ -27,32 +43,32 @@ export async function POST(request: NextRequest) {
     typeof body.guestAddress === "string" ? body.guestAddress.trim().toUpperCase() : "";
 
   if (!slug) {
-    return NextResponse.json({ error: "slug is required" }, { status: 400 });
+    return json({ error: "slug is required" }, 400);
   }
   if (!isStellarAddress(guestAddress)) {
-    return NextResponse.json({ error: "guestAddress must be a Stellar G or C address" }, { status: 400 });
+    return json({ error: "guestAddress must be a Stellar G or C address" }, 400);
   }
 
   const qr = await getQRPointBySlug(slug);
   if (!qr || qr.destinationType !== "pizza_sku" || !qr.isOnline) {
-    return NextResponse.json({ error: "Pizza SKU not found" }, { status: 404 });
+    return json({ error: "Pizza SKU not found" }, 404);
   }
 
   const org = await getOrganizationById(qr.orgId);
   if (!org) {
-    return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+    return json({ error: "Organization not found" }, 404);
   }
 
   const storeSettleTo = resolveCheckoutSettleToAddress(org);
   if (!storeSettleTo) {
-    return NextResponse.json({ error: "Store treasury is not configured" }, { status: 422 });
+    return json({ error: "Store treasury is not configured" }, 422);
   }
 
   let pizzaTokenId: string;
   try {
     pizzaTokenId = getPizzaTokenId();
   } catch {
-    return NextResponse.json({ error: "PizzaToken is not configured" }, { status: 503 });
+    return json({ error: "PizzaToken is not configured" }, 503);
   }
 
   const transfer = buildPizzaRedeemTransfer({
@@ -76,7 +92,7 @@ export async function POST(request: NextRequest) {
     returnTo,
   });
 
-  return NextResponse.json({
+  return json({
     redeem: {
       id: redeem.id,
       status: redeem.status,

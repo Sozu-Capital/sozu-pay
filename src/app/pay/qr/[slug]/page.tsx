@@ -2,14 +2,22 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import MargheritaSkuPage from "@/components/pizza/MargheritaSkuPage";
 import {
+  PizzaClaimedConfirmation,
+  PizzaRedeemPoller,
+} from "@/components/pizza/PizzaRedeemStatus";
+import {
   getCheckoutSession,
   getLatestPendingCheckoutForOrg,
 } from "@/lib/db/checkout-sessions";
 import { getQRPointBySlug } from "@/lib/db/merchant-qr-points";
+import { getPizzaRedeem } from "@/lib/db/pizza-redeems";
 import { checkoutSessionUrl } from "@/lib/checkout-url";
 import { routePayQrPoint } from "@/lib/dashboard/merchant-qr";
 
-type Props = { params: Promise<{ slug: string }> };
+type Props = {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ intent?: string }>;
+};
 
 async function resolveLiveCheckoutId(
   orgId: string,
@@ -30,7 +38,7 @@ async function resolveLiveCheckoutId(
   return latest?.id ?? null;
 }
 
-export default async function PayQRPage({ params }: Props) {
+export default async function PayQRPage({ params, searchParams }: Props) {
   const { slug } = await params;
   const qr = await getQRPointBySlug(slug);
 
@@ -67,6 +75,17 @@ export default async function PayQRPage({ params }: Props) {
   }
 
   if (route.kind === "pizza_sku") {
+    const sp = await searchParams;
+    const intentId = typeof sp.intent === "string" ? sp.intent.trim() : "";
+    if (intentId) {
+      const redeem = await getPizzaRedeem(intentId);
+      if (redeem && redeem.qrPointId === qr.id && redeem.status === "submitted") {
+        return <PizzaClaimedConfirmation pointName={route.name} />;
+      }
+      if (redeem && redeem.qrPointId === qr.id) {
+        return <PizzaRedeemPoller intentId={intentId} pointName={route.name} />;
+      }
+    }
     return <MargheritaSkuPage pointName={route.name} />;
   }
 

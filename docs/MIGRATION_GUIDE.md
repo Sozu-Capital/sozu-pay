@@ -79,6 +79,12 @@ Adds `point_type` (`qr` | `nfc`) on `merchant_qr_points` — both use the same `
 
 Extends `destination_type` with `pizza_sku`. `/pay/qr/{slug}` stays a standing Margherita offer and never completes a `checkout_sessions` row.
 
+### Step 7c: Pizza redeem intents
+
+**File:** `docs/07-reference/supabase-pizza-redeems.sql`
+
+Creates `pizza_redeems` (pending | signed | submitted | failed). Independent of `checkout_sessions`.
+
 ### Step 8: Merchant off-ramp withdrawal queue
 
 **File:** `docs/07-reference/supabase-withdrawal-requests-ramp.sql`

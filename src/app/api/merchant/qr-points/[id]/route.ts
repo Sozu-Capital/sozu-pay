@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { updateQRPoint, deleteQRPoint, getQRPoint } from "@/lib/db/merchant-qr-points";
+import { parseQrPointDestinationType } from "@/lib/dashboard/merchant-qr";
+import type { QrPointDestinationType } from "@/lib/dashboard/merchant-qr";
 
 type Params = {
   params: Promise<{
@@ -34,7 +36,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   const body = await request.json().catch(() => ({}));
   const updates: {
     name?: string;
-    destinationType?: "checkout" | "custom_url";
+    destinationType?: QrPointDestinationType;
     destinationRef?: string;
     isOnline?: boolean;
   } = {};
@@ -42,11 +44,16 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   if (typeof body.name === "string") {
     updates.name = body.name.trim();
   }
-  if (body.destinationType === "checkout" || body.destinationType === "custom_url") {
-    updates.destinationType = body.destinationType;
+  const parsedDestination = parseQrPointDestinationType(body.destinationType);
+  if (parsedDestination) {
+    updates.destinationType = parsedDestination;
   }
   if (typeof body.destinationRef === "string") {
     updates.destinationRef = body.destinationRef.trim();
+  }
+  const nextType = parsedDestination ?? existing.destinationType;
+  if (nextType === "pizza_sku") {
+    updates.destinationRef = "";
   }
   if (typeof body.isOnline === "boolean") {
     updates.isOnline = body.isOnline;

@@ -2,13 +2,15 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
+import { qrPointScanUrl } from "@/lib/dashboard/merchant-qr";
+import type { QrPointDestinationType } from "@/lib/dashboard/merchant-qr";
 
 type QRPoint = {
   id: string;
   name: string;
   slug: string;
   pointType: "qr" | "nfc";
-  destinationType: "checkout" | "custom_url";
+  destinationType: QrPointDestinationType;
   destinationRef: string | null;
   isOnline: boolean;
   createdAt: string;
@@ -22,7 +24,7 @@ export default function QRCodesPage() {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [pointType, setPointType] = useState<"qr" | "nfc">("qr");
-  const [destinationType, setDestinationType] = useState<"checkout" | "custom_url">("checkout");
+  const [destinationType, setDestinationType] = useState<QrPointDestinationType>("checkout");
   const [destinationRef, setDestinationRef] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +73,8 @@ export default function QRCodesPage() {
           slug: slug.trim(),
           pointType,
           destinationType,
-          destinationRef: destinationRef.trim() || undefined,
+          destinationRef:
+            destinationType === "pizza_sku" ? undefined : destinationRef.trim() || undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -114,15 +117,7 @@ export default function QRCodesPage() {
     }
   };
 
-  const getPointUrl = (qr: QRPoint) => {
-    if (qr.destinationType === "checkout" && qr.destinationRef) {
-      return `${baseUrl}/checkout/${qr.destinationRef}`;
-    }
-    if (qr.destinationType === "custom_url" && qr.destinationRef) {
-      return qr.destinationRef;
-    }
-    return `${baseUrl}/pay/qr/${qr.slug}`;
-  };
+  const getPointUrl = (qr: QRPoint) => qrPointScanUrl(qr, baseUrl);
 
   const getQRImageUrl = (qr: QRPoint) => {
     const payUrl = getPointUrl(qr);
@@ -239,6 +234,15 @@ export default function QRCodesPage() {
                 />
                 <span className="text-gray-700 dark:text-gray-300">{t("destinationCustomUrl")}</span>
               </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  checked={destinationType === "pizza_sku"}
+                  onChange={() => setDestinationType("pizza_sku")}
+                  className="text-blue-600"
+                />
+                <span className="text-gray-700 dark:text-gray-300">{t("destinationPizzaSku")}</span>
+              </label>
             </div>
           </div>
 
@@ -332,7 +336,9 @@ export default function QRCodesPage() {
                         ? qr.destinationRef
                           ? t("liveCheckoutLinked", { id: qr.destinationRef })
                           : t("liveCheckoutWaiting")
-                        : t("customUrlLinked", { url: qr.destinationRef ?? "" })}
+                        : qr.destinationType === "pizza_sku"
+                          ? t("pizzaSkuLinked")
+                          : t("customUrlLinked", { url: qr.destinationRef ?? "" })}
                     </p>
                   </div>
                   {qr.pointType === "qr" && (

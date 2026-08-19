@@ -3,6 +3,10 @@ import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { createQRPoint, listQRPointsForOrg } from "@/lib/db/merchant-qr-points";
 import { getLatestPendingCheckoutForOrg } from "@/lib/db/checkout-sessions";
+import {
+  destinationRefForQrCreate,
+  parseQrPointDestinationType,
+} from "@/lib/dashboard/merchant-qr";
 
 /**
  * GET /api/merchant/qr-points
@@ -43,9 +47,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const name = typeof body.name === "string" ? body.name.trim() : "";
   const slug = typeof body.slug === "string" ? body.slug.trim().toLowerCase() : "";
-  const destinationType = body.destinationType === "checkout" || body.destinationType === "custom_url"
-    ? body.destinationType
-    : null;
+  const destinationType = parseQrPointDestinationType(body.destinationType);
   const destinationRef = typeof body.destinationRef === "string" ? body.destinationRef.trim() : undefined;
   const isOnline = typeof body.isOnline === "boolean" ? body.isOnline : true;
   const pointType = body.pointType === "nfc" ? "nfc" : "qr";
@@ -61,13 +63,15 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    let finalDestinationRef = destinationRef;
-    if (destinationType === "checkout" && !finalDestinationRef) {
-      const latest = await getLatestPendingCheckoutForOrg(orgId);
-      if (latest) {
-        finalDestinationRef = latest.id;
-      }
-    }
+    const latest =
+      destinationType === "checkout"
+        ? await getLatestPendingCheckoutForOrg(orgId)
+        : null;
+    const finalDestinationRef = destinationRefForQrCreate({
+      destinationType,
+      destinationRef,
+      latestCheckoutId: latest?.id ?? null,
+    });
 
     const qrPoint = await createQRPoint({
       orgId,

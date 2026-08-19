@@ -73,6 +73,12 @@ Creates the table for managing POS terminals and NFC devices.
 
 Adds `point_type` (`qr` | `nfc`) on `merchant_qr_points` — both use the same `/pay/qr/{slug}` URL.
 
+### Step 7b: Standing pizza SKU destination
+
+**File:** `docs/07-reference/supabase-merchant-qr-points-pizza-sku.sql`
+
+Extends `destination_type` with `pizza_sku`. `/pay/qr/{slug}` stays a standing Margherita offer and never completes a `checkout_sessions` row.
+
 ### Step 8: Merchant off-ramp withdrawal queue
 
 **File:** `docs/07-reference/supabase-withdrawal-requests-ramp.sql`

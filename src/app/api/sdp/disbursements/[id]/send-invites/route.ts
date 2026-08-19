@@ -20,7 +20,6 @@ import {
   markInvitesSentAsync,
   mergedUploadedVerificationsAsync,
 } from "@/lib/disbursements/store";
-import { validateDisbursementFunds } from "@/lib/sdp/validateDisbursementStart";
 import {
   ensureSdpOrgMessagingForExternalInvites,
   startSdpCampaignIfDraft,
@@ -122,13 +121,8 @@ export async function POST(
       return NextResponse.json({ error: "Organization not found." }, { status: 404 });
     }
 
-    const funding = await validateDisbursementFunds({ org, disbursement });
-    if (!funding.ok) {
-      return NextResponse.json(
-        { error: funding.error, code: funding.code },
-        { status: 400 }
-      );
-    }
+    // Invites do not require org treasury USDC. Pollar orgs pay later from classic G;
+    // passkey orgs pay via Distribuir. SDP campaign start errors are reported separately.
 
     // Branded invites go through Resend only — disable SDP's plain Railway /r/… emails.
     await ensureSdpOrgMessagingForExternalInvites(organizationName);

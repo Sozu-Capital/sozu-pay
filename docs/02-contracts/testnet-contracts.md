@@ -13,6 +13,19 @@ Used by the disbursement wallet and (when implemented) vault/Blend integration.
   - **Contract ID:** `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA`
   - Env: `SOROBAN_USDC_TOKEN_ID`
 
+## PizzaToken (testnet SEP-41)
+
+Standing pizza-credit voucher for the Thursday NFC redeem. **Not** Circle USDC — do not reuse `SOROBAN_USDC_TOKEN_ID` / `getCircleUsdcSacContractId()`.
+
+- **Name / symbol / decimals:** Pizza / PIZZA / `0`
+- **Flags:** mintable, ownable, not upgradeable, not pausable, not votes
+- **Premint:** `20` to owner `GDW4KDAKWDXTTXKBJ3EPUCXQ47JOURDM3QXV623QIBNFFOO7SJT2ZQ3A`
+- **Contract ID:** `CDLIQJFEKJ4HGDQ7I5KOAVXOIZLCMVVICRMPK2LL3GE6PL53BQWGS4F6`
+- **WASM hash:** `4d80f771784327034902289ecb6209fd06330f6651f7249f5ab60b62dbab9f3b`
+- Env: `SOROBAN_PIZZA_TOKEN_ID`
+- Deploy: `./scripts/deploy-pizza-token-testnet.sh`
+- Explorer: <https://lab.stellar.org/r/testnet/contract/CDLIQJFEKJ4HGDQ7I5KOAVXOIZLCMVVICRMPK2LL3GE6PL53BQWGS4F6>
+
 ## Disbursement wallet
 
 One deployment **per org** at onboarding. WASM is uploaded once; each org gets its own contract instance initialized with the creator's member passkey smart account as authorized signer.

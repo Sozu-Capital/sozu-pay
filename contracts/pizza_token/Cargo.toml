@@ -1,0 +1,24 @@
+[package]
+name = "pizza_token"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Testnet SEP-41 PizzaToken: 0 decimals, mintable, ownable, premint 20"
+
+[lib]
+crate-type = ["cdylib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = "=26.1.0"
+stellar-access = "=0.7.2"
+stellar-macros = "=0.7.2"
+stellar-tokens = "=0.7.2"
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"

@@ -1,6 +1,7 @@
+import type { QrPointDestinationType } from "@/lib/dashboard/merchant-qr";
 import { getSupabase } from "@/lib/supabase/server";
 
-export type QRPointDestinationType = "checkout" | "custom_url";
+export type QRPointDestinationType = QrPointDestinationType;
 export type QRPointChannel = "qr" | "nfc";
 
 export interface MerchantQRPoint {

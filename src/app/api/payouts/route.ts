@@ -9,6 +9,9 @@ import { createPayout, listPayouts, completePayout, failPayout } from "@/lib/pay
 import { getRecipient } from "@/lib/recipients";
 import { appendAuditEvent } from "@/lib/audit";
 import { sendUsdc, getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
+import { sendPizzaToken } from "@/lib/stellar/send-pizza";
+import { getPizzaTokenId, isPizzaTokenConfigured } from "@/lib/stellar/pizza-token";
+import { parsePayoutAsset, parsePizzaSendAmount, pizzaSendAmountI128, type PayoutAsset } from "@/lib/payouts/asset";
 import { fundClassicAccount, ensureSpendableXlmForFees } from "@/lib/stellar/fund";
 import { invokeSorobanPayout } from "@/lib/stellar/sorobanPayout";
 import { UNLOCK_COOKIE_NAME, getUnlockedKey, getUnlockedKeyFromCookie } from "@/lib/auth/wallet-unlock";
@@ -89,6 +92,7 @@ async function pollarClientTxResponse(params: {
   destination: string;
   recipientLabel?: string;
   fromAddress: string;
+  asset?: PayoutAsset;
 }) {
   // Pollar custodial wallets often have USDC but 0 spendable XLM (reserves / deferred funding).
   // Top up from STELLAR_FUNDER before asking the client to sign.
@@ -103,7 +107,9 @@ async function pollarClientTxResponse(params: {
     });
   }
 
-  const rail = payoutRailForDestination(params.destination);
+  const asset: PayoutAsset = params.asset === "PIZZA" ? "PIZZA" : "USDC";
+  const rail = asset === "PIZZA" ? "sac" : (payoutRailForDestination(params.destination) ?? "classic");
+  const pizzaTokenId = asset === "PIZZA" ? getPizzaTokenId() : undefined;
   return NextResponse.json(
     {
       error: "Confirm this payout with your Pollar session (Home treasury).",
@@ -113,8 +119,15 @@ async function pollarClientTxResponse(params: {
       destination: params.destination,
       recipientLabel: params.recipientLabel,
       fromAddress: params.fromAddress,
-      rail: rail ?? "classic",
-      sacContractId: rail === "sac" ? getCircleUsdcSacContractId() : undefined,
+      asset,
+      rail,
+      sacContractId:
+        asset === "PIZZA"
+          ? pizzaTokenId
+          : rail === "sac"
+            ? getCircleUsdcSacContractId()
+            : undefined,
+      amountI128: asset === "PIZZA" ? pizzaSendAmountI128(params.amount) : undefined,
       feeXlm: {
         toppedUp: feeEnsure.toppedUp,
         spendable: feeEnsure.xlmSpendableAfter,
@@ -378,6 +391,15 @@ export async function POST(request: NextRequest) {
   }
 
   const amount = typeof body.amount === "string" ? body.amount : "0";
+  let asset: PayoutAsset;
+  try {
+    asset = parsePayoutAsset(body.asset);
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Unsupported payout asset" },
+      { status: 400 },
+    );
+  }
 
   if (body.toStellar === true && typeof body.destination === "string") {
     if (!canStellarPayout) {
@@ -419,15 +441,33 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (asset === "PIZZA") {
+      if (!isPizzaTokenConfigured()) {
+        return NextResponse.json(
+          { error: "PIZZA token is not configured on this server." },
+          { status: 400 },
+        );
+      }
+      try {
+        parsePizzaSendAmount(amount);
+      } catch (err) {
+        return NextResponse.json(
+          { error: err instanceof Error ? err.message : "PIZZA amount must be a whole number of at least 1" },
+          { status: 400 },
+        );
+      }
+    }
+
     const record = createPayout(session.id, amount, {
       type: "to_stellar",
       stellarAddress: destination,
       recipientLabel,
       orgId,
+      asset,
     });
 
-    /** Soroban treasury: passkey signs disbursement_wallet.payout on client. */
-    if (sorobanContractId) {
+    /** Pizza is SEP-41 — never the org USDC disbursement contract. */
+    if (sorobanContractId && asset !== "PIZZA") {
       if (!orgId || !user) {
         failPayout(record.id);
         return NextResponse.json({ error: "No organization." }, { status: 400 });
@@ -456,6 +496,17 @@ export async function POST(request: NextRequest) {
     }
 
     if (requirePayoutPassword && org?.stellar_disbursement_public_key) {
+      if (asset === "PIZZA") {
+        failPayout(record.id);
+        return NextResponse.json(
+          {
+            error:
+              "Sending PIZZA requires the Home treasury Pollar session (or an unlocked payout wallet). Payout password signing is USDC-only.",
+            code: "PIZZA_PAYOUT_PASSWORD_UNSUPPORTED",
+          },
+          { status: 400 },
+        );
+      }
       if (destination.trim().toUpperCase().startsWith("C")) {
         failPayout(record.id);
         return NextResponse.json(
@@ -505,6 +556,7 @@ export async function POST(request: NextRequest) {
         destination,
         recipientLabel,
         fromAddress: signer.fromAddress,
+        asset,
       });
     }
 
@@ -538,6 +590,8 @@ export async function POST(request: NextRequest) {
           String(user?.id ?? session.id),
           record.id,
         );
+      } else if (asset === "PIZZA") {
+        txHash = await sendPizzaToken(destination, amount, signerSecretKey);
       } else {
         txHash = await executeStellarPayout(
           destination,
@@ -550,11 +604,12 @@ export async function POST(request: NextRequest) {
       const signerWallet = getSignerPublicKey(signerSecretKey, org, signer.fromAddress);
       appendAuditEvent(
         "payout_approved",
-        `Payout ${amount} USDC to ${destination} (approved by ${session.email ?? session.id})`,
+        `Payout ${amount} ${asset} to ${destination} (approved by ${session.email ?? session.id})`,
         session.id,
         {
           signerWallet,
           amount,
+          asset,
           stellarTxHash: txHash,
           destination,
           recipientLabel,

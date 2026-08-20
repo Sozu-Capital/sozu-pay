@@ -1,11 +1,13 @@
 /**
- * Browser: spend USDC from the authenticated Pollar custodial wallet.
- * Classic G destinations use sendPayment; C destinations use SAC transfer via runTx.
+ * Browser: spend USDC or PIZZA from the authenticated Pollar custodial wallet.
+ * USDC classic G destinations use sendPayment; USDC C destinations use SAC transfer.
+ * PIZZA is always a SEP-41 transfer (never classic USDC).
  */
 "use client";
 
 import { getPollarBrowserClient, isPollarFakeAuth } from "@/lib/pollar/browser-client";
-import { payoutRailForDestination } from "@/lib/payment/payout-rail";
+import type { PayoutAsset } from "@/lib/payouts/asset";
+import { pollarSendPlan } from "@/lib/payouts/send-plan";
 
 const USDC_ISSUER_TESTNET =
   "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
@@ -18,22 +20,16 @@ function usdcIssuer(): string {
     : USDC_ISSUER_TESTNET;
 }
 
-/** Match server amountToI128 (7 decimals). */
-function amountToI128String(amount: string): string {
-  const num = parseFloat(amount);
-  if (!Number.isFinite(num) || num <= 0) {
-    throw new Error(`Invalid amount: ${amount}`);
-  }
-  return String(Math.round(num * 10 ** 7));
-}
-
 export type PollarClientUsdcSendInput = {
   destination: string;
   amount: string;
   /** Expected debit G from the server (session wallet for Pollar staff). */
   fromAddress: string;
-  /** Circle USDC SAC contract id (required for C destinations). */
+  /** Circle USDC SAC (C dest) or PizzaToken contract (PIZZA). */
   sacContractId?: string;
+  asset?: PayoutAsset;
+  /** Server-encoded i128 for SEP-41 (PIZZA is 0 decimals). */
+  amountI128?: string;
 };
 
 export type PollarClientUsdcSendResult = {
@@ -66,13 +62,16 @@ export async function sendUsdcViaPollarClient(
   // Pollar can only debit the logged-in custodial G. Home treasury may be another
   // staff member's wallet; authorized distributors send from their own session.
   const source = from;
+  const asset: PayoutAsset = input.asset === "PIZZA" ? "PIZZA" : "USDC";
+  const plan = pollarSendPlan({
+    asset,
+    destination: input.destination,
+    amount: input.amount,
+    pizzaTokenId: asset === "PIZZA" ? input.sacContractId : undefined,
+    usdcSacId: asset === "USDC" ? input.sacContractId : undefined,
+  });
 
-  const rail = payoutRailForDestination(input.destination);
-  if (!rail) {
-    throw new Error("Invalid destination address");
-  }
-
-  if (rail === "classic") {
+  if (plan.kind === "classic_usdc") {
     const outcome = await client.sendPayment({
       destination: input.destination.trim(),
       amount: String(input.amount),
@@ -91,26 +90,22 @@ export async function sendUsdcViaPollarClient(
     return { stellarTxHash: outcome.hash };
   }
 
-  const sac = (input.sacContractId ?? "").trim();
-  if (!sac.startsWith("C")) {
-    throw new Error("SAC contract id required to send USDC to a smart account (C…).");
-  }
-
+  const amountI128 = (input.amountI128 ?? plan.amountI128).trim();
   const outcome = await client.runTx("invoke_contract", {
-    contractId: sac,
+    contractId: plan.contractId,
     method: "transfer",
     args: [
       { type: "address", value: source },
       { type: "address", value: input.destination.trim() },
-      { type: "i128", value: amountToI128String(input.amount) },
+      { type: "i128", value: amountI128 },
     ],
   });
 
   if (outcome.status === "error") {
-    const detail = outcome.message ?? outcome.details ?? "Pollar SAC transfer failed";
+    const detail = outcome.message ?? outcome.details ?? "Pollar SEP-41 transfer failed";
     const code = outcome.code ? ` [${outcome.code}]` : "";
-      throw new Error(`${detail}${code} (signing ${source.slice(0, 8)}…)`);
+    throw new Error(`${detail}${code} (signing ${source.slice(0, 8)}…)`);
   }
-  if (!outcome.hash) throw new Error("Pollar SAC transfer returned no transaction hash");
+  if (!outcome.hash) throw new Error("Pollar SEP-41 transfer returned no transaction hash");
   return { stellarTxHash: outcome.hash };
 }

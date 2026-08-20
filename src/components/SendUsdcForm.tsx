@@ -16,6 +16,7 @@ export type StellarPayoutBody = {
   toStellar: true;
   destination: string;
   recipientLabel?: string;
+  asset?: "USDC" | "PIZZA";
 };
 
 export type PayoutSuccess = {
@@ -23,6 +24,7 @@ export type PayoutSuccess = {
   destination: string;
   recipientLabel?: string;
   stellarTxHash?: string;
+  asset?: "USDC" | "PIZZA";
 };
 
 function formatTagLabel(tag: string): string {
@@ -34,19 +36,22 @@ export default function SendUsdcForm({
   onFailed,
   onRequireUnlock,
   onSubmitting,
+  canSendPizza = false,
 }: {
   onSent?: (payout: PayoutSuccess) => void;
   onFailed?: (error: string) => void;
   onRequireUnlock?: (body: StellarPayoutBody) => void;
   /** When provided, form opens confirm flow (parent shows modal and submits on confirm). Receives summary and body so parent can submit later. */
   onSubmitting?: (
-    summary: { amount: string; destination: string; recipientLabel?: string },
+    summary: { amount: string; destination: string; recipientLabel?: string; asset: "USDC" | "PIZZA" },
     body: StellarPayoutBody
   ) => void;
+  canSendPizza?: boolean;
 }) {
   const t = useTranslations("sendUsdcForm");
   const [recipientInput, setRecipientInput] = useState("");
   const [amount, setAmount] = useState("");
+  const [asset, setAsset] = useState<"USDC" | "PIZZA">("USDC");
   const [loading, setLoading] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
@@ -124,6 +129,7 @@ export default function SendUsdcForm({
         amount,
         toStellar: true,
         destination: directAddress,
+        asset,
       };
     }
 
@@ -133,6 +139,7 @@ export default function SendUsdcForm({
         toStellar: true,
         destination: resolvedAddress,
         recipientLabel: resolvedTag ? formatTagLabel(resolvedTag) : undefined,
+        asset,
       };
     }
 
@@ -155,6 +162,7 @@ export default function SendUsdcForm({
         destination: data.walletAddress,
         recipientLabel:
           typeof data.tag === "string" ? formatTagLabel(data.tag) : undefined,
+        asset,
       };
     } catch {
       onFailed?.(t("resolveFailed"));
@@ -173,6 +181,7 @@ export default function SendUsdcForm({
       amount,
       destination: body.destination,
       recipientLabel: body.recipientLabel ?? (resolvedTag ? formatTagLabel(resolvedTag) : undefined),
+      asset,
     };
 
     if (onSubmitting) {
@@ -228,6 +237,7 @@ export default function SendUsdcForm({
               destination: result.payout.stellarAddress ?? body.destination,
               recipientLabel: result.payout.recipientLabel ?? body.recipientLabel,
               stellarTxHash: result.stellarTxHash,
+              asset,
             });
           } catch (err) {
             const msg = err instanceof Error ? err.message : "Pollar payout failed.";
@@ -247,6 +257,7 @@ export default function SendUsdcForm({
             destination: p.stellarAddress ?? body.destination,
             recipientLabel: p.recipientLabel ?? body.recipientLabel,
             stellarTxHash: p.stellarTxHash,
+            asset,
           });
         } else if (d.error) {
           if (onFailed) onFailed(d.error);
@@ -263,6 +274,7 @@ export default function SendUsdcForm({
 
   const canSubmit =
     !!amount.trim() &&
+    (asset !== "PIZZA" || /^[1-9][0-9]*$/.test(amount.trim())) &&
     (!!directAddress || !!resolvedAddress) &&
     !resolving &&
     !resolveError;
@@ -291,16 +303,38 @@ export default function SendUsdcForm({
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("directAddress")}</p>
         ) : null}
       </div>
+      {canSendPizza ? (
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
+            {t("assetLabel")}
+          </label>
+          <select
+            value={asset}
+            onChange={(e) => {
+              const next = e.target.value === "PIZZA" ? "PIZZA" : "USDC";
+              setAsset(next);
+              if (next === "PIZZA" && amount && !/^[1-9][0-9]*$/.test(amount.trim())) {
+                setAmount("");
+              }
+            }}
+            className="mt-1 w-28 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm"
+            aria-label={t("assetLabel")}
+          >
+            <option value="USDC">{t("assetUsdc")}</option>
+            <option value="PIZZA">{t("assetPizza")}</option>
+          </select>
+        </div>
+      ) : null}
       <div>
         <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
-          {t("amountLabel")}
+          {asset === "PIZZA" ? t("amountLabelPizza") : t("amountLabel")}
         </label>
         <input
           type="text"
-          inputMode="decimal"
+          inputMode={asset === "PIZZA" ? "numeric" : "decimal"}
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          placeholder="0"
+          placeholder={asset === "PIZZA" ? "1" : "0"}
           className="mt-1 w-24 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm"
         />
       </div>
@@ -309,7 +343,7 @@ export default function SendUsdcForm({
         disabled={loading || !canSubmit}
         className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm disabled:opacity-50"
       >
-        {loading ? t("sending") : t("send")}
+        {loading ? t("sending") : asset === "PIZZA" ? t("sendPizza") : t("send")}
       </button>
     </form>
   );

@@ -43,11 +43,12 @@ export async function POST(request: NextRequest) {
       ? await getOrganizationForUser(session.orgId ?? user.org_id)
       : null;
     const fromAddress = (user.stellar_public_key ?? org?.stellar_disbursement_public_key) ?? undefined;
+    const asset = body.asset === "PIZZA" ? "PIZZA" : "USDC";
 
     completePayout(record.id, stellarTxHash);
     appendAuditEvent(
       "payout_approved",
-      `Payout ${record.amount} USDC to ${record.stellarAddress ?? "?"} (Pollar client tx)`,
+      `Payout ${record.amount} ${asset} to ${record.stellarAddress ?? "?"} (Pollar client tx)`,
       session.id,
       {
         signerWallet: fromAddress,

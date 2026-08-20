@@ -28,6 +28,7 @@ export type DashboardProfile = {
   org_type?: "store" | "ngo" | null;
   is_pollar_user?: boolean;
   is_treasury_owner?: boolean;
+  can_send_pizza?: boolean;
 };
 
 export type DashboardBalanceData = {

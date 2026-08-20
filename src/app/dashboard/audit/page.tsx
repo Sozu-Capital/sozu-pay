@@ -8,6 +8,7 @@ interface PayoutAuditMetadata {
   signerWallet?: string;
   recipientId?: string;
   amount?: string;
+  asset?: string;
   stellarTxHash?: string;
   destination?: string;
   recipientLabel?: string;

@@ -9,6 +9,7 @@ import { resolveOrgDisbursementContractId, resolveOrgTreasuryContractId } from "
 import { isUserDerivedEncrypted } from "@/lib/org-wallet-encryption";
 import { canManageDisbursements, isOrgTreasuryOwner } from "@/lib/auth/disbursement-auth";
 import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
+import { isPizzaTokenConfigured } from "@/lib/stellar/pizza-token";
 import { getUsdcBalance } from "@/lib/stellar/balance";
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
 import { getUsdToLocalRate, convertUsdToLocal } from "@/lib/fx";
@@ -101,6 +102,7 @@ export async function GET() {
     treasury_ready: !!orgDisbursementContractId,
     is_pollar_user: isPollarMappedUser(user),
     is_treasury_owner: isOrgTreasuryOwner(user, org, membership?.role),
+    can_send_pizza: isPizzaTokenConfigured(),
   };
 
   // --- Stellar + FX data (parallel, org wallet only) ---

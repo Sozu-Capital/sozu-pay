@@ -6,6 +6,7 @@ import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
 import { resolveOrgDisbursementContractId, resolveOrgTreasuryContractId } from "@/lib/stellar/org-treasury";
 import { canManageDisbursements, isOrgTreasuryOwner } from "@/lib/auth/disbursement-auth";
+import { isPizzaTokenConfigured } from "@/lib/stellar/pizza-token";
 import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
 import { getUsdcBalance } from "@/lib/stellar/balance";
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
@@ -102,6 +103,7 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
     org_type: org?.type ?? null,
     is_pollar_user: pollarUser,
     is_treasury_owner: isOrgTreasuryOwner(user, org, membership?.role),
+    can_send_pizza: isPizzaTokenConfigured(),
   };
 
   // Dashboard shows treasury balance (receive address). Payout flows use disbursement contract separately.

@@ -4,6 +4,7 @@
 "use client";
 
 import { sendUsdcViaPollarClient } from "@/lib/pollar/client-usdc-send";
+import type { PayoutAsset } from "@/lib/payouts/asset";
 
 export type PollarClientTxChallenge = {
   requirePollarClientTx: true;
@@ -13,6 +14,8 @@ export type PollarClientTxChallenge = {
   fromAddress: string;
   recipientLabel?: string;
   sacContractId?: string;
+  asset?: PayoutAsset;
+  amountI128?: string;
 };
 
 export function isPollarClientTxChallenge(
@@ -58,13 +61,19 @@ export async function executeAndCompletePollarClientPayout(
     amount: challenge.amount,
     fromAddress: challenge.fromAddress,
     sacContractId: challenge.sacContractId,
+    asset: challenge.asset,
+    amountI128: challenge.amountI128,
   });
 
   const res = await fetch("/api/payouts/complete-client", {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ payoutId: challenge.payoutId, stellarTxHash }),
+    body: JSON.stringify({
+      payoutId: challenge.payoutId,
+      stellarTxHash,
+      asset: challenge.asset,
+    }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

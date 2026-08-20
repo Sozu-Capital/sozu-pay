@@ -130,12 +130,16 @@ describe("nextPizzaSkuGuestAction", () => {
     assert.deepEqual(next, { kind: "auto_redeem", guestAddress: GUEST_G });
   });
 
-  it("does not hop again after the wallet bounce-back", () => {
+  it("hops again when the wallet bounce-back is missing guest", () => {
     const next = nextPizzaSkuGuestAction(
       { hopped: "1" },
       { payUrl: PAY, walletOrigin: WALLET },
     );
-    assert.equal(next.kind, "chrome");
+    assert.equal(next.kind, "hop");
+    if (next.kind !== "hop") return;
+    const hopped = new URL(next.url);
+    assert.equal(hopped.origin, WALLET);
+    assert.equal(hopped.pathname, "/auth");
   });
 });
 

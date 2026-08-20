@@ -95,17 +95,19 @@ export function nextPizzaSkuGuestAction(
   const intentId = search.intent?.trim();
   if (intentId) return { kind: "intent", intentId };
 
-  if (search.pizza?.trim() === "0") return { kind: "chrome" };
-
   const guest = search.guest?.trim().toUpperCase();
   const pizzaRaw = search.pizza?.trim();
   const pizzaCount = pizzaRaw === undefined || pizzaRaw === "" ? null : Number(pizzaRaw);
+
+  // Only treat pizza=0 as done once the wallet actually stamped a guest address.
+  if (guest && pizzaRaw === "0") return { kind: "chrome" };
+
   if (guest && (pizzaCount === null || pizzaCount >= 1)) {
     return { kind: "auto_redeem", guestAddress: guest };
   }
 
-  if (search.hopped === "1") return { kind: "chrome" };
-
+  // hopped=1 without guest means the wallet sent us back before the session
+  // existed — hop again instead of showing a dead checkout.
   return { kind: "hop", url: pizzaWalletHopUrl(ctx) };
 }
 

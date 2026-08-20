@@ -363,7 +363,15 @@
     "closeMenu": "Cerrar menú",
     "noOrganization": "Sin organización",
     "accountFallback": "Tu cuenta",
-    "switchOrganization": "Cambiar de organización"
+    "switchOrganization": "Cambiar de organización",
+    "switcherTitle": "Elegir organización",
+    "switcherSignedInAs": "Sesión de {account}",
+    "switcherCurrent": "Actual",
+    "switcherOpening": "Abriendo…",
+    "switcherCreate": "Crear organización",
+    "switcherLoading": "Cargando…",
+    "switcherFailed": "No se pudieron cargar las organizaciones.",
+    "switcherSwitchFailed": "No se pudo cambiar de organización."
   },
   "transactionsPage": {
     "title": "Transacciones",

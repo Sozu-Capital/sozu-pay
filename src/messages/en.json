@@ -363,7 +363,15 @@
     "closeMenu": "Close menu",
     "noOrganization": "No organization",
     "accountFallback": "Your account",
-    "switchOrganization": "Switch organization"
+    "switchOrganization": "Switch organization",
+    "switcherTitle": "Choose organization",
+    "switcherSignedInAs": "Signed in as {account}",
+    "switcherCurrent": "Current",
+    "switcherOpening": "Opening…",
+    "switcherCreate": "Create organization",
+    "switcherLoading": "Loading…",
+    "switcherFailed": "Could not load organizations.",
+    "switcherSwitchFailed": "Could not switch organization."
   },
   "transactionsPage": {
     "title": "Transactions",

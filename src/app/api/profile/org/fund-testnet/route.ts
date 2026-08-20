@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { getSession, setSession } from "@/lib/auth/session";
+import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationById } from "@/lib/db/organizations";
+import { resolveCanonicalActiveOrgId } from "@/lib/db/org-members";
 import { resolveOrgReceiveAddress } from "@/lib/org-receive-address";
 import {
   claimTestnetUsdcViaSozuFaucet,
@@ -34,16 +35,13 @@ export async function POST() {
   const user = await getUserBySessionId(session.id);
   if (!user) return NextResponse.json({ error: "User not found." }, { status: 404 });
 
-  const orgId = user.org_id ?? session.orgId ?? null;
+  const orgId = await resolveCanonicalActiveOrgId({
+    userId: user.id,
+    primaryOrgId: user.org_id,
+    sessionOrgId: session.orgId,
+    staffPublicKey: user.stellar_public_key,
+  });
   if (!orgId) return NextResponse.json({ error: "No organization." }, { status: 404 });
-
-  if (session.orgId !== orgId) {
-    try {
-      await setSession({ ...session, orgId });
-    } catch {
-      // non-fatal
-    }
-  }
 
   const org = await getOrganizationById(orgId);
   if (!org) return NextResponse.json({ error: "Organization not found." }, { status: 404 });
@@ -104,7 +102,14 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const user = await getUserBySessionId(session.id);
-  const orgId = user?.org_id ?? session.orgId ?? null;
+  const orgId = user
+    ? await resolveCanonicalActiveOrgId({
+        userId: user.id,
+        primaryOrgId: user.org_id,
+        sessionOrgId: session.orgId,
+        staffPublicKey: user.stellar_public_key,
+      })
+    : null;
   if (!orgId) {
     return NextResponse.json({
       testnet: isStellarTestnet(),

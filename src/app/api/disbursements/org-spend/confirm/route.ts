@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { requireDisbursementConfirm } from "@/lib/auth/disbursement-auth";
 import { getOrganizationById } from "@/lib/db/organizations";
+import { getOrgMember } from "@/lib/db/org-members";
 import { requireDisbursementOrgAccess } from "@/lib/disbursements/org-scope";
 import { confirmOrgTreasurySpend } from "@/lib/disbursements/org-spend";
 import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
@@ -26,7 +27,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const org = await getOrganizationById(auth.user.org_id!);
+  const orgId = session.orgId ?? auth.user.org_id!;
+  const org = await getOrganizationById(orgId);
   if (!org) {
     return NextResponse.json({ error: "Organization not found.", code: "NO_ORG" }, { status: 400 });
   }
@@ -39,7 +41,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "disbursementId is required" }, { status: 400 });
   }
 
-  const orgAccess = await requireDisbursementOrgAccess(disbursementId, auth.user.org_id!);
+  const orgAccess = await requireDisbursementOrgAccess(disbursementId, org.id);
   if (!orgAccess.ok) return orgAccess.response;
 
   const normalized = payments
@@ -61,6 +63,7 @@ export async function POST(request: NextRequest) {
       user: auth.user,
       disbursementId,
       payments: normalized,
+      memberRole: (await getOrgMember(auth.user.id, org.id))?.role,
     });
 
     if (result.outcome === "executed") {

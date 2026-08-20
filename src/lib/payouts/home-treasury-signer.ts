@@ -50,9 +50,13 @@ export type HomeTreasurySignerResult = {
   requirePayoutPassword: boolean;
 };
 
-function orgTreasuryPublicKey(org: Organization | null): string | null {
-  const pk = (org?.stellar_disbursement_public_key ?? "").trim();
+function classicG(value: string | null | undefined): string | null {
+  const pk = (value ?? "").trim();
   return pk.startsWith("G") && pk.length >= 56 ? pk : null;
+}
+
+function orgTreasuryPublicKey(org: Organization | null): string | null {
+  return classicG(org?.stellar_disbursement_public_key);
 }
 
 /** Env disbursement secret only when its public key equals expectedFrom. */
@@ -97,9 +101,12 @@ export function resolveHomeTreasurySigner(params: {
   pollarHomeTreasury: boolean;
   orgStoredSecret?: string;
   unlockedSecret?: string;
+  /** Logged-in Pollar G — browser can only debit this wallet, not a different Home G. */
+  sessionPublicKey?: string | null;
 }): HomeTreasurySignerResult {
   const { org, pollarHomeTreasury, orgStoredSecret, unlockedSecret } = params;
   const homeG = orgTreasuryPublicKey(org);
+  const sessionG = classicG(params.sessionPublicKey);
 
   if (
     org?.stellar_disbursement_secret_encrypted &&
@@ -157,7 +164,7 @@ export function resolveHomeTreasurySigner(params: {
     }
     return {
       mode: "pollar_client",
-      fromAddress: homeG,
+      fromAddress: sessionG ?? homeG,
       requireUnlock: false,
       requirePayoutPassword: false,
     };

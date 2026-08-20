@@ -4,6 +4,7 @@ import { requireTreasuryOwnerConfirm } from "@/lib/auth/disbursement-auth";
 import { getSpendRequest } from "@/lib/disbursements/spend-requests";
 import { approveQueuedOrgSpend } from "@/lib/disbursements/org-spend";
 import { recordManualDisbursementPaymentAsync } from "@/lib/disbursements/store";
+import { getOrgMember } from "@/lib/db/org-members";
 
 /**
  * POST /api/disbursements/org-spend/[id]/approve
@@ -30,6 +31,7 @@ export async function POST(
       org: auth.org,
       user: auth.user,
       spendRequest,
+      memberRole: (await getOrgMember(auth.user.id, auth.org.id))?.role,
     });
 
     for (let i = 0; i < spendRequest.payments.length; i++) {

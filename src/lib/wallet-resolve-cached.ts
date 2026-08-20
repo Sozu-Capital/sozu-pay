@@ -2,6 +2,7 @@ import { cache } from "react";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser, type Organization } from "@/lib/db/organizations";
+import { resolveCanonicalActiveOrgId } from "@/lib/db/org-members";
 import { resolveOrgDisbursementContractId, resolveOrgTreasuryContractId } from "@/lib/stellar/org-treasury";
 
 export type WalletContext = {
@@ -21,7 +22,14 @@ export const getDashboardWalletContext = cache(async (): Promise<WalletContext> 
   if (!session) return { publicKey: null, orgId: null, org: null, disbursementContractId: null };
 
   const user = await getUserBySessionId(session.id);
-  const orgId = user?.org_id ?? session.orgId ?? null;
+  const orgId = user
+    ? await resolveCanonicalActiveOrgId({
+        userId: user.id,
+        primaryOrgId: user.org_id,
+        sessionOrgId: session.orgId,
+        staffPublicKey: user.stellar_public_key,
+      })
+    : null;
   if (!orgId) return { publicKey: null, orgId, org: null, disbursementContractId: null };
 
   const org = await getOrganizationForUser(orgId);

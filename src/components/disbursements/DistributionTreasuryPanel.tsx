@@ -129,8 +129,8 @@ export function DistributionTreasuryPanel({ onBalancesChange }: Props) {
     <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 p-4 space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{t("title")}</h3>
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 max-w-xl">{t("donutSubtitle")}</p>
+          <h3 className="text-sm font-semibold text-white">{t("title")}</h3>
+          <p className="mt-1 text-xs text-gray-200 max-w-xl">{t("donutSubtitle")}</p>
         </div>
         <Link
           href="/dashboard/audit"

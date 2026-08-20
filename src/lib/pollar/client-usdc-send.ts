@@ -1,5 +1,5 @@
 /**
- * Browser: spend USDC from the authenticated Pollar custodial wallet (Home treasury).
+ * Browser: spend USDC from the authenticated Pollar custodial wallet.
  * Classic G destinations use sendPayment; C destinations use SAC transfer via runTx.
  */
 "use client";
@@ -30,7 +30,7 @@ function amountToI128String(amount: string): string {
 export type PollarClientUsdcSendInput = {
   destination: string;
   amount: string;
-  /** Home treasury G — must match the logged-in Pollar wallet. */
+  /** Expected debit G from the server (session wallet for Pollar staff). */
   fromAddress: string;
   /** Circle USDC SAC contract id (required for C destinations). */
   sacContractId?: string;
@@ -41,7 +41,7 @@ export type PollarClientUsdcSendResult = {
 };
 
 /**
- * Debit the active Pollar session wallet (must be Home treasury) to destination.
+ * Debit the active Pollar session wallet to destination.
  */
 export async function sendUsdcViaPollarClient(
   input: PollarClientUsdcSendInput,
@@ -60,13 +60,12 @@ export async function sendUsdcViaPollarClient(
   await client.ready();
   const from = (client.getWallet()?.address ?? "").trim();
   if (!from.startsWith("G")) {
-    throw new Error("No Pollar custodial wallet in session. Sign in with Google (Pollar) as the treasury owner.");
+    throw new Error("No Pollar custodial wallet in session. Sign in with Google (Pollar).");
   }
-  if (from !== input.fromAddress.trim()) {
-    throw new Error(
-      `Pollar session wallet (${from.slice(0, 8)}…) is not this org’s Home treasury (${input.fromAddress.slice(0, 8)}…). Sign in as the treasury owner.`,
-    );
-  }
+
+  // Pollar can only debit the logged-in custodial G. Home treasury may be another
+  // staff member's wallet; authorized distributors send from their own session.
+  const source = from;
 
   const rail = payoutRailForDestination(input.destination);
   if (!rail) {
@@ -86,7 +85,7 @@ export async function sendUsdcViaPollarClient(
     if (outcome.status === "error") {
       const detail = outcome.message ?? outcome.details ?? "Pollar USDC payment failed";
       const code = outcome.code ? ` [${outcome.code}]` : "";
-      throw new Error(`${detail}${code} (signing ${input.fromAddress.slice(0, 8)}…)`);
+      throw new Error(`${detail}${code} (signing ${source.slice(0, 8)}…)`);
     }
     if (!outcome.hash) throw new Error("Pollar payment returned no transaction hash");
     return { stellarTxHash: outcome.hash };
@@ -101,7 +100,7 @@ export async function sendUsdcViaPollarClient(
     contractId: sac,
     method: "transfer",
     args: [
-      { type: "address", value: input.fromAddress.trim() },
+      { type: "address", value: source },
       { type: "address", value: input.destination.trim() },
       { type: "i128", value: amountToI128String(input.amount) },
     ],
@@ -110,7 +109,7 @@ export async function sendUsdcViaPollarClient(
   if (outcome.status === "error") {
     const detail = outcome.message ?? outcome.details ?? "Pollar SAC transfer failed";
     const code = outcome.code ? ` [${outcome.code}]` : "";
-    throw new Error(`${detail}${code} (signing ${input.fromAddress.slice(0, 8)}…)`);
+      throw new Error(`${detail}${code} (signing ${source.slice(0, 8)}…)`);
   }
   if (!outcome.hash) throw new Error("Pollar SAC transfer returned no transaction hash");
   return { stellarTxHash: outcome.hash };

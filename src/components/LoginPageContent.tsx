@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import { HomeLandingShell } from "@/components/HomeLandingShell";
-import { HomePollarAuth } from "@/components/HomePollarAuth";
+import { HomeStaffAuth } from "@/components/HomeStaffAuth";
 import { logoutPollarBrowserClient } from "@/lib/pollar/browser-client";
 
 type LoginPageContentProps = {
@@ -51,7 +51,7 @@ export function LoginPageContent({ clearSessionOnMount, returnTo }: LoginPageCon
     <DarkGradientBg mobileLanding>
       <HomeLandingShell
         passkeyRegister={false}
-        introCta={<HomePollarAuth returnTo={returnTo} onBusyChange={() => {}} />}
+        introCta={<HomeStaffAuth returnTo={returnTo} />}
         footerExtra={
           <p className="text-center text-sm text-gray-400">
             <Link href="/join" className="underline underline-offset-2 hover:text-gray-200">

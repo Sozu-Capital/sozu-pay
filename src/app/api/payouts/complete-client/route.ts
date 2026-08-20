@@ -39,8 +39,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Payout already failed" }, { status: 400 });
     }
 
-    const org = user.org_id ? await getOrganizationForUser(user.org_id) : null;
-    const fromAddress = org?.stellar_disbursement_public_key ?? undefined;
+    const org = (session.orgId ?? user.org_id)
+      ? await getOrganizationForUser(session.orgId ?? user.org_id)
+      : null;
+    const fromAddress = (user.stellar_public_key ?? org?.stellar_disbursement_public_key) ?? undefined;
 
     completePayout(record.id, stellarTxHash);
     appendAuditEvent(

@@ -4,7 +4,7 @@ import { getSession, setSession } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 import { clearUserOrgId, getUserBySessionId, promoteOrgCreator } from "@/lib/db/users";
-import { createOrganization, getOrganizationById } from "@/lib/db/organizations";
+import { createOrganization, getOrgIdsByTreasuryPublicKey, getOrganizationById } from "@/lib/db/organizations";
 import { addOrgMember } from "@/lib/db/org-members";
 import { createOrgInvites, type OrgInviteRole } from "@/lib/db/org-invites";
 import {
@@ -20,6 +20,7 @@ import { createOrgTreasuryProvisioner } from "@/lib/pollar/org-treasury";
 import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
 import { usableClassicTreasuryPublicKey } from "@/lib/pollar/types";
 import { resolveCreateOrganizationType } from "@/lib/org/resolve-create-type";
+import { staffTreasuryAlreadyBound } from "@/lib/org/accessible-orgs";
 import { randomUUID } from "crypto";
 
 /**
@@ -129,6 +130,23 @@ export async function POST(request: NextRequest) {
             { status: 422 },
           );
         }
+      }
+    }
+
+    if (pollarPath && treasuryPublicKey) {
+      const claimed = await getOrgIdsByTreasuryPublicKey(treasuryPublicKey);
+      if (staffTreasuryAlreadyBound(claimed)) {
+        const existing = await getOrganizationById(claimed[0]!);
+        return NextResponse.json(
+          {
+            error: existing
+              ? `Your Pollar wallet already funds ${existing.name}. Switch to that organization — a second org cannot share the same treasury.`
+              : "Your Pollar wallet already funds another organization. Switch to it instead of creating a duplicate.",
+            code: "TREASURY_ALREADY_BOUND",
+            existingOrgId: claimed[0],
+          },
+          { status: 409 },
+        );
       }
     }
 

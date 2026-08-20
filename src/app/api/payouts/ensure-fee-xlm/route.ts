@@ -23,8 +23,9 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const requested =
     typeof body.address === "string" ? body.address.trim() : "";
+  const userG = (user.stellar_public_key ?? "").trim();
   const homeG = (org?.stellar_disbursement_public_key ?? "").trim();
-  const address = requested.startsWith("G") ? requested : homeG;
+  const address = requested.startsWith("G") ? requested : userG || homeG;
 
   if (!address.startsWith("G")) {
     return NextResponse.json(
@@ -33,10 +34,10 @@ export async function POST(request: Request) {
     );
   }
 
-  // Only allow topping up the org Home treasury (or the same key for Pollar users).
-  if (usesPollarHomeTreasury(user, org) && homeG && address !== homeG) {
+  // Pollar staff send from their session G; Home treasury is the org receive wallet.
+  if (usesPollarHomeTreasury(user, org) && address !== homeG && address !== userG) {
     return NextResponse.json(
-      { error: "Can only ensure fee XLM for this org’s Home treasury" },
+      { error: "Can only ensure fee XLM for this org’s Home treasury or your Pollar wallet" },
       { status: 403 },
     );
   }

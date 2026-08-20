@@ -83,6 +83,24 @@ export function buildStaffInviteUrl(origin: string, token: string): string {
   return `${base}/join/${encodeURIComponent(token)}`;
 }
 
+export function staffInviteShareText(orgName: string, url: string): string {
+  const name = orgName.trim() || "this organization";
+  return `Join ${name} on SozuPay: ${url}`;
+}
+
+/**
+ * Accepting an invite always makes that org the user's primary workspace.
+ * A previous org is kept as a membership, never as the hidden primary.
+ */
+export function planStaffInviteAccept(params: {
+  userOrgId: string | null;
+  inviteOrgId: string;
+}): { primaryOrgId: string; preservePreviousOrgId: string | null } {
+  const previous =
+    params.userOrgId && params.userOrgId !== params.inviteOrgId ? params.userOrgId : null;
+  return { primaryOrgId: params.inviteOrgId, preservePreviousOrgId: previous };
+}
+
 /**
  * Host used in the shareable invite URL. Prefer the live request origin so
  * preview/mobile testing isn't stuck on a stale NEXT_PUBLIC_APP_URL (e.g. localhost).

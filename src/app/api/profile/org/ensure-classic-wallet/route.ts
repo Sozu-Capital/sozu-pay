@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationById } from "@/lib/db/organizations";
+import { resolveCanonicalActiveOrgId } from "@/lib/db/org-members";
 import { provisionOrgTestnetClassicDisbursement } from "@/lib/stellar/provisionOrgTestnetDisbursement";
 import { applyOrganizationSozuTag, getOrganizationSozuTag } from "@/lib/org-sozu-tag";
 import { getOrgReceiveDiagnostics } from "@/lib/org-receive-address";
@@ -28,7 +29,12 @@ export async function POST() {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   }
 
-  const orgId = user.org_id ?? session.orgId ?? null;
+  const orgId = await resolveCanonicalActiveOrgId({
+    userId: user.id,
+    primaryOrgId: user.org_id,
+    sessionOrgId: session.orgId,
+    staffPublicKey: user.stellar_public_key,
+  });
   if (!orgId) return NextResponse.json({ error: "No organization." }, { status: 404 });
 
   const org = await getOrganizationById(orgId);

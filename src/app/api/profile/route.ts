@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
+import { resolveCanonicalActiveOrgId } from "@/lib/db/org-members";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
 import { resolveOrgDisbursementContractId } from "@/lib/stellar/org-treasury";
@@ -22,7 +23,12 @@ export async function GET() {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const orgId = session.orgId ?? user.org_id ?? null;
+  const orgId = await resolveCanonicalActiveOrgId({
+    userId: user.id,
+    primaryOrgId: user.org_id,
+    sessionOrgId: session.orgId,
+    staffPublicKey: user.stellar_public_key,
+  });
   const org_payout_wallet_public_key = getOrgDisbursementPublicKey();
 
   // Read org once — repairOrgCreatorAccess now runs at login, not on every profile load.

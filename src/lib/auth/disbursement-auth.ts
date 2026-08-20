@@ -11,6 +11,11 @@ import {
   type Organization,
 } from "@/lib/db/organizations";
 import { getMemberSmartAccount, type SmartAccountRow } from "@/lib/db/smart-accounts";
+import { isOrgTreasuryOwner, isTreasuryAdminMemberRole } from "@/lib/auth/treasury-owner";
+import { getOrgMember } from "@/lib/db/org-members";
+import { getSession } from "@/lib/auth/session";
+
+export { isOrgTreasuryOwner } from "@/lib/auth/treasury-owner";
 
 type AuthFailure = { ok: false; response: NextResponse };
 type AdminOk = { ok: true; user: User };
@@ -20,18 +25,19 @@ function logDenied(reason: string, meta: Record<string, unknown>) {
   console.warn(`[disbursement-auth] denied: ${reason}`, meta);
 }
 
-export function canManageDisbursements(user: User, org: Organization | null): boolean {
+export function canManageDisbursements(
+  user: User,
+  org: Organization | null,
+  memberRole?: string | null,
+): boolean {
   if (user.admin_level === "admin" || user.admin_level === "super_admin") {
     return true;
   }
-  if (!user.org_id || !org) return false;
-  return org.treasury_manager_user_id === user.id;
-}
-
-/** Creator / treasury manager whose Staff Pollar wallet is bound as Org treasury. */
-export function isOrgTreasuryOwner(user: User, org: Organization | null): boolean {
+  if (memberRole === "admin" || isTreasuryAdminMemberRole(memberRole)) {
+    return true;
+  }
   if (!org) return false;
-  return org.treasury_manager_user_id === user.id;
+  return isOrgTreasuryOwner(user, org, memberRole);
 }
 
 /**
@@ -51,19 +57,23 @@ export async function requireTreasuryOwnerConfirm(
   const admin = await requireDisbursementAdmin(sessionId);
   if (!admin.ok) return admin;
 
-  const org = await getOrganizationById(admin.user.org_id!);
+  const session = await getSession();
+  const orgId = session?.orgId ?? admin.user.org_id!;
+  const org = await getOrganizationById(orgId);
   if (!org) {
     return {
       ok: false,
       response: NextResponse.json({ error: "Organization not found.", code: "NO_ORG" }, { status: 400 }),
     };
   }
-  if (!isOrgTreasuryOwner(admin.user, org)) {
+  const member = await getOrgMember(admin.user.id, org.id);
+  if (!isOrgTreasuryOwner(admin.user, org, member?.role)) {
     logDenied("not org treasury owner", {
       sessionId,
       userId: admin.user.id,
       orgId: org.id,
       treasury_manager_user_id: org.treasury_manager_user_id,
+      memberRole: member?.role ?? null,
     });
     return {
       ok: false,

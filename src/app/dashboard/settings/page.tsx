@@ -42,8 +42,17 @@ export default function SettingsPage() {
   const [inviteRole, setInviteRole] = useState("member");
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [inviteOrgName, setInviteOrgName] = useState<string | null>(null);
+  const [inviteShareText, setInviteShareText] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteExpires, setInviteExpires] = useState<string | null>(null);
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const [members, setMembers] = useState<Array<{ id: number; email: string; admin_level: string; role: string }>>([]);
+  const [memberBusyId, setMemberBusyId] = useState<number | null>(null);
+  const [memberMsg, setMemberMsg] = useState<string | null>(null);
+  const [emailDraft, setEmailDraft] = useState("");
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailMsg, setEmailMsg] = useState<string | null>(null);
   const { signOut, signingOut } = useSignOut();
 
   function loadSozuTagInfo() {
@@ -87,6 +96,7 @@ export default function SettingsPage() {
           twoFactorEnabled: false,
           isPollarUser: !!data.is_pollar_user,
         });
+        setEmailDraft(data.email);
       })
       .catch(() => setUser(null));
     fetch("/api/auth/session")
@@ -94,6 +104,21 @@ export default function SettingsPage() {
       .then((data) => {
         setTwoFactorEnabled(data.user?.twoFactorEnabled ?? false);
       })
+      .catch(() => {});
+    fetch("/api/org/members", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { members: [] }))
+      .then((d) =>
+        setMembers(
+          Array.isArray(d.members)
+            ? d.members.map((m: { id: number; email: string; admin_level: string; role?: string }) => ({
+                id: m.id,
+                email: m.email,
+                admin_level: m.admin_level,
+                role: m.role ?? (m.admin_level === "user" ? "member" : "admin"),
+              }))
+            : [],
+        ),
+      )
       .catch(() => {});
   }, []);
 
@@ -123,11 +148,37 @@ export default function SettingsPage() {
     }
   }
 
+  async function copyInviteLink(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setInviteCopied(true);
+      window.setTimeout(() => setInviteCopied(false), 2000);
+    } catch {
+      setInviteError(t("inviteCopyFailed"));
+    }
+  }
+
+  async function shareInviteLink(url: string) {
+    const text = inviteShareText ?? url;
+    try {
+      if (typeof navigator.share === "function") {
+        await navigator.share({ title: t("inviteTitle"), url, text });
+        return;
+      }
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+    }
+    await copyInviteLink(url);
+  }
+
   async function createStaffInvite() {
     setInviteBusy(true);
     setInviteError(null);
     setInviteUrl(null);
+    setInviteOrgName(null);
+    setInviteShareText(null);
     setInviteExpires(null);
+    setInviteCopied(false);
     try {
       const res = await fetch("/api/org/invites", {
         method: "POST",
@@ -137,8 +188,12 @@ export default function SettingsPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? t("inviteCreateFailed"));
-      setInviteUrl(typeof data.url === "string" ? data.url : null);
+      const url = typeof data.url === "string" ? data.url : null;
+      setInviteUrl(url);
+      setInviteOrgName(typeof data.orgName === "string" ? data.orgName : orgName);
+      setInviteShareText(typeof data.shareText === "string" ? data.shareText : null);
       setInviteExpires(typeof data.expiresAt === "string" ? data.expiresAt : null);
+      if (url) await copyInviteLink(url);
     } catch (e) {
       setInviteError(e instanceof Error ? e.message : t("inviteCreateFailed"));
     } finally {
@@ -169,7 +224,7 @@ export default function SettingsPage() {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("title")}</h1>
+        <h1 className="text-2xl font-bold text-white">{t("title")}</h1>
         <Link
           href="/dashboard/profile"
           className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -181,7 +236,7 @@ export default function SettingsPage() {
         className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4"
         id="language"
       >
-        <h2 className="text-lg font-semibold">{t("languageSectionTitle")}</h2>
+        <h2 className="text-lg font-semibold text-white">{t("languageSectionTitle")}</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("languageSectionBody")}</p>
         <div className="mt-4 max-w-xs">
           <LanguageSwitcher />
@@ -189,7 +244,7 @@ export default function SettingsPage() {
       </section>
 
       <section className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4" id="personal">
-        <h2 className="text-lg font-semibold">{t("personalInfoTitle")}</h2>
+        <h2 className="text-lg font-semibold text-white">{t("personalInfoTitle")}</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("personalInfoBody")}</p>
         {user && (
           <dl className="mt-4 space-y-2 text-sm">
@@ -201,14 +256,57 @@ export default function SettingsPage() {
             </div>
             <div>
               <dt className="text-gray-500 dark:text-gray-400">{t("emailLabel")}</dt>
-              <dd className="font-medium text-gray-900 dark:text-white break-all">{user.email}</dd>
+              {user.isPollarUser ? (
+                <dd className="mt-1 space-y-2">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t("emailChangeHint")}</p>
+                  <form
+                    className="flex flex-wrap items-center gap-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setEmailBusy(true);
+                      setEmailMsg(null);
+                      fetch("/api/profile/email", {
+                        method: "PATCH",
+                        credentials: "include",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ email: emailDraft }),
+                      })
+                        .then(async (res) => {
+                          const data = await res.json().catch(() => ({}));
+                          if (!res.ok) throw new Error(data.error ?? t("emailFailed"));
+                          setUser((u) => (u ? { ...u, email: data.email } : u));
+                          setEmailMsg(t("emailSaved"));
+                        })
+                        .catch((err) => setEmailMsg(err instanceof Error ? err.message : t("emailFailed")))
+                        .finally(() => setEmailBusy(false));
+                    }}
+                  >
+                    <input
+                      type="email"
+                      value={emailDraft}
+                      onChange={(e) => setEmailDraft(e.target.value)}
+                      className="w-full max-w-md rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                    />
+                    <button
+                      type="submit"
+                      disabled={emailBusy}
+                      className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-1.5 text-sm disabled:opacity-50"
+                    >
+                      {emailBusy ? t("sozuTagSaving") : t("emailSave")}
+                    </button>
+                  </form>
+                  {emailMsg ? <p className="text-xs text-gray-500 dark:text-gray-400">{emailMsg}</p> : null}
+                </dd>
+              ) : (
+                <dd className="font-medium text-gray-900 dark:text-white break-all">{user.email}</dd>
+              )}
             </div>
           </dl>
         )}
       </section>
 
       <section className="mt-8" id="security">
-        <h2 className="text-lg font-semibold">{t("security")}</h2>
+        <h2 className="text-lg font-semibold text-white">{t("security")}</h2>
         {(user?.isPollarUser || dashboardProfile?.profile?.is_pollar_user) && (
           <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-600 p-4 space-y-3">
             <p className="text-sm font-medium text-gray-900 dark:text-white">{t("biometricTitle")}</p>
@@ -301,7 +399,7 @@ export default function SettingsPage() {
       </section>
 
       <section className="mt-8" id="sozu-tag">
-        <h2 className="text-lg font-semibold">{t("sozuTagTitle")}</h2>
+        <h2 className="text-lg font-semibold text-white">{t("sozuTagTitle")}</h2>
         <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{t("sozuTagBody")}</p>
         <form
           className="mt-4 max-w-md space-y-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4"
@@ -384,15 +482,20 @@ export default function SettingsPage() {
           className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4"
           id="staff-invite"
         >
-          <h2 className="text-lg font-semibold">{t("inviteTitle")}</h2>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("inviteBody")}</p>
+          <h2 className="text-lg font-semibold text-white">{t("inviteTitle")}</h2>
+          <p className="mt-1 text-sm text-white/70">{t("inviteBody")}</p>
+          {orgName ? (
+            <p className="mt-2 text-sm font-medium text-white">
+              {t("inviteForOrg", { org: orgName })}
+            </p>
+          ) : null}
           <div className="mt-4 flex flex-wrap items-end gap-3">
             <label className="text-sm">
-              <span className="block text-gray-500 dark:text-gray-400 mb-1">{t("inviteRoleLabel")}</span>
+              <span className="mb-1 block text-white/70">{t("inviteRoleLabel")}</span>
               <select
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value)}
-                className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                className="rounded-md border border-white/20 bg-black/40 px-3 py-2 text-sm text-white"
               >
                 <option value="member">{t("inviteRoleMember")}</option>
                 <option value="admin">{t("inviteRoleAdmin")}</option>
@@ -404,32 +507,90 @@ export default function SettingsPage() {
               type="button"
               disabled={inviteBusy}
               onClick={() => void createStaffInvite()}
-              className="rounded-md bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 text-sm font-medium disabled:opacity-50"
+              className="rounded-md bg-white px-4 py-2 text-sm font-medium text-black disabled:opacity-50"
             >
               {inviteBusy ? t("inviteCreating") : t("inviteCreate")}
             </button>
           </div>
-          {inviteError && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{inviteError}</p>}
+          {inviteError && <p className="mt-2 text-sm text-red-300">{inviteError}</p>}
           {inviteUrl && (
-            <div className="mt-3 space-y-1">
-              <p className="text-xs text-gray-500 dark:text-gray-400">{t("inviteLinkReady")}</p>
-              <code className="block break-all rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 text-xs">
-                {inviteUrl}
-              </code>
+            <div className="mt-3 space-y-2">
+              <p className="text-xs text-white/60">
+                {t("inviteLinkJoins", { org: inviteOrgName ?? orgName ?? "" })}
+              </p>
+              <input
+                readOnly
+                value={inviteUrl}
+                onFocus={(e) => e.currentTarget.select()}
+                className="w-full break-all rounded-md border border-white/20 bg-black/50 px-3 py-2 font-mono text-xs text-white"
+                aria-label={t("inviteLinkReady")}
+              />
               {inviteExpires && (
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-white/50">
                   {t("inviteExpires", { at: new Date(inviteExpires).toLocaleString() })}
                 </p>
               )}
-              <button
-                type="button"
-                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                onClick={() => void navigator.clipboard.writeText(inviteUrl)}
-              >
-                {t("inviteCopy")}
-              </button>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  className="text-sm text-white underline underline-offset-2 hover:text-white/80"
+                  onClick={() => void copyInviteLink(inviteUrl)}
+                >
+                  {inviteCopied ? t("inviteCopied") : t("inviteCopy")}
+                </button>
+                <button
+                  type="button"
+                  className="text-sm text-white underline underline-offset-2 hover:text-white/80"
+                  onClick={() => void shareInviteLink(inviteUrl)}
+                >
+                  {t("inviteShare")}
+                </button>
+              </div>
             </div>
           )}
+        </section>
+      ) : null}
+
+      {user?.isPollarUser && members.length > 0 ? (
+        <section className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4" id="roles">
+          <h2 className="text-lg font-semibold text-white">{t("rolesTitle")}</h2>
+          <p className="mt-1 text-sm text-gray-300">{t("rolesBody")}</p>
+          <ul className="mt-4 space-y-3">
+            {members.map((m) => (
+              <li key={m.id} className="flex flex-wrap items-center gap-3 text-sm">
+                <span className="min-w-[12rem] break-all text-white">{m.email}</span>
+                <select
+                  defaultValue={m.role === "owner" ? "admin" : m.role}
+                  disabled={memberBusyId === m.id}
+                  className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2"
+                  onChange={(e) => {
+                    const role = e.target.value;
+                    setMemberBusyId(m.id);
+                    setMemberMsg(null);
+                    fetch("/api/org/members", {
+                      method: "PATCH",
+                      credentials: "include",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ userId: m.id, role }),
+                    })
+                      .then(async (res) => {
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok) throw new Error(data.error ?? t("rolesFailed"));
+                        setMemberMsg(t("rolesSaved"));
+                      })
+                      .catch((err) => setMemberMsg(err instanceof Error ? err.message : t("rolesFailed")))
+                      .finally(() => setMemberBusyId(null));
+                  }}
+                >
+                  <option value="member">{t("inviteRoleMember")}</option>
+                  <option value="admin">{t("inviteRoleAdmin")}</option>
+                  <option value="treasury_manager">{t("inviteRoleTreasury")}</option>
+                  <option value="guardian">{t("inviteRoleGuardian")}</option>
+                </select>
+              </li>
+            ))}
+          </ul>
+          {memberMsg ? <p className="mt-2 text-sm text-gray-300">{memberMsg}</p> : null}
         </section>
       ) : null}
 
@@ -466,7 +627,7 @@ export default function SettingsPage() {
       </div>
 
       <section className="mt-8" id="verification">
-        <h2 className="text-lg font-semibold">{t("verification")}</h2>
+        <h2 className="text-lg font-semibold text-white">{t("verification")}</h2>
         <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
           {t("verificationBody")}
         </p>
@@ -474,7 +635,7 @@ export default function SettingsPage() {
       </section>
 
       <section className="mt-8" id="bank">
-        <h2 className="text-lg font-semibold">{t("bankAccounts")}</h2>
+        <h2 className="text-lg font-semibold text-white">{t("bankAccounts")}</h2>
         <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
           {t("bankAccountsBody")}
         </p>
@@ -482,7 +643,7 @@ export default function SettingsPage() {
       </section>
 
       <section className="mt-8" id="stores">
-        <h2 className="text-lg font-semibold">{t("stores")}</h2>
+        <h2 className="text-lg font-semibold text-white">{t("stores")}</h2>
         {hasOrg ? (
           <div className="mt-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-4">
             <div className="flex flex-wrap items-center gap-2">

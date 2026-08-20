@@ -6,6 +6,7 @@ import {
 } from "@/lib/disbursements/org-spend";
 import { resetSpendRequestsForTests, listPendingSpendRequests } from "@/lib/disbursements/spend-requests";
 import { FakeOrgSpendExecutor } from "@/lib/pollar/spend";
+import { Keypair } from "@stellar/stellar-sdk";
 import { FAKE_POLLAR_STAFF_WALLET } from "@/lib/pollar/types";
 import type { Organization } from "@/lib/db/organizations";
 import type { User } from "@/lib/db/users";
@@ -49,6 +50,8 @@ function user(overrides: Partial<User> = {}): User {
   } as User;
 }
 
+const STAFF_POLLAR_G = Keypair.random().publicKey();
+
 const payments = [
   {
     paymentId: "p1",
@@ -83,7 +86,13 @@ describe("confirmOrgTreasurySpend (NO-GO fallback)", () => {
     const executor = new FakeOrgSpendExecutor();
     const result = await confirmOrgTreasurySpend({
       org: org(),
-      user: user({ id: 2, email: "staff@example.com", admin_level: "admin", privy_user_id: "pollar:staff" }),
+      user: user({
+        id: 2,
+        email: "staff@example.com",
+        admin_level: "user",
+        privy_user_id: "pollar:staff",
+        stellar_public_key: STAFF_POLLAR_G,
+      }),
       disbursementId: "d-2",
       payments,
       executor,
@@ -93,11 +102,36 @@ describe("confirmOrgTreasurySpend (NO-GO fallback)", () => {
     assert.equal(listPendingSpendRequests("org-1").length, 1);
   });
 
+  it("org admin spends from their Pollar G without queueing", async () => {
+    const executor = new FakeOrgSpendExecutor();
+    const result = await confirmOrgTreasurySpend({
+      org: org(),
+      user: user({
+        id: 2,
+        email: "admin@example.com",
+        admin_level: "admin",
+        privy_user_id: "pollar:admin",
+        stellar_public_key: STAFF_POLLAR_G,
+      }),
+      disbursementId: "d-admin",
+      payments,
+      executor,
+    });
+    assert.equal(result.outcome, "executed");
+    if (result.outcome !== "executed") return;
+    assert.equal(executor.calls[0]?.fromAddress, STAFF_POLLAR_G);
+  });
+
   it("owner can approve queued spend", async () => {
     const executor = new FakeOrgSpendExecutor();
     const queued = await confirmOrgTreasurySpend({
       org: org(),
-      user: user({ id: 2, email: "staff@example.com", admin_level: "admin" }),
+      user: user({
+        id: 2,
+        email: "staff@example.com",
+        admin_level: "user",
+        stellar_public_key: STAFF_POLLAR_G,
+      }),
       disbursementId: "d-3",
       payments,
       executor,
@@ -116,11 +150,44 @@ describe("confirmOrgTreasurySpend (NO-GO fallback)", () => {
     assert.equal(listPendingSpendRequests("org-1").length, 0);
   });
 
+  it("invited treasury_manager can approve queued spend", async () => {
+    const executor = new FakeOrgSpendExecutor();
+    const queued = await confirmOrgTreasurySpend({
+      org: org(),
+      user: user({
+        id: 2,
+        admin_level: "user",
+        stellar_public_key: STAFF_POLLAR_G,
+      }),
+      disbursementId: "d-invite",
+      payments,
+      executor,
+    });
+    if (queued.outcome !== "queued") return;
+
+    const approved = await approveQueuedOrgSpend({
+      org: org(),
+      user: user({
+        id: 99,
+        admin_level: "admin",
+        stellar_public_key: STAFF_POLLAR_G,
+      }),
+      memberRole: "treasury_manager",
+      spendRequest: queued.spendRequest,
+      executor,
+    });
+    assert.equal(approved.spendRequest.status, "executed");
+  });
+
   it("non-owner cannot approve", async () => {
     const executor = new FakeOrgSpendExecutor();
     const queued = await confirmOrgTreasurySpend({
       org: org(),
-      user: user({ id: 2, admin_level: "admin" }),
+      user: user({
+        id: 2,
+        admin_level: "user",
+        stellar_public_key: STAFF_POLLAR_G,
+      }),
       disbursementId: "d-4",
       payments,
       executor,
@@ -130,7 +197,11 @@ describe("confirmOrgTreasurySpend (NO-GO fallback)", () => {
       () =>
         approveQueuedOrgSpend({
           org: org(),
-          user: user({ id: 2, admin_level: "admin" }),
+          user: user({
+            id: 2,
+            admin_level: "user",
+            stellar_public_key: STAFF_POLLAR_G,
+          }),
           spendRequest: queued.spendRequest,
           executor,
         }),

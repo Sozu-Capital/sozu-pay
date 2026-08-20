@@ -7,7 +7,7 @@ import {
   type OrgInviteRole,
   type OrgInviteRow,
 } from "@/lib/db/org-invites";
-import { addOrgMember } from "@/lib/db/org-members";
+import { addOrgMember, upsertOrgMember } from "@/lib/db/org-members";
 import { getOrganizationById } from "@/lib/db/organizations";
 import {
   updateUserOrgId,
@@ -20,7 +20,9 @@ import {
   isValidOrgInviteRole,
   mapInviteRoleToMemberRole,
   nextAdminLevelAfterInvite,
+  planStaffInviteAccept,
   staffInvitePlaceholderEmail,
+  staffInviteShareText,
   validateStaffInvite,
 } from "@/lib/org/staff-invite";
 import { getSupabase } from "@/lib/supabase/server";
@@ -31,28 +33,45 @@ export async function createStaffInviteLink(params: {
   origin: string;
   ttlMs?: number;
 }): Promise<
-  | { ok: true; token: string; url: string; expiresAt: string; role: OrgInviteRole }
+  | {
+      ok: true;
+      token: string;
+      url: string;
+      expiresAt: string;
+      role: OrgInviteRole;
+      orgId: string;
+      orgName: string;
+      shareText: string;
+    }
   | { ok: false; error: string }
 > {
   if (!isValidOrgInviteRole(params.role)) {
     return { ok: false, error: "Invalid role" };
   }
+  const org = await getOrganizationById(params.orgId);
+  if (!org) {
+    return { ok: false, error: "Organization not found" };
+  }
   const token = randomUUID();
   const expiresAt = new Date(Date.now() + (params.ttlMs ?? STAFF_INVITE_TTL_MS)).toISOString();
   const email = staffInvitePlaceholderEmail(token);
   const created = await createOrgInvites({
-    orgId: params.orgId,
+    orgId: org.id,
     invites: [{ email, role: params.role, token, expiresAt }],
   });
   if (!created.ok) {
     return { ok: false, error: created.error ?? "Failed to create invite" };
   }
+  const url = buildStaffInviteUrl(params.origin, token);
   return {
     ok: true,
     token,
-    url: buildStaffInviteUrl(params.origin, token),
+    url,
     expiresAt,
     role: params.role,
+    orgId: org.id,
+    orgName: org.name,
+    shareText: staffInviteShareText(org.name, url),
   };
 }
 
@@ -137,24 +156,28 @@ export async function acceptStaffInvite(params: {
     return { ok: false, code: validation.code, message: validation.message };
   }
 
-  const member = await addOrgMember(
+  const member = await upsertOrgMember(
     params.user.id,
     invite!.org_id,
     mapInviteRoleToMemberRole(invite!.role),
   );
   if (!member.ok) {
     // org_members table may be missing in some envs — still bind primary org_id
-    console.warn("[staff-invite] addOrgMember:", member.error);
+    console.warn("[staff-invite] upsertOrgMember:", member.error);
   }
 
-  if (!params.user.org_id) {
-    await updateUserOrgId(params.user.privy_user_id, invite!.org_id);
-  } else if (params.user.org_id !== invite!.org_id) {
-    // Keep the first org as primary; the invite org is a second membership.
-    const previous = await addOrgMember(params.user.id, params.user.org_id, "owner");
+  const plan = planStaffInviteAccept({
+    userOrgId: params.user.org_id,
+    inviteOrgId: invite!.org_id,
+  });
+  if (plan.preservePreviousOrgId) {
+    const previous = await addOrgMember(params.user.id, plan.preservePreviousOrgId, "owner");
     if (!previous.ok) {
       console.warn("[staff-invite] preserve previous org membership:", previous.error);
     }
+  }
+  if (params.user.org_id !== plan.primaryOrgId) {
+    await updateUserOrgId(params.user.privy_user_id, plan.primaryOrgId);
   }
 
   let user = await applyInviteRoleToUser(params.user, invite!.role);

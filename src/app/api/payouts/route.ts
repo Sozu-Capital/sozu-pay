@@ -52,7 +52,7 @@ function resolveSignerForRequest(
   sessionId: string,
   cookieValue: string | null | undefined,
   org: Organization | null,
-  user: { privy_user_id: string } | null,
+  user: { privy_user_id: string; stellar_public_key?: string | null } | null,
 ): HomeTreasurySignerResult {
   const unlocked =
     getUnlockedKey(sessionId) ?? getUnlockedKeyFromCookie(cookieValue) ?? undefined;
@@ -61,6 +61,7 @@ function resolveSignerForRequest(
     pollarHomeTreasury: usesPollarHomeTreasury(user, org),
     orgStoredSecret: getOrgStoredSignerSecret(org),
     unlockedSecret: unlocked,
+    sessionPublicKey: user?.stellar_public_key,
   });
 }
 
@@ -222,6 +223,7 @@ export async function POST(request: NextRequest) {
     }
 
     const user = await getUserBySessionId(session.id);
+    const orgId = session.orgId ?? user?.org_id ?? null;
     const canStellarPayout =
       user?.admin_level === "super_admin" || user?.admin_level === "admin";
 
@@ -253,7 +255,7 @@ export async function POST(request: NextRequest) {
           { status: 403 }
         );
       }
-      const org = user?.org_id ? await getOrganizationForUser(user.org_id) : null;
+      const org = orgId ? await getOrganizationForUser(orgId) : null;
       batchOrg = org;
       orgSorobanContractId = org?.soroban_contract_id ?? null;
       if (orgSorobanContractId) {
@@ -323,7 +325,7 @@ export async function POST(request: NextRequest) {
         bankAccountId: n.bankAccountId,
         stellarAddress: n.stellarAddress,
         recipientLabel: n.recipientLabel,
-        orgId: user?.org_id ?? null,
+        orgId,
       });
       if (n.type === "to_stellar" && n.stellarAddress) {
         try {
@@ -384,7 +386,7 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       );
     }
-    const org = user?.org_id ? await getOrganizationForUser(user.org_id) : null;
+    const org = orgId ? await getOrganizationForUser(orgId) : null;
     const sorobanContractId = org?.soroban_contract_id ?? null;
     const cookieStore = await cookies();
     const unlockCookie = cookieStore.get(UNLOCK_COOKIE_NAME)?.value;
@@ -421,16 +423,16 @@ export async function POST(request: NextRequest) {
       type: "to_stellar",
       stellarAddress: destination,
       recipientLabel,
-      orgId: user?.org_id ?? null,
+      orgId,
     });
 
     /** Soroban treasury: passkey signs disbursement_wallet.payout on client. */
     if (sorobanContractId) {
-      if (!user?.org_id) {
+      if (!orgId || !user) {
         failPayout(record.id);
         return NextResponse.json({ error: "No organization." }, { status: 400 });
       }
-      const memberSa = await getMemberSmartAccount(user.org_id, user.id);
+      const memberSa = await getMemberSmartAccount(orgId, user.id);
       if (!memberSa) {
         failPayout(record.id);
         return NextResponse.json(
@@ -585,7 +587,7 @@ export async function POST(request: NextRequest) {
     type: "to_bank",
     bankAccountId,
     recipientLabel,
-    orgId: user?.org_id ?? null,
+    orgId,
   });
   appendAuditEvent("payout", `Payout to bank: ${recipientLabel ?? bankAccountId}`, session.id);
   return NextResponse.json({ payout: record });

@@ -15,6 +15,7 @@ import {
   isOrgDistributionConfigured,
   resolveOrgDistributionPublicKey,
 } from "@/lib/sdp/org-distribution";
+import { getOrgMember, resolveCanonicalActiveOrgId } from "@/lib/db/org-members";
 import type { DashboardProfile, DashboardBalanceData, DashboardStats } from "@/contexts/DashboardProfileContext";
 import type { TransactionRow } from "@/lib/stellar/transactions";
 
@@ -58,15 +59,21 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
   const user = await getUserBySessionId(session.id);
   if (!user) return null;
 
-  const orgId = session.orgId ?? user.org_id ?? null;
+  const orgId = await resolveCanonicalActiveOrgId({
+    userId: user.id,
+    primaryOrgId: user.org_id,
+    sessionOrgId: session.orgId,
+    staffPublicKey: user.stellar_public_key,
+  });
   const org_payout_wallet_public_key = getOrgDisbursementPublicKey();
 
-  const [org, memberSa] = await Promise.all([
+  const [org, memberSa, membership] = await Promise.all([
     orgId ? getOrganizationForUser(orgId) : Promise.resolve(null),
     orgId ? getMemberSmartAccount(orgId, user.id) : Promise.resolve(null),
+    orgId ? getOrgMember(user.id, orgId) : Promise.resolve(null),
   ]);
 
-  const can_manage_disbursements = canManageDisbursements(user, org);
+  const can_manage_disbursements = canManageDisbursements(user, org, membership?.role);
   const orgDisbursementContractId = org ? resolveOrgDisbursementContractId(org) : null;
   const orgTreasuryContractId = org ? resolveOrgTreasuryContractId(org) : null;
   const orgHasTreasury = !!orgDisbursementContractId || !!(org?.stellar_disbursement_secret_encrypted);
@@ -94,7 +101,7 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
     org_id: orgId,
     org_type: org?.type ?? null,
     is_pollar_user: pollarUser,
-    is_treasury_owner: isOrgTreasuryOwner(user, org),
+    is_treasury_owner: isOrgTreasuryOwner(user, org, membership?.role),
   };
 
   // Dashboard shows treasury balance (receive address). Payout flows use disbursement contract separately.

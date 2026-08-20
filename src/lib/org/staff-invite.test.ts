@@ -8,6 +8,8 @@ import {
   nextAdminLevelAfterInvite,
   buildStaffInviteUrl,
   staffInviteLinkOrigin,
+  staffInviteShareText,
+  planStaffInviteAccept,
   STAFF_INVITE_TTL_MS,
 } from "@/lib/org/staff-invite";
 
@@ -100,5 +102,28 @@ describe("staff invite helpers", () => {
       }),
       "https://pay.sozu.capital",
     );
+  });
+
+  it("share text names the org so a mixup is visible before send", () => {
+    assert.equal(
+      staffInviteShareText("Da Bruno Pizza", "https://pay.sozu.capital/join/tok"),
+      "Join Da Bruno Pizza on SozuPay: https://pay.sozu.capital/join/tok",
+    );
+  });
+
+  it("accept always switches primary to the invited org", () => {
+    const switched = planStaffInviteAccept({
+      userOrgId: "org-mujeres",
+      inviteOrgId: "org-dabruno",
+    });
+    assert.equal(switched.primaryOrgId, "org-dabruno");
+    assert.equal(switched.preservePreviousOrgId, "org-mujeres");
+
+    const firstOrg = planStaffInviteAccept({
+      userOrgId: null,
+      inviteOrgId: "org-dabruno",
+    });
+    assert.equal(firstOrg.primaryOrgId, "org-dabruno");
+    assert.equal(firstOrg.preservePreviousOrgId, null);
   });
 });

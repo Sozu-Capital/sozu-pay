@@ -126,6 +126,20 @@ describe("resolveHomeTreasurySigner", () => {
     assert.equal(result.fromAddress, home.publicKey());
   });
 
+  it("Pollar client: staff session G is the debit source", () => {
+    delete process.env.ORG_DISBURSEMENT_SECRET;
+    delete process.env.POLLAR_FAKE_AUTH;
+    process.env.NODE_ENV = "production";
+    const session = Keypair.random();
+    const result = resolveHomeTreasurySigner({
+      org: org({ id: "1", stellar_disbursement_public_key: home.publicKey() }),
+      pollarHomeTreasury: true,
+      sessionPublicKey: session.publicKey(),
+    });
+    assert.equal(result.mode, "pollar_client");
+    assert.equal(result.fromAddress, session.publicKey());
+  });
+
   it("legacy: allows env fallback when not Pollar home treasury", () => {
     process.env.ORG_DISBURSEMENT_SECRET = hot.secret();
     const result = resolveHomeTreasurySigner({

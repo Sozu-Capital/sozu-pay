@@ -17,13 +17,15 @@ import {
   createOrgSpendExecutor,
   type OrgSpendExecutor,
 } from "@/lib/pollar/spend";
-import { isOrgTreasuryOwner } from "@/lib/auth/disbursement-auth";
+import { canManageDisbursements, isOrgTreasuryOwner } from "@/lib/auth/disbursement-auth";
 
 export type ConfirmOrgSpendInput = {
   org: Organization;
   user: User;
   disbursementId: string;
   payments: SpendRequestPayment[];
+  /** org_members.role for this org — treasury_manager can execute, not only the creator. */
+  memberRole?: string | null;
   /** Injected for tests; defaults to createOrgSpendExecutor(). */
   executor?: OrgSpendExecutor;
 };
@@ -79,10 +81,14 @@ export async function confirmOrgTreasurySpend(
   }
 
   const label = actorLabelFromUser(user);
-  const isOwner = isOrgTreasuryOwner(user, org);
+  const sessionG = (user.stellar_public_key ?? "").trim();
+  const spendFrom =
+    sessionG.startsWith("G") && sessionG.length >= 56 ? sessionG : fromAddress;
+  const isOwner = isOrgTreasuryOwner(user, org, input.memberRole);
+  const canSpend = canManageDisbursements(user, org, input.memberRole) || isOwner;
   const executor = input.executor ?? createOrgSpendExecutor();
 
-  if (!isOwner) {
+  if (!canSpend) {
     const spendRequest = createSpendRequest({
       orgId: org.id,
       disbursementId,
@@ -109,20 +115,20 @@ export async function confirmOrgTreasurySpend(
     const spendRequest = createSpendRequest({
       orgId: org.id,
       disbursementId,
-      fromAddress,
+      fromAddress: spendFrom,
       payments,
       requestedByUserId: String(user.id),
       requestedByLabel: label,
       status: "awaiting_owner_client_tx",
     });
-    auditAction(disbursementId, "spend_confirmed", user, `Owner confirmed; awaiting Pollar custodial session tx`, {
+    auditAction(disbursementId, "spend_confirmed", user, `Admin confirmed; awaiting Pollar session tx`, {
       spendRequestId: spendRequest.id,
     });
     appendAuditEvent(
       "disbursement_spend_confirmed",
       `User ${label} confirmed Org treasury spend (client Pollar session required)`,
       String(user.id),
-      { amount: spendRequest.totalAmount, signerWallet: fromAddress },
+      { amount: spendRequest.totalAmount, signerWallet: spendFrom },
     );
     return { outcome: "awaiting_owner_client_tx", spendRequest };
   }
@@ -130,7 +136,7 @@ export async function confirmOrgTreasurySpend(
   const spendRequest = createSpendRequest({
     orgId: org.id,
     disbursementId,
-    fromAddress,
+    fromAddress: spendFrom,
     payments,
     requestedByUserId: String(user.id),
     requestedByLabel: label,
@@ -138,7 +144,7 @@ export async function confirmOrgTreasurySpend(
   });
 
   const result = await executor.execute({
-    fromAddress,
+    fromAddress: spendFrom,
     actingUserId: String(user.id),
     payments: payments.map((p) => ({
       paymentId: p.paymentId,
@@ -164,7 +170,7 @@ export async function confirmOrgTreasurySpend(
     String(user.id),
     {
       amount: executed.totalAmount,
-      signerWallet: fromAddress,
+      signerWallet: spendFrom,
       stellarTxHash: result.txHashes[0],
       destination: payments[0]?.toAddress,
     },
@@ -180,10 +186,11 @@ export async function approveQueuedOrgSpend(input: {
   org: Organization;
   user: User;
   spendRequest: SpendRequest;
+  memberRole?: string | null;
   executor?: OrgSpendExecutor;
 }): Promise<{ spendRequest: SpendRequest; txHashes: string[] }> {
   const { org, user, spendRequest } = input;
-  if (!isOrgTreasuryOwner(user, org)) {
+  if (!isOrgTreasuryOwner(user, org, input.memberRole)) {
     throw new Error("Only the Org treasury owner can approve spends");
   }
   if (spendRequest.status !== "pending") {

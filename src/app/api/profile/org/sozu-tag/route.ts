@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession, setSession } from "@/lib/auth/session";
+import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import {
   getOrganizationById,
   updateOrganizationDisbursementPublicKey,
 } from "@/lib/db/organizations";
+import { resolveCanonicalActiveOrgId } from "@/lib/db/org-members";
 import {
   applyOrganizationSozuTag,
   getOrganizationSozuTag,
@@ -36,17 +37,15 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const user = await getUserBySessionId(session.id);
-  /** Prefer DB org (source of truth); session.orgId can be stale after org create/switch. */
-  const orgId = user?.org_id ?? session.orgId ?? null;
+  const orgId = user
+    ? await resolveCanonicalActiveOrgId({
+        userId: user.id,
+        primaryOrgId: user.org_id,
+        sessionOrgId: session.orgId,
+        staffPublicKey: user.stellar_public_key,
+      })
+    : session.orgId ?? null;
   if (!orgId) return NextResponse.json({ error: "No organization." }, { status: 404 });
-
-  if (session.orgId !== orgId) {
-    try {
-      await setSession({ ...session, orgId });
-    } catch {
-      // non-fatal
-    }
-  }
 
   let org = await getOrganizationById(orgId);
   if (!org) return NextResponse.json({ error: "Organization not found." }, { status: 404 });
@@ -87,16 +86,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const orgId = user.org_id ?? session.orgId ?? null;
+  const orgId = await resolveCanonicalActiveOrgId({
+    userId: user.id,
+    primaryOrgId: user.org_id,
+    sessionOrgId: session.orgId,
+    staffPublicKey: user.stellar_public_key,
+  });
   if (!orgId) return NextResponse.json({ error: "No organization." }, { status: 404 });
-
-  if (session.orgId !== orgId) {
-    try {
-      await setSession({ ...session, orgId });
-    } catch {
-      // non-fatal
-    }
-  }
 
   if (isPollarMappedUser(user)) {
     await repairFakePollarTreasuryIfNeeded(orgId, user.stellar_public_key);

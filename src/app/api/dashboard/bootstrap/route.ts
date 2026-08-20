@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
+import { resolveCanonicalActiveOrgId } from "@/lib/db/org-members";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
 import { resolveOrgDisbursementContractId, resolveOrgTreasuryContractId } from "@/lib/stellar/org-treasury";
@@ -16,6 +17,7 @@ import {
   isOrgDistributionConfigured,
   resolveOrgDistributionPublicKey,
 } from "@/lib/sdp/org-distribution";
+import { getOrgMember } from "@/lib/db/org-members";
 
 /**
  * GET /api/dashboard/bootstrap
@@ -35,17 +37,23 @@ export async function GET() {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const orgId = session.orgId ?? user.org_id ?? null;
+  const orgId = await resolveCanonicalActiveOrgId({
+    userId: user.id,
+    primaryOrgId: user.org_id,
+    sessionOrgId: session.orgId,
+    staffPublicKey: user.stellar_public_key,
+  });
   const org_payout_wallet_public_key = getOrgDisbursementPublicKey();
 
   // Load org and smart account in parallel — only 2 DB calls total.
-  const [org, memberSa] = await Promise.all([
+  const [org, memberSa, membership] = await Promise.all([
     orgId ? getOrganizationForUser(orgId) : Promise.resolve(null),
     orgId ? getMemberSmartAccount(orgId, user.id) : Promise.resolve(null),
+    orgId ? getOrgMember(user.id, orgId) : Promise.resolve(null),
   ]);
 
   // --- Profile fields ---
-  const can_manage_disbursements = canManageDisbursements(user, org);
+  const can_manage_disbursements = canManageDisbursements(user, org, membership?.role);
   const orgDisbursementContractId = org ? resolveOrgDisbursementContractId(org) : null;
   const orgTreasuryContractId = org ? resolveOrgTreasuryContractId(org) : null;
   const orgHasTreasury = !!orgDisbursementContractId || !!(org?.stellar_disbursement_secret_encrypted);
@@ -92,7 +100,7 @@ export async function GET() {
     needsSmartWalletSetup,
     treasury_ready: !!orgDisbursementContractId,
     is_pollar_user: isPollarMappedUser(user),
-    is_treasury_owner: isOrgTreasuryOwner(user, org),
+    is_treasury_owner: isOrgTreasuryOwner(user, org, membership?.role),
   };
 
   // --- Stellar + FX data (parallel, org wallet only) ---

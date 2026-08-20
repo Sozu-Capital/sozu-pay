@@ -22,10 +22,11 @@ export async function GET() {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
+  const orgId = session.orgId ?? user.org_id ?? null;
   const org_payout_wallet_public_key = getOrgDisbursementPublicKey();
 
   // Read org once — repairOrgCreatorAccess now runs at login, not on every profile load.
-  const org = user.org_id ? await getOrganizationForUser(user.org_id) : null;
+  const org = orgId ? await getOrganizationForUser(orgId) : null;
 
   const can_manage_disbursements = canManageDisbursements(user, org);
 
@@ -41,16 +42,16 @@ export async function GET() {
     !orgHasTreasury &&
     !orgDisbursementContractId;
 
-  const needsOrgCreation = user.admin_level === "super_admin" && !user.org_id;
-  const needsOrganization = !user.org_id;
+  const needsOrgCreation = user.admin_level === "super_admin" && !orgId;
+  const needsOrganization = !orgId;
 
   const memberSa =
-    user.org_id ? await getMemberSmartAccount(user.org_id, user.id) : null;
+    orgId ? await getMemberSmartAccount(orgId, user.id) : null;
   const isPollarUser = (user.privy_user_id ?? "").startsWith("pollar:");
   const pollarTreasuryReady =
     isPollarUser && !!(org?.stellar_disbursement_public_key);
   const needsSmartWalletSetup =
-    !!user.org_id && memberSa == null && !pollarTreasuryReady;
+    !!orgId && memberSa == null && !pollarTreasuryReady;
 
   const org_stellar_disbursement_public_key = org?.stellar_disbursement_public_key ?? null;
   const org_soroban_contract_id = orgDisbursementContractId;
@@ -70,7 +71,7 @@ export async function GET() {
     stellar_public_key: user.stellar_public_key,
     stellar_payout_public_key: user.stellar_payout_public_key ?? null,
     org_payout_wallet_public_key: org_payout_wallet_public_key ?? null,
-    org_id: user.org_id ?? null,
+    org_id: orgId,
     org_type: org?.type ?? null,
     org_stellar_disbursement_public_key,
     org_soroban_contract_id,

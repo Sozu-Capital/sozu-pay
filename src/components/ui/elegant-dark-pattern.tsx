@@ -31,7 +31,7 @@ export function DarkGradientBg({
   return (
     <div
       className={cn(
-        "relative min-h-screen w-full overflow-hidden bg-black",
+        "dark relative min-h-screen w-full overflow-hidden bg-black text-white",
         className
       )}
     >

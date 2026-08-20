@@ -4,11 +4,12 @@ import {
   jsonResponseWithSession,
   sessionUserFromDbUser,
 } from "@/lib/auth/establish-session";
-import { setSession, type SessionUser } from "@/lib/auth/session";
+import { setSession, getSession, type SessionUser } from "@/lib/auth/session";
 import { createPollarTokenVerifier } from "@/lib/pollar/adapter";
-import { resolvePollarPostAuthRedirect } from "@/lib/pollar/session-bridge";
 import { isFakePollarStaffWallet, PollarTokenVerifyError } from "@/lib/pollar/types";
 import { getOrCreateUserByPollar, updateUserStellarPublicKey } from "@/lib/db/users";
+import { listAccessibleOrgIds } from "@/lib/db/org-members";
+import { planPollarLoginDestination } from "@/lib/org/accessible-orgs";
 
 
 export const dynamic = "force-dynamic";
@@ -53,19 +54,28 @@ export async function POST(request: NextRequest) {
       if (updated) user = updated;
     }
 
-    const redirect = resolvePollarPostAuthRedirect(user, returnTo);
+    const orgIds = await listAccessibleOrgIds({
+      userId: user.id,
+      primaryOrgId: user.org_id,
+    });
+    const previous = await getSession();
+    const plan = planPollarLoginDestination({
+      orgIds,
+      primaryOrgId: user.org_id,
+      preservedOrgId: previous?.orgId ?? null,
+      returnTo,
+    });
 
-    // Attach orgId to session when resuming a known membership (skip re-onboarding).
-    if (user.org_id && redirect === "/dashboard") {
+    if (plan.sessionOrgId && plan.redirect === "/dashboard") {
       const sessionUser: SessionUser = {
         ...sessionUserFromDbUser(user),
-        orgId: user.org_id,
+        orgId: plan.sessionOrgId,
       };
       await setSession(sessionUser);
       const response = NextResponse.json({
         success: true,
         userId: user.id,
-        redirect,
+        redirect: plan.redirect,
       });
       return attachSessionCookie(response, sessionUser);
     }
@@ -73,7 +83,7 @@ export async function POST(request: NextRequest) {
     return jsonResponseWithSession(user, {
       success: true,
       userId: user.id,
-      redirect,
+      redirect: plan.redirect,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Pollar verify failed";

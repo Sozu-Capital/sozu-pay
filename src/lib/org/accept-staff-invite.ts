@@ -18,8 +18,8 @@ import {
   STAFF_INVITE_TTL_MS,
   buildStaffInviteUrl,
   isValidOrgInviteRole,
-  mapInviteRoleToAdminLevel,
   mapInviteRoleToMemberRole,
+  nextAdminLevelAfterInvite,
   staffInvitePlaceholderEmail,
   validateStaffInvite,
 } from "@/lib/org/staff-invite";
@@ -94,7 +94,7 @@ export async function previewStaffInvite(token: string): Promise<
 }
 
 async function applyInviteRoleToUser(user: User, role: OrgInviteRole): Promise<User> {
-  const adminLevel = mapInviteRoleToAdminLevel(role);
+  const adminLevel = nextAdminLevelAfterInvite(user.admin_level, role);
   const { data, error } = await getSupabase()
     .from("users")
     .update({
@@ -150,10 +150,11 @@ export async function acceptStaffInvite(params: {
   if (!params.user.org_id) {
     await updateUserOrgId(params.user.privy_user_id, invite!.org_id);
   } else if (params.user.org_id !== invite!.org_id) {
-    // Keep existing primary org; membership is via org_members. For NGO Pollar
-    // invitees without an org, we set org_id above. If they already have an org,
-    // switch primary to the invited org so dashboard opens immediately.
-    await updateUserOrgId(params.user.privy_user_id, invite!.org_id);
+    // Keep the first org as primary; the invite org is a second membership.
+    const previous = await addOrgMember(params.user.id, params.user.org_id, "owner");
+    if (!previous.ok) {
+      console.warn("[staff-invite] preserve previous org membership:", previous.error);
+    }
   }
 
   let user = await applyInviteRoleToUser(params.user, invite!.role);

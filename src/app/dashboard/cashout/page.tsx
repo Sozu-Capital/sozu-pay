@@ -146,7 +146,7 @@ export default function CashOutPage() {
 
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t("title")}</h1>
+      <h1 className="text-2xl font-bold text-white">{t("title")}</h1>
       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("subtitle")}</p>
 
       <div className="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-5 flex items-center justify-between">

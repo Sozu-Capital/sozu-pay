@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationById } from "@/lib/db/organizations";
+import { listAccessibleOrgIds } from "@/lib/db/org-members";
 
 /**
  * GET /api/profile/organizations – list organizations the current user can access.
- * For now: single org (user.org_id). Later: expand with organization_members for multi-org.
  */
 export async function GET() {
   const session = await getSession();
@@ -16,25 +16,25 @@ export async function GET() {
   try {
     const user = await getUserBySessionId(session.id);
     if (!user) {
-      // Session exists but user row missing (should be rare). Still allow creating an org.
       return NextResponse.json({ organizations: [], canCreate: true });
     }
 
+    const extraIds = await listAccessibleOrgIds({
+      userId: user.id,
+      primaryOrgId: user.org_id,
+      sessionOrgId: session.orgId,
+    });
+    const ids = extraIds;
     const organizations: { id: string; name: string }[] = [];
-    if (user.org_id) {
-      const org = await getOrganizationById(user.org_id);
-      if (org) {
-        organizations.push({ id: org.id, name: org.name });
-      }
+    for (const id of ids) {
+      const org = await getOrganizationById(id);
+      if (org) organizations.push({ id: org.id, name: org.name });
     }
-
-    // We allow creating a new organization even if the user already has access to one.
-    // (Creating will switch the user's active org to the newly created one.)
-    const canCreate = true;
 
     return NextResponse.json({
       organizations,
-      canCreate,
+      canCreate: true,
+      activeOrgId: session.orgId ?? user.org_id ?? null,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

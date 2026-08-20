@@ -220,6 +220,17 @@ export async function updateUserPayoutPublicKey(
   return { user, error: null };
 }
 
+export async function updateUserEmail(userId: number, email: string): Promise<User | null> {
+  const { data, error } = await getSupabase()
+    .from("users")
+    .update({ email: email.trim().toLowerCase(), updated_at: new Date().toISOString() })
+    .eq("id", userId)
+    .select()
+    .single();
+  if (error) return null;
+  return data as User;
+}
+
 export async function updateUserOrgId(
   sessionOrPrivyId: string,
   orgId: string
@@ -232,8 +243,14 @@ export async function promoteOrgCreator(
   sessionOrPrivyId: string,
   orgId: string
 ): Promise<User | null> {
+  const existing = await getUserBySessionId(sessionOrPrivyId);
+  if (!existing) {
+    console.error("[users] promoteOrgCreator: user not found for session id");
+    return null;
+  }
   const user = await updateUserBySessionId(sessionOrPrivyId, {
-    org_id: orgId,
+    // Keep the first org as primary so a second create/invite does not hide it.
+    ...(existing.org_id ? {} : { org_id: orgId }),
     admin_level: "super_admin",
     allowed: true,
   });

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { requireDisbursementAdmin } from "@/lib/auth/disbursement-auth";
 import { createStaffInviteLink } from "@/lib/org/accept-staff-invite";
-import { isValidOrgInviteRole } from "@/lib/org/staff-invite";
+import { isValidOrgInviteRole, staffInviteLinkOrigin } from "@/lib/org/staff-invite";
 
 /**
  * POST /api/org/invites — admin creates a one-time expiring Staff invite link.
@@ -24,9 +24,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const origin =
-    (process.env.NEXT_PUBLIC_APP_URL ?? "").trim() ||
-    request.nextUrl.origin;
+  const origin = staffInviteLinkOrigin({
+    requestOrigin: request.nextUrl.origin,
+    envAppUrl: process.env.NEXT_PUBLIC_APP_URL,
+  });
 
   const created = await createStaffInviteLink({
     orgId: auth.user.org_id!,

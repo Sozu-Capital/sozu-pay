@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { DashboardNav } from "@/components/DashboardNav";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
@@ -27,7 +28,13 @@ function DashboardBrandHeader({ className = "" }: { className?: string }) {
         priority
       />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-white leading-tight">{orgLabel}</p>
+        <Link
+          href="/onboarding/organizations"
+          className="block truncate text-sm font-semibold text-white leading-tight hover:underline"
+          title={t("switchOrganization")}
+        >
+          {orgLabel}
+        </Link>
         {accountLabel ? (
           <p className="truncate text-xs text-gray-400 leading-tight">{accountLabel}</p>
         ) : null}
@@ -56,7 +63,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   }, [mobileOpen, closeMobile]);
 
   return (
-    <div className="dark flex min-h-screen flex-col md:flex-row">
+    <div className="dark flex min-h-screen flex-col text-white md:flex-row">
       {/* Desktop sidebar */}
       <aside
         className="hidden md:flex md:w-56 md:flex-col md:border-r md:border-white/10 md:bg-black/40 md:backdrop-blur-sm md:p-4 md:min-h-0 shrink-0"
@@ -122,7 +129,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         <DashboardNav onNavigate={closeMobile} />
       </aside>
 
-      <main className="flex-1 p-4 md:p-8" role="main">
+      <main className="flex-1 p-4 text-white md:p-8" role="main">
         {children}
       </main>
     </div>

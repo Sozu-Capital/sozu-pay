@@ -5,7 +5,9 @@ import {
   staffInvitePlaceholderEmail,
   isValidOrgInviteRole,
   mapInviteRoleToAdminLevel,
+  nextAdminLevelAfterInvite,
   buildStaffInviteUrl,
+  staffInviteLinkOrigin,
   STAFF_INVITE_TTL_MS,
 } from "@/lib/org/staff-invite";
 
@@ -67,12 +69,36 @@ describe("staff invite helpers", () => {
     assert.equal(mapInviteRoleToAdminLevel("admin"), "admin");
     assert.equal(mapInviteRoleToAdminLevel("treasury_manager"), "admin");
     assert.equal(mapInviteRoleToAdminLevel("guardian"), "user");
+    assert.equal(nextAdminLevelAfterInvite("super_admin", "member"), "super_admin");
+    assert.equal(nextAdminLevelAfterInvite("admin", "member"), "admin");
+    assert.equal(nextAdminLevelAfterInvite("user", "admin"), "admin");
+    assert.equal(nextAdminLevelAfterInvite("user", "member"), "user");
   });
 
   it("builds join URL", () => {
     assert.equal(
       buildStaffInviteUrl("https://app.example.com/", "tok-1"),
       "https://app.example.com/join/tok-1",
+    );
+  });
+
+  it("prefers the live request host over a localhost env URL", () => {
+    assert.equal(
+      staffInviteLinkOrigin({
+        requestOrigin: "https://pay.sozu.capital",
+        envAppUrl: "http://localhost:3000",
+      }),
+      "https://pay.sozu.capital",
+    );
+  });
+
+  it("falls back to env when the request is localhost", () => {
+    assert.equal(
+      staffInviteLinkOrigin({
+        requestOrigin: "http://localhost:3000",
+        envAppUrl: "https://pay.sozu.capital",
+      }),
+      "https://pay.sozu.capital",
     );
   });
 });

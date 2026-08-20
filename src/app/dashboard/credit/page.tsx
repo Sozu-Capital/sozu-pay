@@ -99,7 +99,7 @@ export default function CreditPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+      <h1 className="text-2xl font-bold text-white">
         {t("title")}
       </h1>
       <p className="mt-2 text-gray-600 dark:text-gray-400 max-w-2xl">

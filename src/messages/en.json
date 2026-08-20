@@ -362,7 +362,8 @@
     "openMenu": "Open menu",
     "closeMenu": "Close menu",
     "noOrganization": "No organization",
-    "accountFallback": "Your account"
+    "accountFallback": "Your account",
+    "switchOrganization": "Switch organization"
   },
   "transactionsPage": {
     "title": "Transactions",
@@ -464,6 +465,7 @@
       "opening": "Opening…",
       "continue": "Continue to dashboard →",
       "createNew": "Create new organization",
+      "current": "Current",
       "noOrgHint": "No organization linked yet. You can create one above, or ask an admin to invite you to an existing team.",
       "signingOut": "Signing out…",
       "logOut": "Log out",
@@ -800,7 +802,19 @@
     "inviteCreateFailed": "Could not create invite link.",
     "inviteLinkReady": "Share this link (one-time, expires):",
     "inviteExpires": "Expires {at}",
-    "inviteCopy": "Copy link"
+    "inviteCopy": "Copy link",
+    "inviteCopied": "Copied",
+    "inviteShare": "Share",
+    "inviteCopyFailed": "Could not copy the link. Long-press the URL to copy it.",
+    "rolesTitle": "Role administration",
+    "rolesBody": "Admins and treasury managers can send from the org. Members can view.",
+    "rolesSave": "Save role",
+    "rolesSaved": "Role updated.",
+    "rolesFailed": "Could not update role.",
+    "emailChangeHint": "Dashboard contact email. Google sign-in still uses your Google account.",
+    "emailSave": "Save email",
+    "emailSaved": "Email updated.",
+    "emailFailed": "Could not update email."
   },
   "staffInvite": {
     "title": "Join organization",

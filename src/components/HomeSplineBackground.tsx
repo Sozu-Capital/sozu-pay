@@ -55,7 +55,7 @@ export function HomeSplineBackground() {
             <iframe
               src={SPLINE_EMBED_URL}
               title="Sozu background animation"
-              className="home-spline-iframe pointer-events-auto h-full w-full border-0 touch-manipulation"
+              className="home-spline-iframe pointer-events-none h-full w-full border-0"
               style={{ WebkitTouchCallout: "none" }}
               loading="eager"
               onLoad={onLoad}

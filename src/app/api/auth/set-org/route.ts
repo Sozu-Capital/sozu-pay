@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
   const accessible = await listAccessibleOrgIds({
     userId: user.id,
     primaryOrgId: user.org_id,
+    staffPublicKey: user.stellar_public_key,
   });
   const canSelect = accessible.includes(orgId);
 

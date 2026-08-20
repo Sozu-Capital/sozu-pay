@@ -1,5 +1,5 @@
 import { getSupabase } from "@/lib/supabase/server";
-import { getOrgIdsManagedByUser } from "@/lib/db/organizations";
+import { getOrgIdsByTreasuryPublicKey, getOrgIdsManagedByUser } from "@/lib/db/organizations";
 import { mergeAccessibleOrgIds } from "@/lib/org/accessible-orgs";
 
 export type OrgMemberRole = "member" | "admin" | "owner" | "guardian" | "treasury_manager";
@@ -33,16 +33,19 @@ export async function listAccessibleOrgIds(params: {
   userId: number;
   primaryOrgId?: string | null;
   sessionOrgId?: string | null;
+  staffPublicKey?: string | null;
 }): Promise<string[]> {
-  const [memberOrgIds, managedOrgIds] = await Promise.all([
+  const [memberOrgIds, managedOrgIds, staffWalletOrgIds] = await Promise.all([
     getOrgIdsForUser(params.userId),
     getOrgIdsManagedByUser(params.userId),
+    getOrgIdsByTreasuryPublicKey(params.staffPublicKey),
   ]);
   return mergeAccessibleOrgIds({
     primaryOrgId: params.primaryOrgId,
     sessionOrgId: params.sessionOrgId,
     memberOrgIds,
     managedOrgIds,
+    staffWalletOrgIds,
   });
 }
 

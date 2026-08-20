@@ -1,9 +1,10 @@
-/** Merge every org a user can open: primary row, session, memberships, treasury-manager. */
+/** Merge every org a user can open: primary row, session, memberships, treasury-manager, Staff wallet. */
 export function mergeAccessibleOrgIds(parts: {
   primaryOrgId?: string | null;
   sessionOrgId?: string | null;
   memberOrgIds?: string[];
   managedOrgIds?: string[];
+  staffWalletOrgIds?: string[];
 }): string[] {
   return [
     ...new Set(
@@ -12,6 +13,7 @@ export function mergeAccessibleOrgIds(parts: {
         parts.sessionOrgId,
         ...(parts.memberOrgIds ?? []),
         ...(parts.managedOrgIds ?? []),
+        ...(parts.staffWalletOrgIds ?? []),
       ].filter((id): id is string => typeof id === "string" && id.length > 0),
     ),
   ];

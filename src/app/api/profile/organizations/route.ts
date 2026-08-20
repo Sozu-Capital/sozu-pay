@@ -23,6 +23,7 @@ export async function GET() {
       userId: user.id,
       primaryOrgId: user.org_id,
       sessionOrgId: session.orgId,
+      staffPublicKey: user.stellar_public_key,
     });
     const ids = extraIds;
     const organizations: { id: string; name: string }[] = [];

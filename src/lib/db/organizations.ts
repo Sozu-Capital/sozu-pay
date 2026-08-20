@@ -52,6 +52,28 @@ export async function getOrgIdsManagedByUser(userId: number): Promise<string[]> 
   return (data ?? []).map((row) => row.id as string);
 }
 
+/**
+ * Orgs whose classic treasury is this Pollar Staff G-address.
+ * Used when org_members / treasury_manager_user_id are missing in prod.
+ */
+export async function getOrgIdsByTreasuryPublicKey(
+  publicKey: string | null | undefined
+): Promise<string[]> {
+  const key = (publicKey ?? "").trim();
+  if (!key.startsWith("G") || key.length < 56) return [];
+
+  const { data, error } = await getSupabase()
+    .from("organizations")
+    .select("id")
+    .eq("stellar_disbursement_public_key", key);
+
+  if (error) {
+    console.error("[organizations] getOrgIdsByTreasuryPublicKey error:", error.message);
+    return [];
+  }
+  return (data ?? []).map((row) => row.id as string);
+}
+
 export async function getOrganizationForUser(
   orgId: string | null
 ): Promise<Organization | null> {

@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
     const orgIds = await listAccessibleOrgIds({
       userId: user.id,
       primaryOrgId: user.org_id,
+      staffPublicKey: user.stellar_public_key,
     });
     const previous = await getSession();
     const plan = planPollarLoginDestination({

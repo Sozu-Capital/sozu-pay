@@ -3,15 +3,16 @@ import { describe, it } from "node:test";
 import { mergeAccessibleOrgIds, planPollarLoginDestination } from "./accessible-orgs.js";
 
 describe("mergeAccessibleOrgIds", () => {
-  it("unions primary, session, memberships, and treasury-managed orgs", () => {
+  it("unions primary, session, memberships, treasury-managed, and Staff-wallet orgs", () => {
     assert.deepEqual(
       mergeAccessibleOrgIds({
         primaryOrgId: "a",
         sessionOrgId: "b",
         memberOrgIds: ["b", "c"],
         managedOrgIds: ["a", "d"],
+        staffWalletOrgIds: ["e"],
       }).sort(),
-      ["a", "b", "c", "d"],
+      ["a", "b", "c", "d", "e"],
     );
   });
 

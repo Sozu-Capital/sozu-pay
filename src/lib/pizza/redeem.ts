@@ -56,6 +56,16 @@ export function pizzaRedeemWalletSignUrl(params: {
   return url.toString();
 }
 
+/** Store-checkout UI on the wallet — never /auth auto-sign. */
+export function pizzaWalletCheckoutUrl(params: {
+  walletOrigin: string;
+  slug: string;
+}): string {
+  const origin = params.walletOrigin.replace(/\/$/, "");
+  const slug = encodeURIComponent(params.slug.trim().toLowerCase());
+  return `${origin}/checkout/pizza/${slug}`;
+}
+
 export function getWalletOrigin(): string {
   return (
     process.env.NEXT_PUBLIC_SOZU_WALLET_URL?.replace(/\/$/, "") ||
@@ -72,43 +82,16 @@ export type PizzaSkuSearch = {
 
 export type PizzaSkuGuestNext =
   | { kind: "intent"; intentId: string }
-  | { kind: "hop"; url: string }
-  | { kind: "auto_redeem"; guestAddress: string }
-  | { kind: "chrome" };
+  | { kind: "hop"; url: string };
 
-export function pizzaWalletHopUrl(params: {
-  walletOrigin: string;
-  payUrl: string;
-}): string {
-  const returnTo = new URL(params.payUrl);
-  returnTo.searchParams.set("hopped", "1");
-  const url = new URL("/auth", params.walletOrigin.replace(/\/$/, ""));
-  url.searchParams.set("return_to", returnTo.toString());
-  return url.toString();
-}
-
-/** Pay.sozu.capital never prompts passkey/PIN — hop or chrome only. */
+/** Pay.sozu.capital never prompts passkey/PIN — hop to wallet store checkout. */
 export function nextPizzaSkuGuestAction(
   search: PizzaSkuSearch,
-  ctx: { payUrl: string; walletOrigin: string },
+  ctx: { slug: string; walletOrigin: string },
 ): PizzaSkuGuestNext {
   const intentId = search.intent?.trim();
   if (intentId) return { kind: "intent", intentId };
-
-  const guest = search.guest?.trim().toUpperCase();
-  const pizzaRaw = search.pizza?.trim();
-  const pizzaCount = pizzaRaw === undefined || pizzaRaw === "" ? null : Number(pizzaRaw);
-
-  // Only treat pizza=0 as done once the wallet actually stamped a guest address.
-  if (guest && pizzaRaw === "0") return { kind: "chrome" };
-
-  if (guest && (pizzaCount === null || pizzaCount >= 1)) {
-    return { kind: "auto_redeem", guestAddress: guest };
-  }
-
-  // hopped=1 without guest means the wallet sent us back before the session
-  // existed — hop again instead of showing a dead checkout.
-  return { kind: "hop", url: pizzaWalletHopUrl(ctx) };
+  return { kind: "hop", url: pizzaWalletCheckoutUrl(ctx) };
 }
 
 export function parseStellarTxHash(raw: string): string | null {

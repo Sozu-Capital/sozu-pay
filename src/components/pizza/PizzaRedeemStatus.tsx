@@ -14,13 +14,6 @@ export function PizzaClaimedConfirmation({
   const thanks = pizzaPayerThanks(pointName);
   const walletHome = pizzaPayerWalletHomeUrl(walletOrigin);
 
-  useEffect(() => {
-    const id = window.setTimeout(() => {
-      window.location.assign(walletHome);
-    }, 5000);
-    return () => window.clearTimeout(id);
-  }, [walletHome]);
-
   return (
     <main className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
       <div className="w-full max-w-sm rounded-xl border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-gray-800 p-6 text-center">
@@ -37,7 +30,6 @@ export function PizzaClaimedConfirmation({
         >
           Continue in Sozu
         </a>
-        <p className="mt-3 text-xs text-gray-400">Taking you to app.sozu.capital…</p>
       </div>
     </main>
   );

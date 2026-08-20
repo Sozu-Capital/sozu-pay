@@ -11,6 +11,7 @@ import {
   pizzaRedeemClientView,
   pizzaRedeemCompletesCheckoutSession,
   pizzaRedeemWalletSignUrl,
+  pizzaWalletCheckoutUrl,
 } from "./redeem.js";
 
 const CIRCLE_USDC_SAC = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA";
@@ -97,49 +98,45 @@ describe("pizzaRedeemWalletSignUrl", () => {
   });
 });
 
-const PAY = "https://pay.sozu.capital/pay/qr/margherita-nfc";
 const WALLET = "https://app.sozu.capital";
 const GUEST_G = "GDW4KDAKWDXTTXKBJ3EPUCXQ47JOURDM3QXV623QIBNFFOO7SJT2ZQ3A";
 
+describe("pizzaWalletCheckoutUrl", () => {
+  it("opens the wallet store-checkout route for the standing slug", () => {
+    assert.equal(
+      pizzaWalletCheckoutUrl({ walletOrigin: WALLET, slug: "margherita-nfc" }),
+      "https://app.sozu.capital/checkout/pizza/margherita-nfc",
+    );
+  });
+});
+
 describe("nextPizzaSkuGuestAction", () => {
-  it("hops once to the wallet origin with return_to when there is no session", () => {
-    const next = nextPizzaSkuGuestAction({}, { payUrl: PAY, walletOrigin: WALLET });
+  it("hops to wallet store checkout, not /auth auto-sign", () => {
+    const next = nextPizzaSkuGuestAction({}, { slug: "margherita-nfc", walletOrigin: WALLET });
     assert.equal(next.kind, "hop");
     if (next.kind !== "hop") return;
     const hopped = new URL(next.url);
     assert.equal(hopped.origin, WALLET);
-    assert.equal(hopped.pathname, "/auth");
-    const returnTo = hopped.searchParams.get("return_to") ?? "";
-    assert.match(returnTo, /hopped=1/);
-    assert.match(returnTo, /pay\.sozu\.capital/);
+    assert.equal(hopped.pathname, "/checkout/pizza/margherita-nfc");
+    assert.equal(hopped.search, "");
   });
 
-  it("stays on Margherita chrome when pizza balance is 0", () => {
-    const next = nextPizzaSkuGuestAction(
-      { hopped: "1", pizza: "0", guest: GUEST_G },
-      { payUrl: PAY, walletOrigin: WALLET },
-    );
-    assert.equal(next.kind, "chrome");
-  });
-
-  it("auto-starts redeem when signed-in balance is at least 1", () => {
+  it("does not auto-redeem when a guest bounce-back is present", () => {
     const next = nextPizzaSkuGuestAction(
       { hopped: "1", pizza: "1", guest: GUEST_G },
-      { payUrl: PAY, walletOrigin: WALLET },
-    );
-    assert.deepEqual(next, { kind: "auto_redeem", guestAddress: GUEST_G });
-  });
-
-  it("hops again when the wallet bounce-back is missing guest", () => {
-    const next = nextPizzaSkuGuestAction(
-      { hopped: "1" },
-      { payUrl: PAY, walletOrigin: WALLET },
+      { slug: "margherita-nfc", walletOrigin: WALLET },
     );
     assert.equal(next.kind, "hop");
     if (next.kind !== "hop") return;
-    const hopped = new URL(next.url);
-    assert.equal(hopped.origin, WALLET);
-    assert.equal(hopped.pathname, "/auth");
+    assert.equal(next.url, `${WALLET}/checkout/pizza/margherita-nfc`);
+  });
+
+  it("keeps an in-flight intent on pay so confirmation can render", () => {
+    const next = nextPizzaSkuGuestAction(
+      { intent: "intent-1" },
+      { slug: "margherita-nfc", walletOrigin: WALLET },
+    );
+    assert.deepEqual(next, { kind: "intent", intentId: "intent-1" });
   });
 });
 

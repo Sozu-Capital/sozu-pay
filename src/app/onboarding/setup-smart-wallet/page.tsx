@@ -172,7 +172,7 @@ export default function SetupSmartWalletPage() {
         </span>
       </button>
       <div className="w-full max-w-md rounded-xl border border-white/10 bg-white/5 p-6">
-        <h1 className="text-lg font-semibold">{isMerchant ? t("titleMerchant") : t("title")}</h1>
+        <h1 className="text-lg font-semibold text-white">{isMerchant ? t("titleMerchant") : t("title")}</h1>
         <p className="mt-2 text-sm text-gray-300">{isMerchant ? t("subtitleMerchant") : t("subtitle")}</p>
 
         <div className="mt-5">

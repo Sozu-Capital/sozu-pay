@@ -13,6 +13,7 @@ export default function OrganizationsPage() {
   const t = useTranslations("onboardingPages.organizations");
   const tCommon = useTranslations("onboardingPages");
   const [organizations, setOrganizations] = useState<Org[]>([]);
+  const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectingId, setSelectingId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -30,7 +31,7 @@ export default function OrganizationsPage() {
       .then(async (d) => {
         const orgs: Org[] = d.organizations ?? [];
         setOrganizations(orgs);
-        // Single-org: skip picker and enter dashboard
+        setActiveOrgId(typeof d.activeOrgId === "string" ? d.activeOrgId : null);
         if (orgs.length === 1) {
           setSelectingId(orgs[0].id);
           try {
@@ -112,7 +113,10 @@ export default function OrganizationsPage() {
                     disabled={!!selectingId}
                     className="w-full rounded-md border border-white/10 bg-white/5 py-3 px-4 text-left font-medium text-white hover:bg-white/10 disabled:opacity-50 transition-colors"
                   >
-                    <span className="block truncate">{org.name}</span>
+                    <span className="block truncate">
+                      {org.name}
+                      {activeOrgId === org.id ? ` · ${t("current")}` : ""}
+                    </span>
                     <span className="block text-xs text-gray-400 mt-0.5">
                       {selectingId === org.id ? t("opening") : t("continue")}
                     </span>

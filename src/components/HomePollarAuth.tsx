@@ -1,13 +1,25 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import type { PollarClient } from "@pollar/core";
 import {
+  discardReservedPollarOAuthPopup,
   getPollarBrowserClient,
+  getPollarPublishableKey,
   isPollarFakeAuth,
   logoutPollarBrowserClient,
+  reservePollarOAuthPopup,
+  resetPollarBrowserClient,
 } from "@/lib/pollar/browser-client";
+import { completeHostedOAuthSession } from "@/lib/pollar/oauth-complete";
+import {
+  clearPendingPollarOAuth,
+  persistPollarReturnTo,
+  readPendingPollarOAuth,
+  readPollarReturnTo,
+  sanitizeReturnTo,
+} from "@/lib/pollar/oauth-resume";
 
 type HomePollarAuthProps = {
   returnTo?: string;
@@ -57,6 +69,7 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
   const t = useTranslations("login");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const resumeRef = useRef(false);
 
   const fakeAuth = isPollarFakeAuth();
 
@@ -68,26 +81,74 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
     [onBusyChange],
   );
 
-  async function bridgeWithToken(token: string) {
-    const res = await fetch("/api/auth/pollar/verify", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, returnTo }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(data.error ?? t("failedToSignIn"));
-    }
-    const redirect =
-      typeof data.redirect === "string" && data.redirect.startsWith("/")
-        ? data.redirect
-        : "/onboarding/organizations";
-    window.location.assign(redirect);
-  }
+  const bridgeWithToken = useCallback(
+    async (token: string, nextReturnTo?: string) => {
+      const res = await fetch("/api/auth/pollar/verify", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          returnTo: sanitizeReturnTo(nextReturnTo) ?? sanitizeReturnTo(returnTo),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error ?? t("failedToSignIn"));
+      }
+      const stored = readPollarReturnTo();
+      const redirect =
+        sanitizeReturnTo(typeof data.redirect === "string" ? data.redirect : undefined) ??
+        stored ??
+        "/onboarding/organizations";
+      clearPendingPollarOAuth();
+      window.location.assign(redirect);
+    },
+    [returnTo, t],
+  );
+
+  useEffect(() => {
+    if (fakeAuth || resumeRef.current) return;
+    const pending = readPendingPollarOAuth();
+    if (!pending) return;
+    resumeRef.current = true;
+    setBusyState(true);
+    void (async () => {
+      try {
+        persistPollarReturnTo(returnTo);
+        const apiKey = getPollarPublishableKey();
+        let token: string | null = null;
+        const existing = getPollarBrowserClient();
+        if (existing) {
+          await existing.ready();
+          token = accessTokenFromClient(existing);
+        }
+        if (!token && apiKey) {
+          token = await completeHostedOAuthSession({
+            clientSessionId: pending.clientSessionId,
+            apiKey,
+          });
+          if (token) resetPollarBrowserClient();
+        }
+        if (!token) {
+          clearPendingPollarOAuth();
+          throw new Error(t("failedToSignIn"));
+        }
+        await bridgeWithToken(token, readPollarReturnTo() ?? returnTo);
+      } catch (err) {
+        resumeRef.current = false;
+        const message = err instanceof Error ? err.message : t("failedToSignIn");
+        setError(message);
+        setBusyState(false);
+      }
+    })();
+  }, [bridgeWithToken, fakeAuth, returnTo, setBusyState, t]);
 
   async function handleGoogle() {
     setError("");
+    persistPollarReturnTo(returnTo);
+    // Reserve the OAuth window in this click tick before any await (iOS popup rule).
+    if (!fakeAuth) reservePollarOAuthPopup();
     setBusyState(true);
     try {
       if (fakeAuth) {
@@ -99,6 +160,7 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
 
       const client = getPollarBrowserClient();
       if (!client) {
+        discardReservedPollarOAuthPopup();
         throw new Error(t("pollarNotConfigured"));
       }
 
@@ -106,6 +168,7 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
 
       const reused = accessTokenFromClient(client);
       if (reused) {
+        discardReservedPollarOAuthPopup();
         try {
           await bridgeWithToken(reused);
           return;
@@ -116,12 +179,14 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
 
       const fresh = getPollarBrowserClient();
       if (!fresh) {
+        discardReservedPollarOAuthPopup();
         throw new Error(t("pollarNotConfigured"));
       }
       await fresh.ready();
       const token = await waitForAccessToken(fresh, t("failedToSignIn"));
       await bridgeWithToken(token);
     } catch (err) {
+      discardReservedPollarOAuthPopup();
       const message = err instanceof Error ? err.message : t("failedToSignIn");
       if (message.includes("before initialization")) {
         await logoutPollarBrowserClient();
@@ -135,7 +200,7 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
     <div className="flex w-full max-w-sm flex-col items-stretch gap-3">
       <button
         type="button"
-        onClick={handleGoogle}
+        onClick={() => void handleGoogle()}
         disabled={busy}
         className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-full bg-white px-6 text-sm font-semibold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
       >

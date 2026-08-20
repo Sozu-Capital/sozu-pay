@@ -5,6 +5,7 @@ import { getSession, setSession } from "@/lib/auth/session";
 export const dynamic = "force-dynamic";
 import { clearUserOrgId, getUserBySessionId, promoteOrgCreator } from "@/lib/db/users";
 import { createOrganization, getOrganizationById } from "@/lib/db/organizations";
+import { addOrgMember } from "@/lib/db/org-members";
 import { createOrgInvites, type OrgInviteRole } from "@/lib/db/org-invites";
 import {
   applyOrganizationSozuTag,
@@ -159,6 +160,17 @@ export async function POST(request: NextRequest) {
         { error: "Failed to link organization to user." },
         { status: 500 }
       );
+    }
+
+    const ownerMembership = await addOrgMember(activeUser.id, org.id, "owner");
+    if (!ownerMembership.ok) {
+      console.warn("[profile/org] addOrgMember:", ownerMembership.error);
+    }
+    if (activeUser.org_id && activeUser.org_id !== org.id) {
+      const previous = await addOrgMember(activeUser.id, activeUser.org_id, "owner");
+      if (!previous.ok) {
+        console.warn("[profile/org] preserve previous org membership:", previous.error);
+      }
     }
 
     const nextSession = { ...session, orgId: org.id };

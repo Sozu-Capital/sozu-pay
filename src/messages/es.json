@@ -362,7 +362,8 @@
     "openMenu": "Abrir menú",
     "closeMenu": "Cerrar menú",
     "noOrganization": "Sin organización",
-    "accountFallback": "Tu cuenta"
+    "accountFallback": "Tu cuenta",
+    "switchOrganization": "Cambiar de organización"
   },
   "transactionsPage": {
     "title": "Transacciones",
@@ -464,6 +465,7 @@
       "opening": "Abriendo…",
       "continue": "Continuar al panel →",
       "createNew": "Crear nueva organización",
+      "current": "Actual",
       "noOrgHint": "Aún no tienes una organización vinculada. Puedes crear una arriba o pedir a un admin que te invite a un equipo existente.",
       "signingOut": "Cerrando sesión…",
       "logOut": "Cerrar sesión",
@@ -800,7 +802,19 @@
     "inviteCreateFailed": "No se pudo crear el enlace.",
     "inviteLinkReady": "Compartí este enlace (un solo uso, vence):",
     "inviteExpires": "Vence {at}",
-    "inviteCopy": "Copiar enlace"
+    "inviteCopy": "Copiar enlace",
+    "inviteCopied": "Copiado",
+    "inviteShare": "Compartir",
+    "inviteCopyFailed": "No se pudo copiar el enlace. Mantené presionado el URL para copiarlo.",
+    "rolesTitle": "Administración de roles",
+    "rolesBody": "Admins y tesoreros pueden enviar desde la organización. Los miembros pueden ver.",
+    "rolesSave": "Guardar rol",
+    "rolesSaved": "Rol actualizado.",
+    "rolesFailed": "No se pudo actualizar el rol.",
+    "emailChangeHint": "Correo de contacto en el dashboard. El inicio con Google sigue usando tu cuenta de Google.",
+    "emailSave": "Guardar correo",
+    "emailSaved": "Correo actualizado.",
+    "emailFailed": "No se pudo actualizar el correo."
   },
   "staffInvite": {
     "title": "Unirse a la organización",

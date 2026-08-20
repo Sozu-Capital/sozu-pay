@@ -58,7 +58,7 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
   const user = await getUserBySessionId(session.id);
   if (!user) return null;
 
-  const orgId = session.orgId ?? null;
+  const orgId = session.orgId ?? user.org_id ?? null;
   const org_payout_wallet_public_key = getOrgDisbursementPublicKey();
 
   const [org, memberSa] = await Promise.all([
@@ -81,17 +81,17 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
     org_treasury_contract_id: orgTreasuryContractId,
     needsPayoutWalletSetup:
       user.admin_level === "super_admin" && !hasPayoutKey && !orgHasTreasury && !orgDisbursementContractId,
-    needsOrgCreation: user.admin_level === "super_admin" && !user.org_id,
-    needsOrganization: !user.org_id,
+    needsOrgCreation: user.admin_level === "super_admin" && !orgId,
+    needsOrganization: !orgId,
     needsSmartWalletSetup:
-      !!user.org_id &&
+      !!orgId &&
       memberSa == null &&
       !(pollarUser && !!org?.stellar_disbursement_public_key),
     admin_level: user.admin_level,
     can_manage_disbursements,
     member_smart_account_id: memberSa?.contract_id ?? null,
     smart_wallet_ready: !!memberSa,
-    org_id: user.org_id ?? null,
+    org_id: orgId,
     org_type: org?.type ?? null,
     is_pollar_user: pollarUser,
     is_treasury_owner: isOrgTreasuryOwner(user, org),

@@ -68,7 +68,7 @@ export default function AdminPage() {
   if (forbidden) {
     return (
       <div>
-        <h1 className="text-2xl font-bold">{t("title")}</h1>
+        <h1 className="text-2xl font-bold text-white">{t("title")}</h1>
         <p className="mt-2 text-red-600 dark:text-red-400">{t("forbidden")}</p>
       </div>
     );
@@ -76,7 +76,7 @@ export default function AdminPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">{t("title")}</h1>
+      <h1 className="text-2xl font-bold text-white">{t("title")}</h1>
       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
         {t("subtitle")}
       </p>

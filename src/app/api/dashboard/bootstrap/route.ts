@@ -35,7 +35,7 @@ export async function GET() {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const orgId = session.orgId ?? null;
+  const orgId = session.orgId ?? user.org_id ?? null;
   const org_payout_wallet_public_key = getOrgDisbursementPublicKey();
 
   // Load org and smart account in parallel — only 2 DB calls total.
@@ -53,10 +53,10 @@ export async function GET() {
 
   const needsPayoutWalletSetup =
     user.admin_level === "super_admin" && !hasPayoutKey && !orgHasTreasury && !orgDisbursementContractId;
-  const needsOrgCreation = user.admin_level === "super_admin" && !user.org_id;
-  const needsOrganization = !user.org_id;
+  const needsOrgCreation = user.admin_level === "super_admin" && !orgId;
+  const needsOrganization = !orgId;
   const needsSmartWalletSetup =
-    !!user.org_id &&
+    !!orgId &&
     memberSa == null &&
     !(isPollarMappedUser(user) && org?.stellar_disbursement_public_key);
 
@@ -67,7 +67,7 @@ export async function GET() {
     stellar_public_key: user.stellar_public_key,
     stellar_payout_public_key: user.stellar_payout_public_key ?? null,
     org_payout_wallet_public_key: org_payout_wallet_public_key ?? null,
-    org_id: user.org_id ?? null,
+    org_id: orgId,
     org_type: org?.type ?? null,
     org_stellar_disbursement_public_key: org?.stellar_disbursement_public_key ?? null,
     org_soroban_contract_id: orgDisbursementContractId,

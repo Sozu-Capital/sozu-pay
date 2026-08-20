@@ -38,6 +38,20 @@ export async function getOrganizationById(
   return (data as Organization) ?? null;
 }
 
+/** Orgs this user owns as treasury manager (creator), even if users.org_id moved. */
+export async function getOrgIdsManagedByUser(userId: number): Promise<string[]> {
+  const { data, error } = await getSupabase()
+    .from("organizations")
+    .select("id")
+    .eq("treasury_manager_user_id", userId);
+
+  if (error) {
+    console.error("[organizations] getOrgIdsManagedByUser error:", error.message);
+    return [];
+  }
+  return (data ?? []).map((row) => row.id as string);
+}
+
 export async function getOrganizationForUser(
   orgId: string | null
 ): Promise<Organization | null> {

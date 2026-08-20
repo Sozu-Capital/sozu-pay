@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
-import SendUsdcForm, { type PayoutSuccess, type StellarPayoutBody } from "@/components/SendUsdcForm";
+import { type PayoutSuccess, type StellarPayoutBody } from "@/components/SendUsdcForm";
 import PayoutStatusModal, { type PayoutModalSuccess } from "@/components/PayoutStatusModal";
 import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
 import { executePasskeySorobanPayout } from "@/lib/stellar/smartAccounts/signSorobanPayout";
@@ -625,39 +625,17 @@ export default function PayoutsPage() {
         </div>
       )}
 
-      <section className="mt-8">
+      <section className="mt-8 max-w-lg rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-5">
         <h2 className="text-lg font-semibold">{t("sendUsdcTitle")}</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           {canSendPizza ? t("sendPizzaSubtitle") : t("sendUsdcSubtitle")}
         </p>
-        <SendUsdcForm
-          canSendPizza={canSendPizza}
-          onSubmitting={(summary, body) => {
-            setPayoutModalSummary(summary);
-            setPayoutModalSuccess(null);
-            setPayoutModalError(null);
-            setPayoutModalBatchCount(null);
-            setPendingConfirmBody(body);
-            setPendingBatchBody(null);
-            setPayoutModalStatus("confirm");
-            setPayoutModalOpen(true);
-          }}
-          onSent={(payout) => {
-            setPayoutModalStatus("success");
-            setPayoutModalSuccess(payout);
-            setLastSuccess(payout);
-            loadPayouts();
-          }}
-          onFailed={(error) => {
-            setPayoutModalStatus("failed");
-            setPayoutModalError(error);
-          }}
-          onRequireUnlock={(body) => {
-            setPayoutModalOpen(false);
-            setPendingPayoutBody(body);
-            setShowUnlockModal(true);
-          }}
-        />
+        <Link
+          href="/dashboard/send"
+          className="mt-4 inline-flex rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 text-sm font-medium hover:opacity-90"
+        >
+          {t("sendNewRecipientCta")}
+        </Link>
       </section>
 
       <PayoutStatusModal

@@ -351,6 +351,7 @@
     "actionQRCodes": "QR codes",
     "actionPOS": "POS",
     "actionPaySupplier": "Pay supplier",
+    "actionSend": "Send",
     "actionCashOut": "Withdraw to bank"
   },
   "errors": {
@@ -971,6 +972,7 @@
     "sendUsdcTitle": "Send",
     "sendUsdcSubtitle": "Pay a Sozu tag ($username) or Stellar address. Org admin signs with passkey.",
     "sendPizzaSubtitle": "Pay a Sozu tag or Stellar address in USDC or PIZZA (whole pizzas).",
+    "sendNewRecipientCta": "Send to a Sozu tag or wallet",
     "historyTitle": "Payout history",
     "noPayouts": "No payouts yet.",
     "colDate": "Date",
@@ -981,7 +983,7 @@
     "payoutType": "Payout",
     "view": "View",
     "payoutPasswordTitle": "Enter payout password",
-    "payoutPasswordApprove": "Approve sending {amount} USDC{recipient}{destination}.",
+    "payoutPasswordApprove": "Approve sending {amount} {asset}{recipient}{destination}.",
     "payoutPasswordLabel": "Payout password",
     "payoutPasswordPlaceholder": "Password you set for this org wallet",
     "signing": "Signing…",
@@ -1003,6 +1005,11 @@
     "twoFaLargePayout": "2FA required for large payouts.",
     "batchPayoutFailed": "Batch payout failed."
   },
+  "sendPage": {
+    "title": "Send",
+    "subtitle": "Pay anyone with a Sozu tag or Stellar address. No recipient profile needed.",
+    "subtitleWithPizza": "Pay anyone with a Sozu tag or Stellar address in USDC or PIZZA. No recipient profile needed."
+  },
   "sendUsdcForm": {
     "recipientLabel": "Sozu tag or Stellar address",
     "recipientPlaceholder": "$username or G… / C…",
@@ -1011,6 +1018,7 @@
     "assetLabel": "Asset",
     "assetUsdc": "USDC",
     "assetPizza": "PIZZA",
+    "pizzaUnavailable": "PIZZA is not available for this organization yet.",
     "send": "Send USDC",
     "sendPizza": "Send PIZZA",
     "sending": "Sending…",

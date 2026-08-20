@@ -351,6 +351,7 @@
     "actionQRCodes": "Códigos QR",
     "actionPOS": "POS",
     "actionPaySupplier": "Pagar proveedor",
+    "actionSend": "Enviar",
     "actionCashOut": "Retirar al banco"
   },
   "errors": {
@@ -971,6 +972,7 @@
     "sendUsdcTitle": "Enviar",
     "sendUsdcSubtitle": "Paga a un Sozu tag ($usuario) o dirección Stellar. El admin firma con passkey.",
     "sendPizzaSubtitle": "Paga a un Sozu tag o dirección Stellar en USDC o PIZZA (pizzas enteras).",
+    "sendNewRecipientCta": "Enviar a un Sozu tag o wallet",
     "historyTitle": "Historial de retiros",
     "noPayouts": "Aún no hay retiros.",
     "colDate": "Fecha",
@@ -981,7 +983,7 @@
     "payoutType": "Retiro",
     "view": "Ver",
     "payoutPasswordTitle": "Introduce la contraseña de retiros",
-    "payoutPasswordApprove": "Aprueba el envío de {amount} USDC{recipient}{destination}.",
+    "payoutPasswordApprove": "Aprueba el envío de {amount} {asset}{recipient}{destination}.",
     "payoutPasswordLabel": "Contraseña de retiros",
     "payoutPasswordPlaceholder": "Contraseña que configuraste para la billetera de la org",
     "signing": "Firmando…",
@@ -1003,6 +1005,11 @@
     "twoFaLargePayout": "Se requiere 2FA para retiros grandes.",
     "batchPayoutFailed": "Error en el retiro por lotes."
   },
+  "sendPage": {
+    "title": "Enviar",
+    "subtitle": "Paga a cualquiera con un Sozu tag o una dirección Stellar. No hace falta crear un destinatario.",
+    "subtitleWithPizza": "Paga a cualquiera con un Sozu tag o una dirección Stellar en USDC o PIZZA. No hace falta crear un destinatario."
+  },
   "sendUsdcForm": {
     "recipientLabel": "Sozu tag o dirección Stellar",
     "recipientPlaceholder": "$usuario o G… / C…",
@@ -1011,6 +1018,7 @@
     "assetLabel": "Activo",
     "assetUsdc": "USDC",
     "assetPizza": "PIZZA",
+    "pizzaUnavailable": "PIZZA aún no está disponible para esta organización.",
     "send": "Enviar USDC",
     "sendPizza": "Enviar PIZZA",
     "sending": "Enviando…",

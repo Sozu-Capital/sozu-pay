@@ -10,13 +10,15 @@ import {
   executeAndCompletePollarClientPayout,
   isPollarClientTxChallenge,
 } from "@/lib/pollar/complete-client-payout";
+import { cn } from "@/lib/utils";
+import type { PayoutAsset } from "@/lib/payouts/asset";
 
 export type StellarPayoutBody = {
   amount: string;
   toStellar: true;
   destination: string;
   recipientLabel?: string;
-  asset?: "USDC" | "PIZZA";
+  asset?: PayoutAsset;
 };
 
 export type PayoutSuccess = {
@@ -24,7 +26,7 @@ export type PayoutSuccess = {
   destination: string;
   recipientLabel?: string;
   stellarTxHash?: string;
-  asset?: "USDC" | "PIZZA";
+  asset?: PayoutAsset;
 };
 
 function formatTagLabel(tag: string): string {
@@ -43,7 +45,7 @@ export default function SendUsdcForm({
   onRequireUnlock?: (body: StellarPayoutBody) => void;
   /** When provided, form opens confirm flow (parent shows modal and submits on confirm). Receives summary and body so parent can submit later. */
   onSubmitting?: (
-    summary: { amount: string; destination: string; recipientLabel?: string; asset: "USDC" | "PIZZA" },
+    summary: { amount: string; destination: string; recipientLabel?: string; asset: PayoutAsset },
     body: StellarPayoutBody
   ) => void;
   canSendPizza?: boolean;
@@ -51,12 +53,19 @@ export default function SendUsdcForm({
   const t = useTranslations("sendUsdcForm");
   const [recipientInput, setRecipientInput] = useState("");
   const [amount, setAmount] = useState("");
-  const [asset, setAsset] = useState<"USDC" | "PIZZA">("USDC");
+  const [asset, setAsset] = useState<PayoutAsset>("USDC");
   const [loading, setLoading] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [resolvedAddress, setResolvedAddress] = useState<string | null>(null);
   const [resolvedTag, setResolvedTag] = useState<string | null>(null);
+
+  function selectAsset(next: PayoutAsset) {
+    setAsset(next);
+    if (next === "PIZZA" && amount && !/^[1-9][0-9]*$/.test(amount.trim())) {
+      setAmount("");
+    }
+  }
 
   const directAddress = useMemo(() => {
     const n = normalizeStellarAddressInput(recipientInput);
@@ -279,17 +288,56 @@ export default function SendUsdcForm({
     !resolving &&
     !resolveError;
 
+  const fieldClass =
+    "mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-violet-500";
+
   return (
-    <form onSubmit={handleSubmit} className="mt-3 flex flex-wrap gap-2 items-end max-w-md">
-      <div className="min-w-[16rem] flex-1">
-        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
+    <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+      <div>
+        <p className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t("assetLabel")}</p>
+        <div
+          role="radiogroup"
+          aria-label={t("assetLabel")}
+          className="mt-2 inline-flex rounded-full border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 p-0.5"
+        >
+          {(["USDC", "PIZZA"] as const).map((option) => {
+            const selected = asset === option;
+            const pizzaLocked = option === "PIZZA" && !canSendPizza;
+            return (
+              <button
+                key={option}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                disabled={pizzaLocked}
+                title={pizzaLocked ? t("pizzaUnavailable") : undefined}
+                onClick={() => selectAsset(option)}
+                className={cn(
+                  "rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
+                  selected
+                    ? "bg-gray-900 text-white shadow-sm dark:bg-white dark:text-gray-900"
+                    : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white",
+                  pizzaLocked && "cursor-not-allowed opacity-40 hover:text-gray-600 dark:hover:text-gray-400"
+                )}
+              >
+                {option === "USDC" ? t("assetUsdc") : t("assetPizza")}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <label htmlFor="send-recipient" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           {t("recipientLabel")}
         </label>
         <input
+          id="send-recipient"
           value={recipientInput}
           onChange={(e) => setRecipientInput(e.target.value)}
           placeholder={t("recipientPlaceholder")}
-          className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm"
+          autoComplete="off"
+          className={fieldClass}
         />
         {resolving ? (
           <p className="mt-1 text-xs text-gray-500">{t("resolving")}</p>
@@ -303,45 +351,26 @@ export default function SendUsdcForm({
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("directAddress")}</p>
         ) : null}
       </div>
-      {canSendPizza ? (
-        <div>
-          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
-            {t("assetLabel")}
-          </label>
-          <select
-            value={asset}
-            onChange={(e) => {
-              const next = e.target.value === "PIZZA" ? "PIZZA" : "USDC";
-              setAsset(next);
-              if (next === "PIZZA" && amount && !/^[1-9][0-9]*$/.test(amount.trim())) {
-                setAmount("");
-              }
-            }}
-            className="mt-1 w-28 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm"
-            aria-label={t("assetLabel")}
-          >
-            <option value="USDC">{t("assetUsdc")}</option>
-            <option value="PIZZA">{t("assetPizza")}</option>
-          </select>
-        </div>
-      ) : null}
+
       <div>
-        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
+        <label htmlFor="send-amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           {asset === "PIZZA" ? t("amountLabelPizza") : t("amountLabel")}
         </label>
         <input
+          id="send-amount"
           type="text"
           inputMode={asset === "PIZZA" ? "numeric" : "decimal"}
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          placeholder={asset === "PIZZA" ? "1" : "0"}
-          className="mt-1 w-24 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm"
+          placeholder={asset === "PIZZA" ? "1" : "0.00"}
+          className={fieldClass}
         />
       </div>
+
       <button
         type="submit"
         disabled={loading || !canSubmit}
-        className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm disabled:opacity-50"
+        className="w-full rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 py-2.5 px-4 font-medium hover:opacity-90 disabled:opacity-50"
       >
         {loading ? t("sending") : asset === "PIZZA" ? t("sendPizza") : t("send")}
       </button>

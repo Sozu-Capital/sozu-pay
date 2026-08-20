@@ -14,7 +14,9 @@ describe("storeDashboardNavLinks", () => {
 
     assert.ok(hrefs.includes("/dashboard/pos"));
     assert.ok(hrefs.includes("/dashboard/qr-codes"));
+    assert.ok(hrefs.includes("/dashboard/send"));
     assert.ok(kinds.includes("pos"));
+    assert.ok(kinds.includes("send"));
     assert.equal(kinds.filter((k) => k === "pos").length, 1);
 
     assert.ok(!hrefs.includes("/dashboard/checkout"));
@@ -31,6 +33,8 @@ describe("storeHomeActions", () => {
     assert.equal(kinds[0], "pos");
     assert.ok(hrefs.includes("/dashboard/pos"));
     assert.ok(hrefs.includes("/dashboard/qr-codes"));
+    assert.ok(hrefs.includes("/dashboard/send"));
+    assert.ok(kinds.includes("send"));
     assert.ok(!hrefs.includes("/dashboard/checkout"));
   });
 });
@@ -42,12 +46,12 @@ describe("ngoDashboardNavLinks", () => {
     assert.ok(!links.some((l) => l.kind === "pos"));
   });
 
-  it("is Send-first: payouts before recipients, people indented", () => {
+  it("is Send-first: new recipient send before people, people indented", () => {
     const links = ngoDashboardNavLinks({ showDisbursements: true });
     const sendIdx = links.findIndex((l) => l.kind === "send");
     const peopleIdx = links.findIndex((l) => l.kind === "people");
     assert.ok(sendIdx >= 0);
-    assert.equal(links[sendIdx]!.href, "/dashboard/payouts");
+    assert.equal(links[sendIdx]!.href, "/dashboard/send");
     assert.ok(peopleIdx > sendIdx);
     assert.equal(links[peopleIdx]!.href, "/dashboard/recipients");
     assert.equal(links[peopleIdx]!.indent, true);

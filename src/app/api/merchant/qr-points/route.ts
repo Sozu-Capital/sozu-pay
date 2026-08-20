@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { createQRPoint, listQRPointsForOrg } from "@/lib/db/merchant-qr-points";
+import { listSubmittedPizzaRedeemsForOrg } from "@/lib/db/pizza-redeems";
 import { getLatestPendingCheckoutForOrg } from "@/lib/db/checkout-sessions";
 import {
   destinationRefForQrCreate,
   parseQrPointDestinationType,
 } from "@/lib/dashboard/merchant-qr";
+import { foldSubmittedPizzaDeposits } from "@/lib/pizza/deposits";
 
 /**
  * GET /api/merchant/qr-points
@@ -25,7 +27,14 @@ export async function GET() {
   }
 
   const qrPoints = await listQRPointsForOrg(orgId);
-  return NextResponse.json({ qrPoints });
+  const deposits = foldSubmittedPizzaDeposits(await listSubmittedPizzaRedeemsForOrg(orgId));
+  return NextResponse.json({
+    qrPoints: qrPoints.map((point) => ({
+      ...point,
+      pizzasDeposited: deposits.byQrPointId[point.id] ?? 0,
+    })),
+    orgPizzasDeposited: deposits.orgTotal,
+  });
 }
 
 /**

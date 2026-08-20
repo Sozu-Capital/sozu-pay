@@ -83,6 +83,7 @@ export default async function PayQRPage({ params, searchParams }: Props) {
 
   if (route.kind === "pizza_sku") {
     const sp = await searchParams;
+    const walletOrigin = getWalletOrigin();
     const next = nextPizzaSkuGuestAction(
       {
         intent: sp.intent,
@@ -90,16 +91,22 @@ export default async function PayQRPage({ params, searchParams }: Props) {
         pizza: sp.pizza,
         guest: sp.guest,
       },
-      { payUrl: merchantQrPayUrl(slug), walletOrigin: getWalletOrigin() },
+      { payUrl: merchantQrPayUrl(slug), walletOrigin },
     );
 
     if (next.kind === "intent") {
       const redeem = await getPizzaRedeem(next.intentId);
       if (redeem && redeem.qrPointId === qr.id && redeem.status === "submitted") {
-        return <PizzaClaimedConfirmation pointName={route.name} />;
+        return <PizzaClaimedConfirmation pointName={route.name} walletOrigin={walletOrigin} />;
       }
       if (redeem && redeem.qrPointId === qr.id) {
-        return <PizzaRedeemPoller intentId={next.intentId} pointName={route.name} />;
+        return (
+          <PizzaRedeemPoller
+            intentId={next.intentId}
+            pointName={route.name}
+            walletOrigin={walletOrigin}
+          />
+        );
       }
       return <MargheritaSkuPage pointName={route.name} />;
     }

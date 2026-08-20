@@ -2,7 +2,25 @@
 
 import { useEffect, useState } from "react";
 
-export function PizzaClaimedConfirmation({ pointName }: { pointName: string }) {
+import { pizzaPayerThanks, pizzaPayerWalletHomeUrl } from "@/lib/pizza/deposits";
+
+export function PizzaClaimedConfirmation({
+  pointName,
+  walletOrigin,
+}: {
+  pointName: string;
+  walletOrigin: string;
+}) {
+  const thanks = pizzaPayerThanks(pointName);
+  const walletHome = pizzaPayerWalletHomeUrl(walletOrigin);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      window.location.assign(walletHome);
+    }, 5000);
+    return () => window.clearTimeout(id);
+  }, [walletHome]);
+
   return (
     <main className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
       <div className="w-full max-w-sm rounded-xl border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-gray-800 p-6 text-center">
@@ -11,10 +29,15 @@ export function PizzaClaimedConfirmation({ pointName }: { pointName: string }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <p className="text-lg font-semibold text-gray-900 dark:text-white">Pizza claimed</p>
-        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-          1 PIZZA credited to {pointName}. This chip stays live for the next guest.
-        </p>
+        <p className="text-lg font-semibold text-gray-900 dark:text-white">{thanks.title}</p>
+        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{thanks.body}</p>
+        <a
+          href={walletHome}
+          className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-gray-900 dark:bg-gray-100 px-4 py-3 text-sm font-medium text-white dark:text-gray-900"
+        >
+          Continue in Sozu
+        </a>
+        <p className="mt-3 text-xs text-gray-400">Taking you to app.sozu.capital…</p>
       </div>
     </main>
   );
@@ -23,9 +46,11 @@ export function PizzaClaimedConfirmation({ pointName }: { pointName: string }) {
 export function PizzaRedeemPoller({
   intentId,
   pointName,
+  walletOrigin,
 }: {
   intentId: string;
   pointName: string;
+  walletOrigin: string;
 }) {
   const [claimed, setClaimed] = useState(false);
 
@@ -48,7 +73,7 @@ export function PizzaRedeemPoller({
   }, [intentId]);
 
   if (claimed) {
-    return <PizzaClaimedConfirmation pointName={pointName} />;
+    return <PizzaClaimedConfirmation pointName={pointName} walletOrigin={walletOrigin} />;
   }
 
   return (

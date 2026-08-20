@@ -14,11 +14,14 @@ type QRPoint = {
   destinationRef: string | null;
   isOnline: boolean;
   createdAt: string;
+  pizzasDeposited: number;
 };
 
 export default function QRCodesPage() {
   const t = useTranslations("qrNfcPage");
   const [qrPoints, setQRPoints] = useState<QRPoint[]>([]);
+  const [orgPizzasDeposited, setOrgPizzasDeposited] = useState(0);
+  const [openPointId, setOpenPointId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
@@ -38,7 +41,15 @@ export default function QRCodesPage() {
     setLoading(true);
     fetch("/api/merchant/qr-points")
       .then((r) => (r.ok ? r.json() : { qrPoints: [] }))
-      .then((d) => setQRPoints(d.qrPoints ?? []))
+      .then((d) => {
+        setQRPoints(
+          (d.qrPoints ?? []).map((p: QRPoint) => ({
+            ...p,
+            pizzasDeposited: Number(p.pizzasDeposited) || 0,
+          })),
+        );
+        setOrgPizzasDeposited(Number(d.orgPizzasDeposited) || 0);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -111,7 +122,10 @@ export default function QRCodesPage() {
     if (!confirm(t("confirmDelete", { name: pointName }))) return;
     try {
       const res = await fetch(`/api/merchant/qr-points/${id}`, { method: "DELETE" });
-      if (res.ok) load();
+      if (res.ok) {
+        if (openPointId === id) setOpenPointId(null);
+        load();
+      }
     } catch (err) {
       console.error("Failed to delete point:", err);
     }
@@ -290,6 +304,9 @@ export default function QRCodesPage() {
 
       <div className="mt-8">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t("listTitle")}</h2>
+        {!loading && (
+          <p className="mt-2 text-sm text-gray-400">{t("orgAccountPizzas", { count: orgPizzasDeposited })}</p>
+        )}
         {loading ? (
           <div className="mt-4 space-y-3">
             {[0, 1, 2].map((i) => (
@@ -300,12 +317,23 @@ export default function QRCodesPage() {
           <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">{t("empty")}</p>
         ) : (
           <div className="mt-4 space-y-3">
-            {qrPoints.map((qr) => (
+            {qrPoints.map((qr) => {
+              const isOpen = openPointId === qr.id;
+              return (
               <div
                 key={qr.id}
-                className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-4"
+                className={`rounded-lg border bg-white dark:bg-gray-800/50 p-4 ${
+                  isOpen
+                    ? "border-indigo-400 dark:border-indigo-500"
+                    : "border-gray-200 dark:border-gray-700"
+                }`}
               >
-                <div className="flex items-start justify-between gap-4">
+                <button
+                  type="button"
+                  onClick={() => setOpenPointId(isOpen ? null : qr.id)}
+                  aria-expanded={isOpen}
+                  className="flex w-full items-start justify-between gap-4 text-left rounded-md -m-1 p-1 hover:bg-gray-50 dark:hover:bg-gray-800/80"
+                >
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-medium text-gray-900 dark:text-white">{qr.name}</h3>
@@ -328,10 +356,8 @@ export default function QRCodesPage() {
                         {qr.isOnline ? t("online") : t("offline")}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 break-all font-mono">
-                      {getPointUrl(qr)}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                    <p className="mt-1 text-sm text-gray-400 break-all font-mono">{getPointUrl(qr)}</p>
+                    <p className="text-xs text-gray-400 mt-1">
                       {qr.destinationType === "checkout"
                         ? qr.destinationRef
                           ? t("liveCheckoutLinked", { id: qr.destinationRef })
@@ -339,6 +365,9 @@ export default function QRCodesPage() {
                         : qr.destinationType === "pizza_sku"
                           ? t("pizzaSkuLinked")
                           : t("customUrlLinked", { url: qr.destinationRef ?? "" })}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-300 mt-1">
+                      {t("pizzasOnCard", { count: qr.pizzasDeposited })}
                     </p>
                   </div>
                   {qr.pointType === "qr" && (
@@ -348,15 +377,44 @@ export default function QRCodesPage() {
                       className="w-20 h-20 rounded border border-gray-200 dark:border-gray-700 shrink-0"
                     />
                   )}
-                </div>
+                </button>
+                {isOpen && (
+                  <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4 space-y-2">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      {t("orgAccountPizzas", { count: orgPizzasDeposited })}
+                    </p>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                      {t("thisChipPizzas", { count: qr.pizzasDeposited })}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <a
+                        href={getPointUrl(qr)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 text-sm font-medium"
+                      >
+                        {t("openPayUrl")}
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setOpenPointId(null)}
+                        className="rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700"
+                      >
+                        {t("closePoint")}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="mt-4 flex items-center gap-2">
                   <button
+                    type="button"
                     onClick={() => handleToggleOnline(qr.id, qr.isOnline)}
                     className="rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700"
                   >
                     {qr.isOnline ? t("takeOffline") : t("bringOnline")}
                   </button>
                   <button
+                    type="button"
                     onClick={() => handleDelete(qr.id, qr.name)}
                     className="rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 px-3 py-1.5 text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/20"
                   >
@@ -364,7 +422,8 @@ export default function QRCodesPage() {
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -4,10 +4,10 @@
 
 **Blocked by:** 04
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Contract file lists exact URL patterns and inactive-redirect behavior
-- [ ] QR / pasted pay.sozu.capital URLs that match `/{store}/{checkout}` are documented as wallet-openable
-- [ ] Inactive named URLs are documented as “follow redirect to store landing” (or open native store landing)
-- [ ] Google in the wallet is documented as `openAuthSessionAsync` / AuthSession, never a Safari/Chrome tab
-- [ ] POS and pizza slug routes remain documented so the wallet does not regress
+- [x] Contract file lists exact URL patterns and inactive-redirect behavior
+- [x] QR / pasted pay.sozu.capital URLs that match `/{store}/{checkout}` are documented as wallet-openable
+- [x] Inactive named URLs are documented as “follow redirect to store landing” (or open native store landing)
+- [x] Google in the wallet is documented as `openAuthSessionAsync` / AuthSession, never a Safari/Chrome tab
+- [x] POS and pizza slug routes remain documented so the wallet does not regress

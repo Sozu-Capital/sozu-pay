@@ -304,7 +304,17 @@
     "colAmount": "Amount",
     "colRef": "Reference",
     "colStatus": "Status",
-    "confirmDelete": "Delete this payment link?"
+    "confirmDelete": "Delete this payment link?",
+    "standingTitle": "Standing checkouts",
+    "standingSubtitle": "Named URLs that keep working after each sale. Turn them off or set a deadline.",
+    "storeSlugLabel": "Store slug",
+    "checkoutSlugLabel": "Checkout name (URL slug)",
+    "deadlineLabel": "Deadline (optional)",
+    "standingCreate": "Create standing checkout",
+    "standingLive": "Live",
+    "standingOff": "Off",
+    "standingTurnOff": "Turn off",
+    "standingTurnOn": "Turn on"
   },
   "posPage": {
     "title": "POS",

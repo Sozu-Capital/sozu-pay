@@ -4,10 +4,10 @@
 
 **Blocked by:** 03
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `namedCheckoutUrl(storeSlug, checkoutSlug)` returns `{origin}/{store}/{checkout}` on the SozuPay host
-- [ ] Path parse distinguishes reserved routes, store landing, and named checkout
-- [ ] Checkout slug rules match public-name constraints (lowercase, unique per store)
-- [ ] Existing `checkoutSessionUrl` behavior for POS ids is unchanged
-- [ ] Tests live next to `checkout-url` tests
+- [x] `namedCheckoutUrl(storeSlug, checkoutSlug)` returns `{origin}/{store}/{checkout}` on the SozuPay host
+- [x] Path parse distinguishes reserved routes, store landing, and named checkout
+- [x] Checkout slug rules match public-name constraints (lowercase, unique per store)
+- [x] Existing `checkoutSessionUrl` behavior for POS ids is unchanged
+- [x] Tests live next to `checkout-url` tests

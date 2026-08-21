@@ -21,6 +21,7 @@ import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
 import { usableClassicTreasuryPublicKey } from "@/lib/pollar/types";
 import { resolveCreateOrganizationType } from "@/lib/org/resolve-create-type";
 import { staffTreasuryAlreadyBound } from "@/lib/org/accessible-orgs";
+import { ensureOrgStoreSlug } from "@/lib/db/store-slugs";
 import { randomUUID } from "crypto";
 
 /**
@@ -158,6 +159,7 @@ export async function POST(request: NextRequest) {
       treasury_guardian_threshold: pollarPath ? 1 : guardianThreshold,
       stellar_disbursement_public_key: treasuryPublicKey,
     });
+    await ensureOrgStoreSlug(org.id);
 
     if (invites.length > 0) {
       const inviteRows = invites.map((i) => ({

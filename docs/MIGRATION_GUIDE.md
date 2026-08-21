@@ -85,6 +85,12 @@ Extends `destination_type` with `pizza_sku`. `/pay/qr/{slug}` stays a standing M
 
 Creates `pizza_redeems` (pending | signed | submitted | failed). Independent of `checkout_sessions`.
 
+### Step 7d: Standing checkouts + store slugs
+
+**File:** `docs/07-reference/supabase-standing-checkouts.sql`
+
+Adds `organizations.store_slug` / `store_slug_previous` and `standing_checkouts` for durable Named Checkout URLs (`/{store-slug}/{checkout-slug}`). Completing a payment attempt must not flip the standing row off.
+
 ### Step 8: Merchant off-ramp withdrawal queue
 
 **File:** `docs/07-reference/supabase-withdrawal-requests-ramp.sql`

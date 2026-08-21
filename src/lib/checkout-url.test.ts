@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { checkoutSessionUrl, getCheckoutBaseUrl } from "./checkout-url.js";
+import { namedCheckoutUrl, storeLandingUrl } from "./named-checkout/urls.js";
 
 describe("getCheckoutBaseUrl", () => {
   it("uses the SozuPay app URL, not SozuCredit", () => {
@@ -14,6 +15,11 @@ describe("getCheckoutBaseUrl", () => {
         checkoutSessionUrl("cs_test"),
         "https://pay.sozu.capital/checkout/cs_test",
       );
+      assert.equal(
+        namedCheckoutUrl("maria_cafe", "almuerzo"),
+        "https://pay.sozu.capital/maria_cafe/almuerzo",
+      );
+      assert.equal(storeLandingUrl("maria_cafe"), "https://pay.sozu.capital/maria_cafe");
     } finally {
       if (prevApp === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
       else process.env.NEXT_PUBLIC_APP_URL = prevApp;

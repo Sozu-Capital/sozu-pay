@@ -48,11 +48,10 @@ export async function createCheckoutSession(params: {
   allowDebit?: boolean;
   allowCredit?: boolean;
   allowBankTransfer?: boolean;
+  standingCheckoutId?: string;
 }): Promise<CheckoutSession> {
   const now = new Date().toISOString();
-  const { data, error } = await getSupabase()
-    .from("checkout_sessions")
-    .insert({
+  const row: Record<string, unknown> = {
       id: params.id,
       org_id: params.orgId,
       amount_usd: params.amountUsd,
@@ -73,7 +72,11 @@ export async function createCheckoutSession(params: {
       expires_at: params.expiresAt ?? null,
       created_at: now,
       updated_at: now,
-    })
+  };
+  if (params.standingCheckoutId) row.standing_checkout_id = params.standingCheckoutId;
+  const { data, error } = await getSupabase()
+    .from("checkout_sessions")
+    .insert(row)
     .select()
     .single();
 
@@ -248,7 +251,7 @@ export async function softDeleteCheckoutSession(
   return true;
 }
 
-/** One live checkout per org — supersede older pending links when a new one is created. */
+/** One live POS checkout per org — supersede older pending POS links. Standing checkouts live in a different table and are not selected. */
 export async function expirePendingCheckoutSessionsForOrg(
   orgId: string,
   exceptId: string,

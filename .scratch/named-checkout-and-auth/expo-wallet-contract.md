@@ -36,7 +36,9 @@ QR scanner: if the scanned string is an https URL on the checkout host, parse pa
 Dashboard will 302 `/{store}/{checkout}` → `/{store}` when the standing offer is off or past deadline. Wallet should:
 
 1. Request the named URL (follow redirects), or
-2. Call a public JSON endpoint if one is added later (`GET /api/checkout/named?store=&checkout=`).
+2. Call `GET /api/checkout/named?store={storeSlug}&checkout={checkoutSlug}` (omit `checkout` for the store landing JSON).
+
+Response `kind`: `pay` | `store-landing` | `not-found`. When `store-landing`, open native store landing (`redirect` is `/{storeSlug}`).
 
 Do not show “payment complete” or “link not found” for an **Inactive checkout** when the store exists. Show the store.
 

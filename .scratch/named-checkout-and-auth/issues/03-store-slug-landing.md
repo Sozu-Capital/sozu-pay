@@ -4,11 +4,11 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Store slug prefers **Org Sozu tag**; otherwise a unique slug from the org display name
-- [ ] `/{store-slug}` renders a public landing for a known store
-- [ ] Unknown store slug is not-found (not redirected to `/`)
-- [ ] Reserved routes (`dashboard`, `checkout`, `auth`, …) are never captured as store slugs
-- [ ] URL helper seam covers landing URL and reserved-segment rejection
-- [ ] Changing Org Sozu tag moves the public slug; the old slug redirects to the new landing
+- [x] Store slug prefers **Org Sozu tag**; otherwise a unique slug from the org display name
+- [x] `/{store-slug}` renders a public landing for a known store
+- [x] Unknown store slug is not-found (not redirected to `/`)
+- [x] Reserved routes (`dashboard`, `checkout`, `auth`, …) are never captured as store slugs
+- [x] URL helper seam covers landing URL and reserved-segment rejection
+- [x] Changing Org Sozu tag moves the public slug; the old slug redirects to the new landing

@@ -7,6 +7,8 @@ import {
   normalizePublicSlug,
 } from "@/lib/named-checkout";
 
+export const dynamic = "force-dynamic";
+
 type Props = { params: Promise<{ storeSlug: string; checkoutSlug: string }> };
 
 export default async function NamedCheckoutPage({ params }: Props) {

@@ -9,6 +9,8 @@ import {
   storeLandingDestination,
 } from "@/lib/named-checkout";
 
+export const dynamic = "force-dynamic";
+
 type Props = { params: Promise<{ storeSlug: string }> };
 
 export default async function StoreLandingPage({ params }: Props) {

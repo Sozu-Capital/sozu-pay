@@ -17,6 +17,8 @@ export type Organization = {
   referral_code: string | null;
   sozu_tag_auth_user_id: string | null;
   treasury_smart_account_address: string | null;
+  store_slug?: string | null;
+  store_slug_previous?: string | null;
   created_at: string;
   updated_at: string;
 };

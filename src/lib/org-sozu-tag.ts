@@ -12,6 +12,7 @@ import { resolveOrgReceiveAddress } from "@/lib/org-receive-address";
 import { getUserByUsername } from "@/lib/db/users";
 import { suggestOrgTagFromOrgName } from "@/lib/sozu-tag-suggest";
 import { isFakePollarStaffWallet } from "@/lib/pollar/types";
+import { applyStoreSlugForNewTag } from "@/lib/db/store-slugs";
 
 function stellarWalletUserColumn(): string {
   return process.env.SOZUPAY_STELLAR_WALLET_USER_ID_COLUMN?.trim() || "user_id";
@@ -238,6 +239,8 @@ export async function applyOrganizationSozuTag(params: {
 
   const w = await upsertStellarWallet(sb, authUserId, destination);
   if (!w.ok) return { ok: false, status: 502, error: w.error };
+
+  await applyStoreSlugForNewTag(org.id, username);
 
   return { ok: true, username, sozuTagAuthUserId: authUserId };
 }

@@ -304,7 +304,17 @@
     "colAmount": "Monto",
     "colRef": "Referencia",
     "colStatus": "Estado",
-    "confirmDelete": "¿Eliminar este enlace de pago?"
+    "confirmDelete": "¿Eliminar este enlace de pago?",
+    "standingTitle": "Checkouts permanentes",
+    "standingSubtitle": "URLs con el nombre de tu tienda que siguen andando después de cada venta. Podés apagarlas o ponerles fecha de vencimiento.",
+    "storeSlugLabel": "Slug de la tienda",
+    "checkoutSlugLabel": "Nombre del checkout (slug de la URL)",
+    "deadlineLabel": "Vencimiento (opcional)",
+    "standingCreate": "Crear checkout permanente",
+    "standingLive": "Activo",
+    "standingOff": "Apagado",
+    "standingTurnOff": "Apagar",
+    "standingTurnOn": "Prender"
   },
   "posPage": {
     "title": "POS",

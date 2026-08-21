@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { CheckoutPreviewCard } from "@/components/CheckoutPreviewCard";
 import ReceiptModal from "@/components/ReceiptModal";
+import { StandingCheckoutPanel } from "@/components/StandingCheckoutPanel";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 
 type Session = {
@@ -450,6 +451,8 @@ export default function CheckoutPage() {
           </div>
         )}
       </section>
+
+      <StandingCheckoutPanel />
 
       {/* Receipt Modal */}
       <ReceiptModal

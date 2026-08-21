@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 import ReceiptModal, { ReceiptSession, ReceiptTransaction } from "@/components/ReceiptModal";
@@ -114,12 +115,12 @@ export default function DashboardTransactions() {
           </table>
         </div>
       )}
-      <a
+      <Link
         href="/dashboard/transactions"
         className="inline-block mt-3 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
       >
         {t("viewAll")}
-      </a>
+      </Link>
 
       <ReceiptModal
         open={showModal}

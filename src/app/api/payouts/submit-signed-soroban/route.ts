@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getSession } from "@/lib/auth/session";
-import { getUserBySessionId } from "@/lib/db/users";
+import { requireStellarPayoutAccess } from "@/lib/auth/disbursement-auth";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getPayoutById, getPayoutByIdAsync, completePayout, failPayout, ensurePendingPayout } from "@/lib/payouts";
@@ -20,10 +20,9 @@ export async function POST(request: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const user = await getUserBySessionId(session.id);
-  if (!user || (user.admin_level !== "super_admin" && user.admin_level !== "admin")) {
-    return NextResponse.json({ error: "Only admins can submit Soroban payouts." }, { status: 403 });
-  }
+  const gate = await requireStellarPayoutAccess(session.id);
+  if (!gate.ok) return gate.response;
+  const user = gate.user;
 
   const body = await request.json().catch(() => ({}));
   const signedEnvelopeXdr = typeof body.signedEnvelopeXdr === "string" ? body.signedEnvelopeXdr.trim() : "";

@@ -828,6 +828,8 @@
     "storesCurrentFallback": "Your organization",
     "storesNoOrg": "You don’t have a store organization yet.",
     "storesCreateCta": "Create your store",
+    "storesSwitchOrg": "Switch organization",
+    "storesCreateAnother": "Create another organization",
     "inviteTitle": "Staff invite links",
     "inviteBody": "Create a one-time link. The invitee signs in with Google and joins the organization you are viewing now.",
     "inviteForOrg": "Inviting to {org}",

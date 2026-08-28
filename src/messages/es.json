@@ -828,6 +828,8 @@
     "storesCurrentFallback": "Tu organización",
     "storesNoOrg": "Aún no tenés una organización tienda.",
     "storesCreateCta": "Crear tu tienda",
+    "storesSwitchOrg": "Cambiar de organización",
+    "storesCreateAnother": "Crear otra organización",
     "inviteTitle": "Enlaces de invitación de staff",
     "inviteBody": "Creá un enlace de un solo uso. Quien lo abra inicia sesión con Google y se une a la organización que estás viendo ahora.",
     "inviteForOrg": "Invitar a {org}",

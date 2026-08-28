@@ -5,7 +5,7 @@ import { getSession, setSession } from "@/lib/auth/session";
 export const dynamic = "force-dynamic";
 import { clearUserOrgId, getUserBySessionId, promoteOrgCreator } from "@/lib/db/users";
 import { createOrganization, getOrgIdsByTreasuryPublicKey, getOrganizationById } from "@/lib/db/organizations";
-import { addOrgMember } from "@/lib/db/org-members";
+import { addOrgMember, upsertOrgMember } from "@/lib/db/org-members";
 import { createOrgInvites, type OrgInviteRole } from "@/lib/db/org-invites";
 import {
   applyOrganizationSozuTag,
@@ -20,7 +20,7 @@ import { createOrgTreasuryProvisioner } from "@/lib/pollar/org-treasury";
 import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
 import { usableClassicTreasuryPublicKey } from "@/lib/pollar/types";
 import { resolveCreateOrganizationType } from "@/lib/org/resolve-create-type";
-import { staffTreasuryAlreadyBound } from "@/lib/org/accessible-orgs";
+import { staffTreasuryAlreadyBound, staffGForNewOrg } from "@/lib/org/accessible-orgs";
 import { randomUUID } from "crypto";
 
 /**
@@ -124,19 +124,10 @@ export async function POST(request: NextRequest) {
 
     if (pollarPath && treasuryPublicKey) {
       const claimed = await getOrgIdsByTreasuryPublicKey(treasuryPublicKey);
-      if (staffTreasuryAlreadyBound(claimed)) {
-        const existing = await getOrganizationById(claimed[0]!);
-        return NextResponse.json(
-          {
-            error: existing
-              ? `Your Pollar wallet already funds ${existing.name}. Switch to that organization — a second org cannot share the same treasury.`
-              : "Your Pollar wallet already funds another organization. Switch to it instead of creating a duplicate.",
-            code: "TREASURY_ALREADY_BOUND",
-            existingOrgId: claimed[0],
-          },
-          { status: 409 },
-        );
-      }
+      treasuryPublicKey = staffGForNewOrg({
+        staffPublicKey: treasuryPublicKey,
+        alreadyBound: staffTreasuryAlreadyBound(claimed),
+      });
     }
 
     const org = await createOrganization({
@@ -169,7 +160,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ownerMembership = await addOrgMember(activeUser.id, org.id, "owner");
+    const ownerMembership = await upsertOrgMember(activeUser.id, org.id, "owner");
     if (!ownerMembership.ok) {
       console.warn("[profile/org] addOrgMember:", ownerMembership.error);
     }

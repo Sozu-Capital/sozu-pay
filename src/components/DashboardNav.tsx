@@ -66,7 +66,9 @@ function NavLink({
 export function DashboardNav({ onNavigate }: { onNavigate?: () => void } = {}) {
   const { profile } = useDashboardProfile() ?? { profile: null };
   const isAdmin =
-    profile?.admin_level === "admin" || profile?.admin_level === "super_admin";
+    profile?.admin_level === "admin" ||
+    profile?.admin_level === "super_admin" ||
+    profile?.can_manage_disbursements === true;
   const isStore = profile?.org_type === "store";
   const showDisbursementsNav = !isStore && !!profile?.org_id;
   const t = useTranslations("nav");

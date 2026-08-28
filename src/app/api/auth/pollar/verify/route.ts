@@ -10,6 +10,7 @@ import { isFakePollarStaffWallet, PollarTokenVerifyError } from "@/lib/pollar/ty
 import { getOrCreateUserByPollar, updateUserStellarPublicKey } from "@/lib/db/users";
 import { listAccessibleOrgIds } from "@/lib/db/org-members";
 import { planPollarLoginDestination } from "@/lib/org/accessible-orgs";
+import { repairOrgCreatorAccess } from "@/lib/auth/disbursement-auth";
 
 
 export const dynamic = "force-dynamic";
@@ -66,6 +67,8 @@ export async function POST(request: NextRequest) {
       preservedOrgId: previous?.orgId ?? null,
       returnTo,
     });
+
+    user = await repairOrgCreatorAccess(user, plan.sessionOrgId ?? user.org_id).catch(() => user);
 
     if (plan.sessionOrgId && plan.redirect === "/dashboard") {
       const sessionUser: SessionUser = {

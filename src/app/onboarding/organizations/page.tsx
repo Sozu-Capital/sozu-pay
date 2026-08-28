@@ -32,7 +32,7 @@ export default function OrganizationsPage() {
       .then(async (d) => {
         const orgs: Org[] = d.organizations ?? [];
         setOrganizations(orgs);
-        setCanCreate(d.canCreate !== false && orgs.length === 0);
+        setCanCreate(d.canCreate !== false);
         setActiveOrgId(typeof d.activeOrgId === "string" ? d.activeOrgId : null);
         if (orgs.length === 1) {
           setSelectingId(orgs[0].id);

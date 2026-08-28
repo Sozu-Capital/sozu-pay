@@ -673,6 +673,20 @@ export default function SettingsPage() {
                 </Link>
               </div>
             )}
+            <div className="mt-4 flex flex-wrap gap-3 text-sm">
+              <Link
+                href="/onboarding/organizations"
+                className="font-medium text-emerald-700 dark:text-emerald-400 underline-offset-2 hover:underline"
+              >
+                {t("storesSwitchOrg")}
+              </Link>
+              <Link
+                href="/onboarding/create-organization"
+                className="font-medium text-emerald-700 dark:text-emerald-400 underline-offset-2 hover:underline"
+              >
+                {t("storesCreateAnother")}
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="mt-3 space-y-2">

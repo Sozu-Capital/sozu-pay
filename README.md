@@ -103,7 +103,7 @@ Run migrations in Supabase SQL Editor if tables don't exist: [docs/07-reference/
 
 ## Local tests
 
-Vercel preview URLs cannot complete Pollar Google login: the OAuth callback is not on Pollar’s allowlist. Use the local suite instead:
+Automated tests do **not** need real Google. `test:e2e` starts Next on port 3010 with `POLLAR_FAKE_AUTH` so **Continue with Google** does not open an OAuth window. Org create then provisions a **real Stellar testnet G** (Friendbot + USDC trustline).
 
 ```bash
 bun run test        # unit tests
@@ -111,7 +111,15 @@ bun run test:e2e    # Playwright against a local Next server with fake Pollar
 bun run test:local  # both
 ```
 
-`test:e2e` starts Next on port 3010 with `POLLAR_FAKE_AUTH` so **Continue with Google** does not open a real OAuth window. Org create then provisions a **real Stellar testnet G** (Friendbot + USDC trustline) so checkout payments are on-chain — not the fake Pollar sentinel wallet.
+Real Pollar Google login needs each origin allowlisted in [Pollar Dashboard → Build → Domains](https://dashboard.pollar.xyz) (no wildcards). Use these hosts:
+
+| Host | What it is |
+|------|------------|
+| `http://localhost:3000` | Local `npm run dev` with real Pollar keys |
+| `https://dev.pay.sozu.capital` | Vercel Preview for branch `dev` |
+| `https://pay.sozu.capital` | Vercel Production (`prod`) |
+
+Do not test Google on unique `*.vercel.app` SHA URLs — those are not on Pollar’s list.
 
 ---
 

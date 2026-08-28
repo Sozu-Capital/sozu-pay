@@ -122,6 +122,19 @@ export function staffTreasuryAlreadyBound(existingOrgIds: string[]): boolean {
   return existingOrgIds.some((id) => typeof id === "string" && id.length > 0);
 }
 
+/**
+ * Bind the creator's Staff G only when no org already uses it.
+ * Otherwise leave null so testnet provisioner creates a unique treasury G.
+ */
+export function staffGForNewOrg(params: {
+  staffPublicKey: string | null;
+  alreadyBound: boolean;
+}): string | null {
+  if (params.alreadyBound) return null;
+  const g = (params.staffPublicKey ?? "").trim();
+  return g.startsWith("G") && g.length >= 56 ? g : null;
+}
+
 export function planPollarLoginDestination(params: {
   orgIds: string[];
   primaryOrgId: string | null;

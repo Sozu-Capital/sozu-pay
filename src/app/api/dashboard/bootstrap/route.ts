@@ -7,7 +7,7 @@ import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
 import { resolveOrgDisbursementContractId, resolveOrgTreasuryContractId } from "@/lib/stellar/org-treasury";
 import { isUserDerivedEncrypted } from "@/lib/org-wallet-encryption";
-import { canManageDisbursements, isOrgTreasuryOwner } from "@/lib/auth/disbursement-auth";
+import { canManageDisbursements, isOrgTreasuryOwner, repairOrgCreatorAccess } from "@/lib/auth/disbursement-auth";
 import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
 import { isPizzaTokenConfigured } from "@/lib/stellar/pizza-token";
 import { getUsdcBalance } from "@/lib/stellar/balance";
@@ -33,7 +33,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const user = await getUserBySessionId(session.id);
+  let user = await getUserBySessionId(session.id);
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
@@ -44,6 +44,7 @@ export async function GET() {
     sessionOrgId: session.orgId,
     staffPublicKey: user.stellar_public_key,
   });
+  user = await repairOrgCreatorAccess(user, orgId).catch(() => user);
   const org_payout_wallet_public_key = getOrgDisbursementPublicKey();
 
   // Load org and smart account in parallel — only 2 DB calls total.

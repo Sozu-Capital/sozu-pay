@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Transaction } from "@stellar/stellar-sdk";
 import { getSession } from "@/lib/auth/session";
-import { getUserBySessionId } from "@/lib/db/users";
+import { requireStellarPayoutAccess } from "@/lib/auth/disbursement-auth";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getPayoutById, getPayoutByIdAsync, completePayout, failPayout } from "@/lib/payouts";
 import { appendAuditEvent } from "@/lib/audit";
@@ -20,13 +20,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const user = await getUserBySessionId(session.id);
-  if (!user || user.admin_level !== "super_admin") {
-    return NextResponse.json(
-      { error: "Only super admins can submit signed payouts." },
-      { status: 403 }
-    );
-  }
+  const gate = await requireStellarPayoutAccess(session.id);
+  if (!gate.ok) return gate.response;
+  const user = gate.user;
 
   const body = await request.json().catch(() => ({}));
   const signedEnvelopeXdr = typeof body.signedEnvelopeXdr === "string" ? body.signedEnvelopeXdr.trim() : "";

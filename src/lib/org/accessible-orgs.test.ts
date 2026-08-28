@@ -7,6 +7,7 @@ import {
   planPollarLoginDestination,
   remapToCanonicalOrgId,
   staffTreasuryAlreadyBound,
+  staffGForNewOrg,
 } from "./accessible-orgs.js";
 
 describe("mergeAccessibleOrgIds", () => {
@@ -112,6 +113,18 @@ describe("staffTreasuryAlreadyBound", () => {
   it("blocks creating a second org on a Pollar G that already funds one", () => {
     assert.equal(staffTreasuryAlreadyBound(["org-dabruno"]), true);
     assert.equal(staffTreasuryAlreadyBound([]), false);
+  });
+});
+
+describe("staffGForNewOrg", () => {
+  const staffG = "G".padEnd(56, "A");
+
+  it("reuses the Staff G when it is free", () => {
+    assert.equal(staffGForNewOrg({ staffPublicKey: staffG, alreadyBound: false }), staffG);
+  });
+
+  it("leaves treasury unset when the Staff G already funds an org", () => {
+    assert.equal(staffGForNewOrg({ staffPublicKey: staffG, alreadyBound: true }), null);
   });
 });
 

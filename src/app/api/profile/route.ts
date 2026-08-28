@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
-import { resolveCanonicalActiveOrgId } from "@/lib/db/org-members";
+import { getOrgMember, resolveCanonicalActiveOrgId } from "@/lib/db/org-members";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
 import { resolveOrgDisbursementContractId } from "@/lib/stellar/org-treasury";
 import { isUserDerivedEncrypted } from "@/lib/org-wallet-encryption";
-import { canManageDisbursements } from "@/lib/auth/disbursement-auth";
+import { canManageDisbursements, repairOrgCreatorAccess } from "@/lib/auth/disbursement-auth";
 
 /**
  * GET /api/profile – current user's profile from DB (for Profile page).
@@ -18,7 +18,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const user = await getUserBySessionId(session.id);
+  let user = await getUserBySessionId(session.id);
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
@@ -29,12 +29,15 @@ export async function GET() {
     sessionOrgId: session.orgId,
     staffPublicKey: user.stellar_public_key,
   });
+  user = await repairOrgCreatorAccess(user, orgId).catch(() => user);
   const org_payout_wallet_public_key = getOrgDisbursementPublicKey();
 
-  // Read org once — repairOrgCreatorAccess now runs at login, not on every profile load.
-  const org = orgId ? await getOrganizationForUser(orgId) : null;
+  const [org, membership] = await Promise.all([
+    orgId ? getOrganizationForUser(orgId) : Promise.resolve(null),
+    orgId ? getOrgMember(user.id, orgId) : Promise.resolve(null),
+  ]);
 
-  const can_manage_disbursements = canManageDisbursements(user, org);
+  const can_manage_disbursements = canManageDisbursements(user, org, membership?.role);
 
   const orgDisbursementContractId = org ? resolveOrgDisbursementContractId(org) : null;
   const orgHasTreasury =

@@ -89,13 +89,18 @@ export async function requireTreasuryOwnerConfirm(
   return { ok: true, user: admin.user, org };
 }
 
-export async function userCanManageDisbursements(user: User): Promise<boolean> {
+export async function userCanManageDisbursements(
+  user: User,
+  activeOrgId?: string | null,
+): Promise<boolean> {
   if (user.admin_level === "admin" || user.admin_level === "super_admin") {
     return true;
   }
-  if (!user.org_id) return false;
-  const org = await getOrganizationById(user.org_id);
-  return canManageDisbursements(user, org);
+  const orgId = activeOrgId ?? user.org_id;
+  if (!orgId) return false;
+  const org = await getOrganizationById(orgId);
+  const member = await getOrgMember(user.id, orgId);
+  return canManageDisbursements(user, org, member?.role);
 }
 
 /** Org admins and treasury managers are auto-activated (no manual allowlist step). */
@@ -106,26 +111,35 @@ export async function ensureDisbursementManagerActivated(user: User): Promise<Us
   return updated ?? user;
 }
 
-/** Backfill treasury manager + super_admin for org creators on older rows. */
-export async function repairOrgCreatorAccess(user: User): Promise<User> {
-  if (!user.org_id) return user;
+/** Backfill treasury manager + super_admin for org creators / org admins on older rows. */
+export async function repairOrgCreatorAccess(
+  user: User,
+  activeOrgId?: string | null,
+): Promise<User> {
+  const orgId = activeOrgId ?? user.org_id;
+  if (!orgId) return user;
 
-  const org = await getOrganizationById(user.org_id);
+  const org = await getOrganizationById(orgId);
   if (!org) return ensureDisbursementManagerActivated(user);
 
+  const member = await getOrgMember(user.id, org.id);
   const isTreasuryManager = org.treasury_manager_user_id === user.id;
   const isOrgAdmin = user.admin_level === "admin" || user.admin_level === "super_admin";
+  const isMemberAdmin =
+    member?.role === "owner" ||
+    member?.role === "admin" ||
+    isTreasuryAdminMemberRole(member?.role);
 
   if (org.treasury_manager_user_id == null) {
     const memberSa = await getMemberSmartAccount(org.id, user.id);
-    if (memberSa || isOrgAdmin) {
+    if (memberSa || isOrgAdmin || isMemberAdmin) {
       await updateOrganizationTreasuryManager(org.id, user.id);
       const promoted = await promoteOrgCreator(user.privy_user_id, org.id);
       return promoted ?? ensureDisbursementManagerActivated(user);
     }
   }
 
-  if (isTreasuryManager && !isOrgAdmin) {
+  if ((isTreasuryManager || isMemberAdmin) && !isOrgAdmin) {
     const promoted = await promoteOrgCreator(user.privy_user_id, org.id);
     return promoted ?? ensureDisbursementManagerActivated(user);
   }
@@ -148,14 +162,16 @@ export async function requireDisbursementAdmin(
     };
   }
 
-  user = await repairOrgCreatorAccess(user);
+  const session = await getSession();
+  const orgId = session?.orgId ?? user.org_id;
+  user = await repairOrgCreatorAccess(user, orgId);
 
-  if (!(await userCanManageDisbursements(user))) {
+  if (!(await userCanManageDisbursements(user, orgId))) {
     logDenied("insufficient role for disbursements", {
       sessionId,
       userId: user.id,
       admin_level: user.admin_level,
-      orgId: user.org_id,
+      orgId,
     });
     return {
       ok: false,
@@ -168,13 +184,30 @@ export async function requireDisbursementAdmin(
       ),
     };
   }
-  if (!user.org_id) {
+  if (!orgId) {
     return {
       ok: false,
       response: NextResponse.json({ error: "No organization selected.", code: "NO_ORG" }, { status: 400 }),
     };
   }
   return { ok: true, user };
+}
+
+/** Same org-admin gate as disbursements; payout UI copy stays "Stellar payouts". */
+export async function requireStellarPayoutAccess(
+  sessionId: string,
+): Promise<AdminOk | AuthFailure> {
+  const gate = await requireDisbursementAdmin(sessionId);
+  if (!gate.ok && gate.response.status === 403) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "Only admins can perform Stellar payouts." },
+        { status: 403 },
+      ),
+    };
+  }
+  return gate;
 }
 
 /** Full gate for starting payments — requires registered passkey smart account. */

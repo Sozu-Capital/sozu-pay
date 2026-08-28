@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { Keypair } from "@stellar/stellar-sdk";
 import { getSession } from "@/lib/auth/session";
+import { requireStellarPayoutAccess } from "@/lib/auth/disbursement-auth";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
@@ -235,10 +236,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const user = await getUserBySessionId(session.id);
+    let user = await getUserBySessionId(session.id);
     const orgId = session.orgId ?? user?.org_id ?? null;
-    const canStellarPayout =
-      user?.admin_level === "super_admin" || user?.admin_level === "admin";
 
     const body = await request.json().catch(() => ({}));
 
@@ -262,12 +261,9 @@ export async function POST(request: NextRequest) {
     let batchSignerMode: HomeTreasurySignerResult["mode"] | undefined;
     let batchFromAddress: string | undefined;
     if (hasStellarInBatch) {
-      if (!canStellarPayout) {
-        return NextResponse.json(
-          { error: "Only admins can perform Stellar payouts." },
-          { status: 403 }
-        );
-      }
+      const gate = await requireStellarPayoutAccess(session.id);
+      if (!gate.ok) return gate.response;
+      user = gate.user;
       const org = orgId ? await getOrganizationForUser(orgId) : null;
       batchOrg = org;
       orgSorobanContractId = org?.soroban_contract_id ?? null;
@@ -402,12 +398,9 @@ export async function POST(request: NextRequest) {
   }
 
   if (body.toStellar === true && typeof body.destination === "string") {
-    if (!canStellarPayout) {
-      return NextResponse.json(
-        { error: "Only admins can perform Stellar payouts." },
-        { status: 403 }
-      );
-    }
+    const gate = await requireStellarPayoutAccess(session.id);
+    if (!gate.ok) return gate.response;
+    user = gate.user;
     const org = orgId ? await getOrganizationForUser(orgId) : null;
     const sorobanContractId = org?.soroban_contract_id ?? null;
     const cookieStore = await cookies();

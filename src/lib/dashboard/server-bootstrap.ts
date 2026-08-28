@@ -5,7 +5,7 @@ import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
 import { resolveOrgDisbursementContractId, resolveOrgTreasuryContractId } from "@/lib/stellar/org-treasury";
-import { canManageDisbursements, isOrgTreasuryOwner } from "@/lib/auth/disbursement-auth";
+import { canManageDisbursements, isOrgTreasuryOwner, repairOrgCreatorAccess } from "@/lib/auth/disbursement-auth";
 import { isPizzaTokenConfigured } from "@/lib/stellar/pizza-token";
 import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
 import { getUsdcBalance } from "@/lib/stellar/balance";
@@ -57,7 +57,7 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
   const session = await getSession();
   if (!session) return null;
 
-  const user = await getUserBySessionId(session.id);
+  let user = await getUserBySessionId(session.id);
   if (!user) return null;
 
   const orgId = await resolveCanonicalActiveOrgId({
@@ -66,6 +66,7 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
     sessionOrgId: session.orgId,
     staffPublicKey: user.stellar_public_key,
   });
+  user = await repairOrgCreatorAccess(user, orgId).catch(() => user);
   const org_payout_wallet_public_key = getOrgDisbursementPublicKey();
 
   const [org, memberSa, membership] = await Promise.all([

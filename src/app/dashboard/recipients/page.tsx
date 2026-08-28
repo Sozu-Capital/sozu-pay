@@ -111,8 +111,12 @@ export default function RecipientsPage() {
   useEffect(() => {
     fetch("/api/profile")
       .then((r) => (r.ok ? r.json() : {}))
-      .then((p: { admin_level?: string; org_payout_wallet_public_key?: string | null; org_stellar_disbursement_public_key?: string | null; email?: string; org_type?: string }) => {
-        setAdminLevel(p.admin_level ?? "");
+      .then((p: { admin_level?: string; can_manage_disbursements?: boolean; org_payout_wallet_public_key?: string | null; org_stellar_disbursement_public_key?: string | null; email?: string; org_type?: string }) => {
+        setAdminLevel(
+          p.can_manage_disbursements || p.admin_level === "admin" || p.admin_level === "super_admin"
+            ? (p.admin_level === "admin" ? "admin" : "super_admin")
+            : (p.admin_level ?? ""),
+        );
         setPayoutWalletAddress(p.org_payout_wallet_public_key ?? p.org_stellar_disbursement_public_key ?? null);
         setUserDisplayName(p.email?.split("@")[0] ?? tc("you"));
         setIsStore(p.org_type === "store");

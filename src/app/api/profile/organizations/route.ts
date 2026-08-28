@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { listCollapsedAccessibleOrgs, resolveCanonicalActiveOrgId } from "@/lib/db/org-members";
+import { canCreateOwnedOrg } from "@/lib/org/can-create-owned-org";
 
 /**
  * GET /api/profile/organizations – list organizations the current user can access.
@@ -36,7 +37,7 @@ export async function GET() {
 
     return NextResponse.json({
       organizations,
-      canCreate: true,
+      canCreate: canCreateOwnedOrg(organizations.length),
       activeOrgId: canonicalId ?? session.orgId ?? user.org_id ?? null,
     });
   } catch (err) {

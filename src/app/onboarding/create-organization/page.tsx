@@ -16,7 +16,8 @@ import {
   type OrgSetupStepKey,
 } from "@/components/onboarding/OrgCreateSetupProgress";
 import { OrgFundPaymentModal } from "@/components/onboarding/OrgFundPaymentModal";
-import { getClientSignupIntent, clearClientSignupIntent } from "@/lib/auth/signup-intent";
+import { OrgKindPicker, type OrgKind } from "@/components/onboarding/OrgKindPicker";
+import { clearClientSignupIntent } from "@/lib/auth/signup-intent";
 
 type TaxEntityType = "private_company" | "ngo";
 type InviteRole = "member" | "admin" | "guardian" | "treasury_manager";
@@ -45,8 +46,6 @@ function isValidOrgTag(tag: string): boolean {
 }
 
 export default function CreateOrganizationPage() {
-  const router = useRouter();
-  const t = useTranslations("onboardingPages.createOrg");
   const [authMode, setAuthMode] = useState<"loading" | "pollar" | "passkey">("loading");
 
   useEffect(() => {
@@ -97,15 +96,12 @@ function PasskeyCreateOrganizationPage() {
   } = useSmartAccountKitContext();
   const [fundModalOpen, setFundModalOpen] = useState(false);
 
-  // Check signup intent on mount (cookie + sessionStorage from /merchants)
-  const signupIntent = useMemo(() => getClientSignupIntent(), []);
-  const isMerchantIntent = signupIntent === "merchant";
+  const [kind, setKind] = useState<OrgKind | null>(null);
+  const isMerchantIntent = kind === "store";
 
   const [orgName, setOrgName] = useState("");
   const [taxOpen, setTaxOpen] = useState(false);
-  const [taxEntityType, setTaxEntityType] = useState<TaxEntityType>(
-    isMerchantIntent ? "private_company" : "ngo"
-  );
+  const [taxEntityType, setTaxEntityType] = useState<TaxEntityType>("ngo");
   const [taxLegalName, setTaxLegalName] = useState("");
   const [taxId, setTaxId] = useState("");
   const [taxAddress, setTaxAddress] = useState("");
@@ -142,6 +138,7 @@ function PasskeyCreateOrganizationPage() {
   }, [invitesText]);
 
   useEffect(() => {
+    if (!kind) return;
     const defaultName = isMerchantIntent ? t("defaultOrgNameMerchant") : t("defaultOrgName");
     setOrgName((prev) => {
       const name = prev || defaultName;
@@ -150,7 +147,7 @@ function PasskeyCreateOrganizationPage() {
       }
       return name;
     });
-  }, [t, isMerchantIntent]);
+  }, [t, isMerchantIntent, kind]);
 
   function handleOrgNameChange(value: string) {
     setOrgName(value);
@@ -511,6 +508,14 @@ function PasskeyCreateOrganizationPage() {
   return (
     <DarkGradientBg>
       <main className="min-h-screen flex flex-col items-center justify-center p-4 dark text-white">
+        {!kind ? (
+          <OrgKindPicker
+            onSelect={(next) => {
+              setKind(next);
+              setTaxEntityType(next === "store" ? "private_company" : "ngo");
+            }}
+          />
+        ) : (
         <div className="w-full max-w-md rounded-xl border border-white/10 bg-black/40 backdrop-blur-sm p-6 shadow-xl">
           <h1 className="text-xl font-semibold text-white">
             {isMerchantIntent ? t("titleMerchant") : t("title")}
@@ -738,8 +743,16 @@ function PasskeyCreateOrganizationPage() {
             >
               {step === "error" ? t("retry") : isMerchantIntent ? t("submitMerchant") : t("submit")}
             </button>
+            <button
+              type="button"
+              onClick={() => setKind(null)}
+              className="mt-3 w-full text-center text-xs text-gray-400 underline underline-offset-2 hover:text-gray-200"
+            >
+              {t("typePickerBack")}
+            </button>
           </div>
         </div>
+        )}
       </main>
     </DarkGradientBg>
   );

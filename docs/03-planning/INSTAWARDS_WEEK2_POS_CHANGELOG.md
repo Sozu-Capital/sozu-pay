@@ -136,7 +136,7 @@ Follow-up (code, not blocking this report): fail closed on persist — do not re
 
 ## Demo script (Round 2 / prod)
 
-1. Sign in on [pay.sozu.capital](https://pay.sozu.capital) as a store merchant with a settle-to treasury.
+1. Sign in on [pay.sozu.capital](https://pay.sozu.capital) as a store merchant with a settle-to treasury (`/merchants` redirects to `/`).
 2. Open **POS**.
 3. Key in a whole-peso amount (CLP). Amount shows with Chilean grouping.
 4. **Create charge** → waiting pill + QR + same CLP total.

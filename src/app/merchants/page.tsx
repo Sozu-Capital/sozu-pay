@@ -1,27 +1,14 @@
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth/session";
-import { MerchantsPageContent } from "@/components/MerchantsPageContent";
 
+/** Retired store door — one login at `/`. */
 export default async function MerchantsPage({
   searchParams,
 }: {
   searchParams: Promise<{ returnTo?: string; fresh?: string }>;
 }) {
   const params = await searchParams;
-  const session = await getSession();
-
-  if (session && params.fresh !== "1") {
-    const returnTo = params.returnTo;
-    if (returnTo && returnTo.startsWith("/")) {
-      redirect(returnTo);
-    }
-    redirect("/onboarding/organizations");
-  }
-
-  return (
-    <MerchantsPageContent
-      clearSessionOnMount={params.fresh === "1"}
-      returnTo={params.returnTo}
-    />
-  );
+  const url = new URL("/", "http://local.invalid");
+  if (params.returnTo) url.searchParams.set("returnTo", params.returnTo);
+  if (params.fresh) url.searchParams.set("fresh", params.fresh);
+  redirect(`${url.pathname}${url.search}`);
 }

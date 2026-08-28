@@ -11,8 +11,8 @@ type HomeStaffAuthProps = {
 };
 
 /**
- * Staff door: Google is the primary CTA. Passkey and PIN stay on the same screen
- * as quieter options — never a phone-QR WebAuthn sheet.
+ * Staff door: Google is the only new-user option. Passkey and PIN are
+ * existing-account recovery — never a phone-QR WebAuthn sheet.
  */
 export function HomeStaffAuth({ returnTo }: HomeStaffAuthProps) {
   const t = useTranslations("login");
@@ -35,7 +35,9 @@ export function HomeStaffAuth({ returnTo }: HomeStaffAuthProps) {
             >
               {t("continueWithGoogle")}
             </button>
-          ) : null}
+          ) : (
+            <p className="pt-1 text-center text-xs text-white/45">{t("existingAccountLead")}</p>
+          )}
           {method !== "passkey" ? (
             <button
               type="button"

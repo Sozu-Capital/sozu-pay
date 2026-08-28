@@ -77,7 +77,11 @@ function SecondaryButton({
   );
 }
 
-export function MerchantPollarOnboarding() {
+type MerchantPollarOnboardingProps = {
+  onBackToPicker?: () => void;
+};
+
+export function MerchantPollarOnboarding({ onBackToPicker }: MerchantPollarOnboardingProps = {}) {
   const router = useRouter();
   const t = useTranslations("onboardingPages.createOrg");
   const tCommon = useTranslations("onboardingPages");
@@ -234,7 +238,11 @@ export function MerchantPollarOnboarding() {
       return;
     }
     if (phase === "intro") {
-      router.replace("/merchants");
+      if (onBackToPicker) {
+        onBackToPicker();
+        return;
+      }
+      router.replace("/");
       return;
     }
     if (phase === "done") {

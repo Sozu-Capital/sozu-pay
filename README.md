@@ -1,6 +1,6 @@
 # SozuPay Dashboard
 
-**Canonical GitHub repo:** [blessedux/sozupay_mvp](https://github.com/blessedux/sozupay_mvp) (`origin`). Local folder may be named `SozuPay_dashboard`; see [docs/06-operations/repository-and-naming.md](docs/06-operations/repository-and-naming.md).
+**Canonical GitHub repo:** [Sozu-Capital/sozu-pay](https://github.com/Sozu-Capital/sozu-pay) (`origin`). Local folder may be named `SozuPay_dashboard`; see [docs/06-operations/repository-and-naming.md](docs/06-operations/repository-and-naming.md).
 
 Dashboard for the **EMPRENDE microcredit program** with our first NGO partner **MUJERES 2000**. Used by **Equipo interno** (staff) to manage beneficiaries, disbursements, repayments, and reporting. Roadmap and feature scope are driven by [MUJERES 2000 requirements](docs/05-requirements/Requerimientos_funcionales_MUJERES_2000.pdf) and documented in [docs/03-planning/ngo-disbursement-wallet-dev-plan.md](docs/03-planning/ngo-disbursement-wallet-dev-plan.md) and [docs/03-planning/todo.md](docs/03-planning/todo.md).
 
@@ -98,6 +98,20 @@ npm run dev
 ## Database (Supabase)
 
 Run migrations in Supabase SQL Editor if tables don't exist: [docs/07-reference/supabase-users-table.sql](docs/07-reference/supabase-users-table.sql), [docs/07-reference/supabase-recipients-table.sql](docs/07-reference/supabase-recipients-table.sql), [docs/07-reference/supabase-organizations-table.sql](docs/07-reference/supabase-organizations-table.sql). Organizations have `type` (store | ngo) and optional `soroban_contract_id` for Phase 2 disbursement.
+
+---
+
+## Local tests
+
+Vercel preview URLs cannot complete Pollar Google login: the OAuth callback is not on Pollar’s allowlist. Use the local suite instead:
+
+```bash
+bun run test        # unit tests
+bun run test:e2e    # Playwright against a local Next server with fake Pollar
+bun run test:local  # both
+```
+
+`test:e2e` starts Next on port 3010 with `POLLAR_FAKE_AUTH` so **Continue with Google** does not open a real OAuth window. Org create then provisions a **real Stellar testnet G** (Friendbot + USDC trustline) so checkout payments are on-chain — not the fake Pollar sentinel wallet.
 
 ---
 

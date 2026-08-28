@@ -1,14 +1,11 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { getOnboardingSignOutLandingUrl } from "@/lib/auth/signup-intent";
 import { useSignOut } from "@/lib/auth/useSignOut";
 
 export function OnboardingSignOutButton() {
   const t = useTranslations("nav");
-  const { signOut, signingOut } = useSignOut({
-    getLandingUrl: getOnboardingSignOutLandingUrl,
-  });
+  const { signOut, signingOut } = useSignOut();
 
   return (
     <button

@@ -18,7 +18,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let user = await getUserBySessionId(session.id);
+  const user = await getUserBySessionId(session.id);
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
@@ -29,34 +29,34 @@ export async function GET() {
     sessionOrgId: session.orgId,
     staffPublicKey: user.stellar_public_key,
   });
-  user = await repairOrgCreatorAccess(user, orgId).catch(() => user);
+  const activeUser = await repairOrgCreatorAccess(user, orgId).catch(() => user);
   const org_payout_wallet_public_key = getOrgDisbursementPublicKey();
 
   const [org, membership] = await Promise.all([
     orgId ? getOrganizationForUser(orgId) : Promise.resolve(null),
-    orgId ? getOrgMember(user.id, orgId) : Promise.resolve(null),
+    orgId ? getOrgMember(activeUser.id, orgId) : Promise.resolve(null),
   ]);
 
-  const can_manage_disbursements = canManageDisbursements(user, org, membership?.role);
+  const can_manage_disbursements = canManageDisbursements(activeUser, org, membership?.role);
 
   const orgDisbursementContractId = org ? resolveOrgDisbursementContractId(org) : null;
   const orgHasTreasury =
     !!orgDisbursementContractId || !!(org?.stellar_disbursement_secret_encrypted);
 
   /** Legacy: classic G payout key setup (deprecated for new orgs). */
-  const hasPayoutKey = !!(user.stellar_payout_public_key || user.stellar_public_key);
+  const hasPayoutKey = !!(activeUser.stellar_payout_public_key || activeUser.stellar_public_key);
   const needsPayoutWalletSetup =
-    user.admin_level === "super_admin" &&
+    activeUser.admin_level === "super_admin" &&
     !hasPayoutKey &&
     !orgHasTreasury &&
     !orgDisbursementContractId;
 
-  const needsOrgCreation = user.admin_level === "super_admin" && !orgId;
+  const needsOrgCreation = activeUser.admin_level === "super_admin" && !orgId;
   const needsOrganization = !orgId;
 
   const memberSa =
-    orgId ? await getMemberSmartAccount(orgId, user.id) : null;
-  const isPollarUser = (user.privy_user_id ?? "").startsWith("pollar:");
+    orgId ? await getMemberSmartAccount(orgId, activeUser.id) : null;
+  const isPollarUser = (activeUser.privy_user_id ?? "").startsWith("pollar:");
   const pollarTreasuryReady =
     isPollarUser && !!(org?.stellar_disbursement_public_key);
   const needsSmartWalletSetup =
@@ -74,11 +74,11 @@ export async function GET() {
   const org_has_recovery = !!(org?.recovery_encrypted_secret);
 
   return NextResponse.json({
-    email: user.email,
-    username: user.username ?? null,
+    email: activeUser.email,
+    username: activeUser.username ?? null,
     org_name: org?.name ?? null,
-    stellar_public_key: user.stellar_public_key,
-    stellar_payout_public_key: user.stellar_payout_public_key ?? null,
+    stellar_public_key: activeUser.stellar_public_key,
+    stellar_payout_public_key: activeUser.stellar_payout_public_key ?? null,
     org_payout_wallet_public_key: org_payout_wallet_public_key ?? null,
     org_id: orgId,
     org_type: org?.type ?? null,
@@ -87,12 +87,12 @@ export async function GET() {
     org_has_stored_secret,
     org_encryption_type,
     org_has_recovery,
-    allowed: user.allowed,
-    admin_level: user.admin_level,
+    allowed: activeUser.allowed,
+    admin_level: activeUser.admin_level,
     can_manage_disbursements,
     member_smart_account_id: memberSa?.contract_id ?? null,
     smart_wallet_ready: !!memberSa,
-    activation_requested_at: user.activation_requested_at,
+    activation_requested_at: activeUser.activation_requested_at,
     needsPayoutWalletSetup,
     needsOrgCreation,
     needsOrganization,

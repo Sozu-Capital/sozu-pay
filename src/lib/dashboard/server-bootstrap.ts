@@ -57,7 +57,7 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
   const session = await getSession();
   if (!session) return null;
 
-  let user = await getUserBySessionId(session.id);
+  const user = await getUserBySessionId(session.id);
   if (!user) return null;
 
   const orgId = await resolveCanonicalActiveOrgId({
@@ -66,44 +66,44 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
     sessionOrgId: session.orgId,
     staffPublicKey: user.stellar_public_key,
   });
-  user = await repairOrgCreatorAccess(user, orgId).catch(() => user);
+  const activeUser = await repairOrgCreatorAccess(user, orgId).catch(() => user);
   const org_payout_wallet_public_key = getOrgDisbursementPublicKey();
 
   const [org, memberSa, membership] = await Promise.all([
     orgId ? getOrganizationForUser(orgId) : Promise.resolve(null),
-    orgId ? getMemberSmartAccount(orgId, user.id) : Promise.resolve(null),
-    orgId ? getOrgMember(user.id, orgId) : Promise.resolve(null),
+    orgId ? getMemberSmartAccount(orgId, activeUser.id) : Promise.resolve(null),
+    orgId ? getOrgMember(activeUser.id, orgId) : Promise.resolve(null),
   ]);
 
-  const can_manage_disbursements = canManageDisbursements(user, org, membership?.role);
+  const can_manage_disbursements = canManageDisbursements(activeUser, org, membership?.role);
   const orgDisbursementContractId = org ? resolveOrgDisbursementContractId(org) : null;
   const orgTreasuryContractId = org ? resolveOrgTreasuryContractId(org) : null;
   const orgHasTreasury = !!orgDisbursementContractId || !!(org?.stellar_disbursement_secret_encrypted);
-  const hasPayoutKey = !!(user.stellar_payout_public_key || user.stellar_public_key);
-  const pollarUser = isPollarMappedUser(user);
+  const hasPayoutKey = !!(activeUser.stellar_payout_public_key || activeUser.stellar_public_key);
+  const pollarUser = isPollarMappedUser(activeUser);
 
   const profile: DashboardProfile = {
-    email: user.email,
-    username: user.username ?? null,
+    email: activeUser.email,
+    username: activeUser.username ?? null,
     org_name: org?.name ?? null,
     org_soroban_contract_id: orgDisbursementContractId,
     org_treasury_contract_id: orgTreasuryContractId,
     needsPayoutWalletSetup:
-      user.admin_level === "super_admin" && !hasPayoutKey && !orgHasTreasury && !orgDisbursementContractId,
-    needsOrgCreation: user.admin_level === "super_admin" && !orgId,
+      activeUser.admin_level === "super_admin" && !hasPayoutKey && !orgHasTreasury && !orgDisbursementContractId,
+    needsOrgCreation: activeUser.admin_level === "super_admin" && !orgId,
     needsOrganization: !orgId,
     needsSmartWalletSetup:
       !!orgId &&
       memberSa == null &&
       !(pollarUser && !!org?.stellar_disbursement_public_key),
-    admin_level: user.admin_level,
+    admin_level: activeUser.admin_level,
     can_manage_disbursements,
     member_smart_account_id: memberSa?.contract_id ?? null,
     smart_wallet_ready: !!memberSa,
     org_id: orgId,
     org_type: org?.type ?? null,
     is_pollar_user: pollarUser,
-    is_treasury_owner: isOrgTreasuryOwner(user, org, membership?.role),
+    is_treasury_owner: isOrgTreasuryOwner(activeUser, org, membership?.role),
     can_send_pizza: isPizzaTokenConfigured(),
   };
 

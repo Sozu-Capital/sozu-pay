@@ -76,8 +76,17 @@ export function pickCanonicalOrgIdForSharedG(orgs: OrgTreasuryIdentity[]): strin
 /**
  * One Pollar Staff G can only fund one real org. Extra create-org rows that copied
  * the same G (e.g. Mi negocio444 vs Dabruno) must not appear as separate treasuries.
+ *
+ * `keepIds` is the user's primary / session org — never hide the org they just created,
+ * even if the $tag write failed and it still shares a Staff G.
  */
-export function collapseOrgIdsSharingTreasury(orgs: OrgTreasuryIdentity[]): string[] {
+export function collapseOrgIdsSharingTreasury(
+  orgs: OrgTreasuryIdentity[],
+  keepIds: Iterable<string | null | undefined> = [],
+): string[] {
+  const keep = new Set(
+    [...keepIds].filter((id): id is string => typeof id === "string" && id.length > 0),
+  );
   const byG = new Map<string, OrgTreasuryIdentity[]>();
   const kept: string[] = [];
   const seen = new Set<string>();
@@ -98,8 +107,20 @@ export function collapseOrgIdsSharingTreasury(orgs: OrgTreasuryIdentity[]): stri
     byG.set(g, group);
   }
   for (const group of byG.values()) {
+    const tagged = group.filter((org) => org.sozu_tag_auth_user_id);
+    if (tagged.length > 0) {
+      // Real creates (they have a $tag) stay visible even if they briefly shared a G.
+      for (const org of tagged) pushUnique(org.id);
+      for (const org of group) {
+        if (keep.has(org.id)) pushUnique(org.id);
+      }
+      continue;
+    }
     const canonical = pickCanonicalOrgIdForSharedG(group);
     if (canonical) pushUnique(canonical);
+    for (const org of group) {
+      if (keep.has(org.id)) pushUnique(org.id);
+    }
   }
   return kept;
 }
@@ -107,9 +128,16 @@ export function collapseOrgIdsSharingTreasury(orgs: OrgTreasuryIdentity[]): stri
 export function remapToCanonicalOrgId(
   selectedId: string,
   orgs: OrgTreasuryIdentity[],
+  keepIds: Iterable<string | null | undefined> = [],
 ): string {
+  const keep = new Set(
+    [...keepIds].filter((id): id is string => typeof id === "string" && id.length > 0),
+  );
+  if (keep.has(selectedId)) return selectedId;
   const selected = orgs.find((org) => org.id === selectedId);
   if (!selected) return selectedId;
+  // Tagged orgs are the ones the user named — don't silently switch them to a sibling.
+  if (selected.sozu_tag_auth_user_id) return selectedId;
   const g = classicG(selected.stellar_disbursement_public_key);
   if (!g) return selectedId;
   const siblings = orgs.filter((org) => classicG(org.stellar_disbursement_public_key) === g);

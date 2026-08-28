@@ -133,7 +133,7 @@ export default function OrganizationsPage() {
           {canCreate ? (
             <div className="mt-6 flex flex-col gap-3">
               <Link
-                href="/onboarding/create-organization"
+                href="/onboarding/create-organization?new=1"
                 className="w-full text-center rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium hover:opacity-90 transition-opacity"
               >
                 {t("createNew")}

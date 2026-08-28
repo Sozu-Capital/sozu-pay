@@ -6,6 +6,7 @@ import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
 import { resolveOrgDisbursementContractId, resolveOrgTreasuryContractId } from "@/lib/stellar/org-treasury";
 import { canManageDisbursements, isOrgTreasuryOwner, repairOrgCreatorAccess } from "@/lib/auth/disbursement-auth";
+import { orgOnboardingFlags } from "@/lib/org/onboarding-flags";
 import { isPizzaTokenConfigured } from "@/lib/stellar/pizza-token";
 import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
 import { getUsdcBalance } from "@/lib/stellar/balance";
@@ -81,6 +82,12 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
   const orgHasTreasury = !!orgDisbursementContractId || !!(org?.stellar_disbursement_secret_encrypted);
   const hasPayoutKey = !!(activeUser.stellar_payout_public_key || activeUser.stellar_public_key);
   const pollarUser = isPollarMappedUser(activeUser);
+  const { needsOrgCreation, needsOrganization, needsSmartWalletSetup } = orgOnboardingFlags({
+    canonicalOrgId: orgId,
+    primaryOrgId: activeUser.org_id,
+    isPollarUser: pollarUser,
+    hasMemberSmartAccount: !!memberSa,
+  });
 
   const profile: DashboardProfile = {
     email: activeUser.email,
@@ -90,12 +97,9 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
     org_treasury_contract_id: orgTreasuryContractId,
     needsPayoutWalletSetup:
       activeUser.admin_level === "super_admin" && !hasPayoutKey && !orgHasTreasury && !orgDisbursementContractId,
-    needsOrgCreation: activeUser.admin_level === "super_admin" && !orgId,
-    needsOrganization: !orgId,
-    needsSmartWalletSetup:
-      !!orgId &&
-      memberSa == null &&
-      !(pollarUser && !!org?.stellar_disbursement_public_key),
+    needsOrgCreation,
+    needsOrganization,
+    needsSmartWalletSetup,
     admin_level: activeUser.admin_level,
     can_manage_disbursements,
     member_smart_account_id: memberSa?.contract_id ?? null,

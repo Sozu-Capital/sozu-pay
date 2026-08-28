@@ -681,7 +681,7 @@ export default function SettingsPage() {
                 {t("storesSwitchOrg")}
               </Link>
               <Link
-                href="/onboarding/create-organization"
+                href="/onboarding/create-organization?new=1"
                 className="font-medium text-emerald-700 dark:text-emerald-400 underline-offset-2 hover:underline"
               >
                 {t("storesCreateAnother")}

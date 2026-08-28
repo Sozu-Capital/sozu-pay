@@ -206,7 +206,7 @@ export function MerchantPollarOnboarding({ onBackToPicker }: MerchantPollarOnboa
           : orgTagNormalized;
       setSavedTag(tagFromServer);
       setSavedName(name.trim());
-      setPhase("secure");
+      setPhase("done");
     } catch (e) {
       setError(e instanceof Error ? e.message : tCommon("somethingWentWrong"));
       setPhase("error");
@@ -469,7 +469,7 @@ export function MerchantPollarOnboarding({ onBackToPicker }: MerchantPollarOnboa
               <p className="text-xs leading-relaxed text-gray-400">{t("secureHowHint")}</p>
             </div>
             <div className="mt-6 flex flex-col gap-2">
-              <PrimaryButton onClick={() => router.replace("/onboarding/setup-smart-wallet")}>
+              <PrimaryButton onClick={() => finish("/dashboard")}>
                 {t("secureNowCta")}
               </PrimaryButton>
               <SecondaryButton onClick={() => setPhase("done")}>

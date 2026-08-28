@@ -55,6 +55,20 @@ export default function CreateOrganizationPage() {
         const res = await fetch("/api/profile", { credentials: "include", cache: "no-store" });
         const data = await res.json().catch(() => ({}));
         if (cancelled) return;
+        const forceNew =
+          typeof window !== "undefined" &&
+          new URLSearchParams(window.location.search).get("new") === "1";
+        if (
+          data.is_pollar_user &&
+          !forceNew &&
+          data.needsOrgCreation === false &&
+          (data.org_id || data.needsOrganization)
+        ) {
+          window.location.replace(
+            data.needsOrganization ? "/onboarding/organizations" : "/dashboard",
+          );
+          return;
+        }
         setAuthMode(data.is_pollar_user ? "pollar" : "passkey");
       } catch {
         if (!cancelled) setAuthMode("passkey");

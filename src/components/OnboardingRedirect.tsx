@@ -23,7 +23,7 @@ export function OnboardingRedirect() {
       router.replace("/onboarding/organizations");
       return;
     }
-    if (profile.needsSmartWalletSetup) {
+    if (profile.needsSmartWalletSetup && !profile.is_pollar_user) {
       router.replace("/onboarding/setup-smart-wallet");
     }
   }, [
@@ -31,6 +31,7 @@ export function OnboardingRedirect() {
     profile?.needsOrgCreation,
     profile?.needsOrganization,
     profile?.needsSmartWalletSetup,
+    profile?.is_pollar_user,
     profile,
     router,
   ]);

@@ -98,7 +98,7 @@ export function OrgSwitcherModal({
 
   function handleCreate() {
     onClose();
-    router.push("/onboarding/create-organization");
+    router.push("/onboarding/create-organization?new=1");
   }
 
   if (!open) return null;

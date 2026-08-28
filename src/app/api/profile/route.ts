@@ -8,6 +8,7 @@ import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
 import { resolveOrgDisbursementContractId } from "@/lib/stellar/org-treasury";
 import { isUserDerivedEncrypted } from "@/lib/org-wallet-encryption";
 import { canManageDisbursements, repairOrgCreatorAccess } from "@/lib/auth/disbursement-auth";
+import { orgOnboardingFlags } from "@/lib/org/onboarding-flags";
 
 /**
  * GET /api/profile – current user's profile from DB (for Profile page).
@@ -51,16 +52,18 @@ export async function GET() {
     !orgHasTreasury &&
     !orgDisbursementContractId;
 
-  const needsOrgCreation = activeUser.admin_level === "super_admin" && !orgId;
-  const needsOrganization = !orgId;
-
+  const isPollarUser = (activeUser.privy_user_id ?? "").startsWith("pollar:");
   const memberSa =
     orgId ? await getMemberSmartAccount(orgId, activeUser.id) : null;
-  const isPollarUser = (activeUser.privy_user_id ?? "").startsWith("pollar:");
+  const { needsOrgCreation, needsOrganization, needsSmartWalletSetup } = orgOnboardingFlags({
+    canonicalOrgId: orgId,
+    primaryOrgId: activeUser.org_id,
+    isPollarUser,
+    hasMemberSmartAccount: !!memberSa,
+  });
+
   const pollarTreasuryReady =
     isPollarUser && !!(org?.stellar_disbursement_public_key);
-  const needsSmartWalletSetup =
-    !!orgId && memberSa == null && !pollarTreasuryReady;
 
   const org_stellar_disbursement_public_key = org?.stellar_disbursement_public_key ?? null;
   const org_soroban_contract_id = orgDisbursementContractId;

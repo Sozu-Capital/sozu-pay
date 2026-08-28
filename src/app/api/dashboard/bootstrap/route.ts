@@ -8,6 +8,7 @@ import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
 import { resolveOrgDisbursementContractId, resolveOrgTreasuryContractId } from "@/lib/stellar/org-treasury";
 import { isUserDerivedEncrypted } from "@/lib/org-wallet-encryption";
 import { canManageDisbursements, isOrgTreasuryOwner, repairOrgCreatorAccess } from "@/lib/auth/disbursement-auth";
+import { orgOnboardingFlags } from "@/lib/org/onboarding-flags";
 import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
 import { isPizzaTokenConfigured } from "@/lib/stellar/pizza-token";
 import { getUsdcBalance } from "@/lib/stellar/balance";
@@ -63,12 +64,13 @@ export async function GET() {
 
   const needsPayoutWalletSetup =
     activeUser.admin_level === "super_admin" && !hasPayoutKey && !orgHasTreasury && !orgDisbursementContractId;
-  const needsOrgCreation = activeUser.admin_level === "super_admin" && !orgId;
-  const needsOrganization = !orgId;
-  const needsSmartWalletSetup =
-    !!orgId &&
-    memberSa == null &&
-    !(isPollarMappedUser(activeUser) && org?.stellar_disbursement_public_key);
+  const pollarUser = isPollarMappedUser(activeUser);
+  const { needsOrgCreation, needsOrganization, needsSmartWalletSetup } = orgOnboardingFlags({
+    canonicalOrgId: orgId,
+    primaryOrgId: activeUser.org_id,
+    isPollarUser: pollarUser,
+    hasMemberSmartAccount: !!memberSa,
+  });
 
   const profile = {
     email: activeUser.email,
@@ -101,7 +103,7 @@ export async function GET() {
     needsOrganization,
     needsSmartWalletSetup,
     treasury_ready: !!orgDisbursementContractId,
-    is_pollar_user: isPollarMappedUser(activeUser),
+    is_pollar_user: pollarUser,
     is_treasury_owner: isOrgTreasuryOwner(activeUser, org, membership?.role),
     can_send_pizza: isPizzaTokenConfigured(),
   };

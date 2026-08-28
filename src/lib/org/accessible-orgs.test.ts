@@ -98,6 +98,55 @@ describe("collapseOrgIdsSharingTreasury", () => {
     );
   });
 
+  it("keeps two tagged orgs even when they share a Pollar G", () => {
+    const ids = collapseOrgIdsSharingTreasury([
+      {
+        id: "org-dabruno",
+        stellar_disbursement_public_key: staffG,
+        sozu_tag_auth_user_id: "tag-dabruno",
+        created_at: "2026-06-01T00:00:00.000Z",
+      },
+      {
+        id: "org-cafe",
+        stellar_disbursement_public_key: staffG,
+        sozu_tag_auth_user_id: "tag-cafe",
+        created_at: "2026-08-28T00:00:00.000Z",
+      },
+    ]);
+    assert.deepEqual(ids.sort(), ["org-cafe", "org-dabruno"]);
+  });
+
+  it("keeps the user's new primary org even when it is untagged and shares a G", () => {
+    const ids = collapseOrgIdsSharingTreasury(
+      [
+        {
+          id: "org-dabruno",
+          stellar_disbursement_public_key: staffG,
+          sozu_tag_auth_user_id: "tag-dabruno",
+          created_at: "2026-06-01T00:00:00.000Z",
+        },
+        {
+          id: "org-new",
+          stellar_disbursement_public_key: staffG,
+          created_at: "2026-08-28T00:00:00.000Z",
+        },
+      ],
+      ["org-new"],
+    );
+    assert.deepEqual(ids.sort(), ["org-dabruno", "org-new"]);
+    assert.equal(
+      remapToCanonicalOrgId(
+        "org-new",
+        [
+          { id: "org-dabruno", stellar_disbursement_public_key: staffG, sozu_tag_auth_user_id: "tag-dabruno" },
+          { id: "org-new", stellar_disbursement_public_key: staffG },
+        ],
+        ["org-new"],
+      ),
+      "org-new",
+    );
+  });
+
   it("does not collapse orgs that have no classic treasury", () => {
     assert.deepEqual(
       collapseOrgIdsSharingTreasury([

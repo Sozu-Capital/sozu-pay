@@ -88,7 +88,9 @@ export async function listCollapsedAccessibleOrgs(params: {
   const orgs = (
     await Promise.all(ids.map((id) => getOrganizationById(id)))
   ).filter((org): org is Organization => org != null);
-  const kept = new Set(collapseOrgIdsSharingTreasury(orgs));
+  const kept = new Set(
+    collapseOrgIdsSharingTreasury(orgs, [params.primaryOrgId, params.sessionOrgId]),
+  );
   return orgs.filter((org) => kept.has(org.id));
 }
 
@@ -108,7 +110,7 @@ export async function resolveCanonicalActiveOrgId(params: {
   const siblings = (
     await Promise.all(siblingIds.map((id) => getOrganizationById(id)))
   ).filter((row): row is Organization => row != null);
-  return remapToCanonicalOrgId(orgId, siblings);
+  return remapToCanonicalOrgId(orgId, siblings, [params.primaryOrgId]);
 }
 
 export async function getOrgMember(

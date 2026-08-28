@@ -4,8 +4,8 @@ import { getSession, setSession } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 import { clearUserOrgId, getUserBySessionId, promoteOrgCreator } from "@/lib/db/users";
-import { createOrganization, getOrgIdsByTreasuryPublicKey, getOrganizationById } from "@/lib/db/organizations";
-import { addOrgMember, upsertOrgMember } from "@/lib/db/org-members";
+import { createOrganization, getOrgIdsByTreasuryPublicKey, getOrganizationById, getOrgIdsManagedByUser } from "@/lib/db/organizations";
+import { addOrgMember, getOrgIdsForUser, upsertOrgMember } from "@/lib/db/org-members";
 import { createOrgInvites, type OrgInviteRole } from "@/lib/db/org-invites";
 import {
   applyOrganizationSozuTag,
@@ -21,6 +21,7 @@ import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
 import { usableClassicTreasuryPublicKey } from "@/lib/pollar/types";
 import { resolveCreateOrganizationType } from "@/lib/org/resolve-create-type";
 import { staffTreasuryAlreadyBound, staffGForNewOrg } from "@/lib/org/accessible-orgs";
+import { matchingOwnedOrg } from "@/lib/org/onboarding-flags";
 import { randomUUID } from "crypto";
 
 /**
@@ -106,6 +107,37 @@ export async function POST(request: NextRequest) {
   });
 
   try {
+    const existingIds = [
+      ...new Set(
+        [
+          activeUser.org_id,
+          ...(await getOrgIdsManagedByUser(activeUser.id)),
+          ...(await getOrgIdsForUser(activeUser.id)),
+        ].filter((id): id is string => typeof id === "string" && id.length > 0),
+      ),
+    ];
+    const existingOrgs = (
+      await Promise.all(existingIds.map((id) => getOrganizationById(id)))
+    ).filter((row): row is NonNullable<typeof row> => row != null);
+    const already = matchingOwnedOrg(existingOrgs, name);
+    if (already) {
+      const nextSession = { ...session, orgId: already.id };
+      try {
+        await setSession(nextSession);
+      } catch {
+        // non-fatal
+      }
+      return attachSessionCookie(
+        NextResponse.json({
+          ok: true,
+          organization: { id: already.id, name: already.name, type: already.type },
+          reused: true,
+          redirect: pollarPath ? "/dashboard" : undefined,
+        }),
+        nextSession,
+      );
+    }
+
     let treasuryPublicKey: string | null = null;
     if (pollarPath) {
       // Optional client-supplied G (from Pollar session); else provisioner uses creator.stellar_public_key
@@ -232,14 +264,8 @@ export async function POST(request: NextRequest) {
     if (tagToApply) {
       const tagRes = await applyOrganizationSozuTag({ orgId: org.id, usernameRaw: tagToApply });
       if (!tagRes.ok) {
-        const stubTreasuryFailure =
-          tagRes.status === 422 &&
-          /stub|Cannot publish \$tag|no receive address/i.test(tagRes.error);
-        // Explicit tag + real treasury errors (taken/invalid) fail the request.
-        // Stub-treasury / missing-receive soft-fails so org create still completes.
-        if (explicitTag && !stubTreasuryFailure) {
-          return NextResponse.json({ error: tagRes.error }, { status: tagRes.status });
-        }
+        // Org row already exists. Never 409/422 the whole create — retrying
+        // "name/tag already taken" remounts the type picker and mints ghost orgs.
         console.warn("[profile/org] sozu tag apply failed:", tagRes.error);
         return attachSessionCookie(
           NextResponse.json({

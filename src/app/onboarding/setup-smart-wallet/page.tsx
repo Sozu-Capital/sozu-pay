@@ -47,7 +47,11 @@ export default function SetupSmartWalletPage() {
       .then((d) => {
         const email = typeof d?.email === "string" ? d.email : "";
         if (email) setProfileEmail(email);
-        if (d?.is_pollar_user || d?.org_type === "store") setIsMerchant(true);
+        if (d?.is_pollar_user) {
+          router.replace("/dashboard");
+          return;
+        }
+        if (d?.org_type === "store") setIsMerchant(true);
       })
       .catch(() => {});
 
@@ -57,7 +61,7 @@ export default function SetupSmartWalletPage() {
         if (typeof d?.credentialId === "string") setLoginCredentialId(d.credentialId);
       })
       .catch(() => {});
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

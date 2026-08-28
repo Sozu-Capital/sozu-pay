@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { matchingOwnedOrg, orgOnboardingFlags } from "./onboarding-flags.js";
+import { matchingOwnedOrg, orgOnboardingFlags, primaryOrgIdAfterCreate } from "./onboarding-flags.js";
 
 describe("orgOnboardingFlags", () => {
   it("does not send a Pollar user back to create-org after they already have a primary org", () => {
@@ -59,5 +59,12 @@ describe("matchingOwnedOrg", () => {
       "  cafe sozu ",
     );
     assert.equal(match?.id, "a");
+  });
+});
+
+describe("primaryOrgIdAfterCreate", () => {
+  it("points primary at the org just created so a unique-G second org survives logout", () => {
+    assert.equal(primaryOrgIdAfterCreate("org-old", "org-new"), "org-new");
+    assert.equal(primaryOrgIdAfterCreate(null, "org-new"), "org-new");
   });
 });

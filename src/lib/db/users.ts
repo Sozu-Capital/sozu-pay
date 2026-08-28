@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { getSupabase } from "@/lib/supabase/server";
+import { primaryOrgIdAfterCreate } from "@/lib/org/onboarding-flags";
 
 export type User = {
   id: number;
@@ -249,8 +250,7 @@ export async function promoteOrgCreator(
     return null;
   }
   const user = await updateUserBySessionId(sessionOrPrivyId, {
-    // Keep the first org as primary so a second create/invite does not hide it.
-    ...(existing.org_id ? {} : { org_id: orgId }),
+    org_id: primaryOrgIdAfterCreate(existing.org_id, orgId),
     admin_level: "super_admin",
     allowed: true,
   });

@@ -30,3 +30,16 @@ export function matchingOwnedOrg<T extends { id: string; name: string }>(
   if (!n) return null;
   return orgs.find((org) => org.name.trim().toLowerCase() === n) ?? null;
 }
+
+/**
+ * users.org_id after POST /api/profile/org.
+ * A second Pollar org gets its own Friendbot G, so Staff-wallet lookup cannot
+ * find it. If we leave org_id on the first org and org_members is missing,
+ * the new row is unreachable after logout ("You do not have access").
+ */
+export function primaryOrgIdAfterCreate(
+  _existingPrimary: string | null,
+  createdOrgId: string,
+): string {
+  return createdOrgId;
+}

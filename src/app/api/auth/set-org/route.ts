@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { attachSessionCookie } from "@/lib/auth/establish-session";
 import { getSession, setSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
-import { getOrganizationById, getOrgIdsByTreasuryPublicKey } from "@/lib/db/organizations";
+import { getOrganizationById } from "@/lib/db/organizations";
 import { listAccessibleOrgIds } from "@/lib/db/org-members";
-import { remapToCanonicalOrgId } from "@/lib/org/accessible-orgs";
 
 /**
  * POST /api/auth/set-org – set the current organization for this session.
@@ -44,16 +43,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "You do not have access to this organization" }, { status: 403 });
   }
 
-  const siblingIds = await getOrgIdsByTreasuryPublicKey(org.stellar_disbursement_public_key);
-  const siblings =
-    siblingIds.length > 1
-      ? (
-          await Promise.all(siblingIds.map((id) => getOrganizationById(id)))
-        ).filter((row): row is NonNullable<typeof row> => row != null)
-      : [org];
-  const canonicalId = remapToCanonicalOrgId(orgId, siblings);
-
-  const nextSession = { ...session, orgId: canonicalId };
+  const nextSession = { ...session, orgId };
   await setSession(nextSession);
-  return attachSessionCookie(NextResponse.json({ ok: true, orgId: canonicalId }), nextSession);
+  return attachSessionCookie(NextResponse.json({ ok: true, orgId }), nextSession);
 }

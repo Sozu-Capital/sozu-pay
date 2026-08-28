@@ -50,9 +50,11 @@ export async function listAccessibleOrgIds(params: {
     getOrgIdsManagedByUser(params.userId),
     getOrgIdsByTreasuryPublicKey(params.staffPublicKey),
   ]);
+  void params.sessionOrgId;
   return mergeAccessibleOrgIds({
     primaryOrgId: params.primaryOrgId,
-    sessionOrgId: params.sessionOrgId,
+    // Session cookie is not proof of access — listing it made the picker show
+    // a brand-new org the user could not open (403) and that vanished on logout.
     memberOrgIds,
     managedOrgIds,
     staffWalletOrgIds,

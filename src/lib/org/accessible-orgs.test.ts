@@ -27,6 +27,23 @@ describe("mergeAccessibleOrgIds", () => {
   it("drops empty values", () => {
     assert.deepEqual(mergeAccessibleOrgIds({ primaryOrgId: null, memberOrgIds: [""] }), []);
   });
+
+  it("keeps a second unique-G org only when it is the primary (Staff G still finds the first)", () => {
+    assert.deepEqual(
+      mergeAccessibleOrgIds({
+        primaryOrgId: "org-old",
+        staffWalletOrgIds: ["org-old"],
+      }),
+      ["org-old"],
+    );
+    assert.deepEqual(
+      mergeAccessibleOrgIds({
+        primaryOrgId: "org-new",
+        staffWalletOrgIds: ["org-old"],
+      }).sort(),
+      ["org-new", "org-old"],
+    );
+  });
 });
 
 describe("pickActiveOrgId", () => {

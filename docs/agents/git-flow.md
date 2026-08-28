@@ -16,7 +16,7 @@ promotionChain:
 - **featureBase** (`dev`) — new feature PRs target this branch. This is the shared test / preview environment.
 - **deployTrigger** (`prod`) — merge here deploys **Production** on Vercel (`pay.sozu.capital`).
 
-`main` still exists as a historical default. Do not merge new work into `main`; promote `dev` → `prod`.
+`main` was renamed to `main-archived` (same SHA as the first `prod` cut). Do not merge new work there; promote `dev` → `prod`.
 
 ## How skills use this file
 

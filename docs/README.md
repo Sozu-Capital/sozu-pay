@@ -57,4 +57,4 @@ For architecture, contracts, or integrations, use the folders below.
 - **SDP NGO platform deployment (Vercel + hosted SDP):** [04-integrations/sdp-ngo-platform-deployment.md](04-integrations/sdp-ngo-platform-deployment.md)
 - **SDP Railway deploy runbook (step-by-step):** [04-integrations/sdp-railway-deploy.md](04-integrations/sdp-railway-deploy.md)
 - **SDP testnet E2E (local SDP + credit.sozu.capital):** [04-integrations/sdp-testnet-production-e2e.md](04-integrations/sdp-testnet-production-e2e.md)
-- **Repository naming (sozupay_mvp vs local folder):** [06-operations/repository-and-naming.md](06-operations/repository-and-naming.md)
+- **Repository naming (`sozu-pay` vs local folder):** [06-operations/repository-and-naming.md](06-operations/repository-and-naming.md)

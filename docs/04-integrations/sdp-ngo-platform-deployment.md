@@ -118,7 +118,7 @@ Steps (high level):
 
 ### Phase C — SozuPay Dashboard on Vercel (NGO UI)
 
-1. Deploy **this repo** (`sozupay_mvp`) to Vercel (existing or new project).
+1. Deploy **this repo** (`sozu-pay`) to Vercel (existing or new project).
 2. Add server env (names illustrative — align with your SDP client implementation):
 
    ```bash
@@ -172,7 +172,7 @@ Docker SDP is **not** deployed to production — it **simulates** Phase B on you
 
 ## Deployment checklist (copy for Notion)
 
-- [ ] Canonical repo: `origin` → `blessedux/sozupay_mvp` ([naming doc](../06-operations/repository-and-naming.md))
+- [ ] Canonical repo: `origin` → `Sozu-Capital/sozu-pay` ([naming doc](../06-operations/repository-and-naming.md))
 - [ ] SozuCredit prod + testnet env on Vercel
 - [ ] SDP testnet stack live (API + TSS + Postgres + messages)
 - [ ] SozuCredit wallet seeded in SDP

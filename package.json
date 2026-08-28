@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test:e2e": "playwright test",
+    "test:local": "npm run test && npm run test:e2e",
     "sdp:e2e-cli": "node scripts/sdp-railway-e2e-cli.mjs",
     "sdp:preflight": "bash scripts/sdp-preflight.sh credit.sozu.capital",
     "lint": "next lint",

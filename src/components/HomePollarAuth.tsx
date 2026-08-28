@@ -152,7 +152,8 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
     setBusyState(true);
     try {
       if (fakeAuth) {
-        const subject = `dev-${Date.now()}`;
+        const subject =
+          (process.env.NEXT_PUBLIC_POLLAR_FAKE_SUBJECT ?? "").trim() || `dev-${Date.now()}`;
         const email = `dev+${subject}@example.com`;
         await bridgeWithToken(`fake.${subject}.${encodeFakeEmail(email)}`);
         return;

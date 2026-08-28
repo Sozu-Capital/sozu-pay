@@ -8,7 +8,6 @@ import {
   registerSmartAccount,
   resolvePublicKeyFromServer,
 } from "@/lib/stellar/smartAccounts/registerWalletClient";
-import { getClientSignupIntent } from "@/lib/auth/signup-intent";
 
 export default function SetupSmartWalletPage() {
   const router = useRouter();
@@ -41,10 +40,6 @@ export default function SetupSmartWalletPage() {
     }
     router.replace(isMerchant ? "/dashboard" : "/onboarding/create-organization");
   }, [isMerchant, router]);
-
-  useEffect(() => {
-    setIsMerchant(getClientSignupIntent() === "merchant");
-  }, []);
 
   useEffect(() => {
     fetch("/api/profile", { credentials: "include" })

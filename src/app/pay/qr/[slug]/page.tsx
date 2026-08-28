@@ -126,7 +126,7 @@ export default async function PayQRPage({ params, searchParams }: Props) {
             {route.name} is ready, but the merchant has not opened a live checkout yet. Scan again once they create a payment link.
           </p>
           <Link
-            href="/merchants"
+            href="/"
             className="mt-6 inline-block rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-5 py-2 text-sm font-medium"
           >
             Learn about SOZU

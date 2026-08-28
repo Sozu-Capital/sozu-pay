@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import DashboardTransactions from "@/components/DashboardTransactions";
+import { StoreReconciliationPanel } from "@/components/StoreReconciliationPanel";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 import { storeHomeActions, type StoreHomeActionKind } from "@/lib/dashboard/nav-links";
 
@@ -126,6 +127,8 @@ export default function StoreHomeDashboard() {
           ))}
         </div>
       </div>
+
+      <StoreReconciliationPanel compact />
 
       {/* Recent transactions */}
       <section>

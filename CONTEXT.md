@@ -1,6 +1,6 @@
 # SozuPay Dashboard
 
-Merchant and NGO dashboard for managing organizations, treasuries, and disbursements on Stellar. For **NGOs**, staff identity and the **Org treasury wallet** are provided via **Pollar**. Merchant (`store`) path stays on the legacy passkey / PIN model until a separate initiative.
+Merchant and NGO dashboard for managing organizations, treasuries, and disbursements on Stellar. New Users sign in with **Pollar login** (Google). Passkey and backup PIN remain only for existing accounts. Organization type (**Store** vs **NGO**) is chosen at org creation, not by landing URL.
 
 ## Language
 
@@ -11,8 +11,8 @@ A person who can log into the dashboard and access one or more organizations.
 _Avoid_: Account, member (unless referring to org membership)
 
 **Pollar login**:
-How a User authenticates to the dashboard for the NGO path. V1: Google only via Pollar. Establishes the dashboard session via a **Staff Pollar identity**. Does not make that identity the org's spending wallet.
-_Avoid_: Social login (without Pollar), OAuth (in user-facing language), sign-in with Google (as if SozuPay owned the OAuth app), email OTP / GitHub / passkey (as NGO v1 login options)
+How a new User authenticates to the dashboard. V1: Google only via Pollar. Establishes the dashboard session via a **Staff Pollar identity**. Same door for **Store** and **NGO**; org type is not implied by login. The `/` landing is a **neutral door** (names both products; does not pick a type). Does not make that identity the org's spending wallet.
+_Avoid_: Social login (without Pollar), OAuth (in user-facing language), sign-in with Google (as if SozuPay owned the OAuth app), two product landings (`/` vs `/merchants`) as auth options, passkey (as the new-user login), NGO-only or store-only headline on `/`
 
 **Sozu tag**:
 An optional public handle (e.g. `$maria-ngo`) on a **User**, used as a human-readable payment address — not for login. Under **Pollar login**, auth is Google; the tag may be set later via soft prompt or settings.
@@ -29,20 +29,32 @@ _Avoid_: Migration wizard, dual-run (for NGOs in this initiative)
 ### Organizations & money movement
 
 **Organization**:
-A workspace a User belongs to. Tax entity type is `ngo` (distribution / microcredit partner) or `store` (merchant).
+A workspace a User belongs to. Type is `ngo` (**NGO** / distribution) or `store` (**Store**).
 _Avoid_: Account, tenant, microcredit org (use NGO / distribution org)
 
+**Store**:
+An **Organization** with type `store` — one org is one store. Runs **POS** and standing QR/NFC. Creating a store means creating that organization as `store`. At org creation the user-facing name is **Store with POS**.
+_Avoid_: Shop (as a second entity), location, venue, multi-store (Instawards out of scope)
+
+**Merchant**:
+A **User** operating a **Store**. New merchants use **Pollar login**. Existing merchants may still sign in with passkey / PIN.
+_Avoid_: Seller, vendor (unless in marketing copy)
+
 **NGO**:
-An **Organization** with type `ngo` — runs distributions / disbursements to recipients. Includes microcredit partners.
-_Avoid_: Microcredit org (as a separate type), nonprofit (unless legal entity language)
+An **Organization** with type `ngo` — runs distributions / disbursements to recipients. Includes microcredit partners. At org creation the user-facing name is **Distribution platform**; the persisted type remains `ngo`.
+_Avoid_: Microcredit org (as a separate type), nonprofit (unless legal entity language), `distribution` as a third org type
 
 **Disbursement**:
 A batch payout from an NGO's funds to one or more recipients.
 _Avoid_: Payout batch (unless referring to a specific SDP object), transfer (alone)
 
 **Org treasury wallet**:
-The single Pollar-managed Stellar wallet that holds an **Organization**'s operating funds and is the source of **Disbursements**. Provisioned per org (not per staff login); access to spend is gated by SozuPay roles on the acting **User**.
-_Avoid_: Member wallet, personal wallet, passkey smart account (for NGO staff target model)
+The Pollar-managed Stellar wallet that holds an **Organization**'s operating funds. For an **NGO**, it is the source of **Disbursements**. For a new **Store**, it is the settle-to address for **POS** / Checkout. Provisioned per org from the creator’s **Staff Pollar identity**; one G funds one org.
+_Avoid_: Member wallet, personal wallet, passkey smart account (for new Pollar orgs)
+
+**Store onboarding (Pollar path)**:
+**Pollar login** → required type picker (**Store with POS**) → name the store → Pollar **Org treasury wallet** → **Store dashboard**. No passkey required to take payments. Optional device lock is Settings, not a gate.
+_Avoid_: Merchant passkey onboarding (for new stores), `/merchants` as the door
 
 **NGO onboarding (Pollar path)**:
 The new-staff happy path: **Pollar login** → create **Organization** (name) → dashboard with empty **Org treasury wallet** and a fund CTA. No passkey, PIN, or smart-account linking steps. Join-by-invite is a secondary entry, not the primary CTA. Org picker only when the User already belongs to more than one org. Optional **Sozu tag** / **Org Sozu tag** are not required at create — a dismissible soft prompt on first dashboard landing nudges the User to add them.
@@ -52,7 +64,13 @@ _Avoid_: Wallet setup, smart wallet onboarding (for new NGOs)
 The in-app review step before a **Disbursement** spends from the **Org treasury wallet** — shows totals / recipients and requires an explicit Confirm. No passkey, PIN, or Pollar re-OTP in v1; authorization is session + SozuPay role, with the acting **User** recorded in the audit log.
 _Avoid_: Signing ceremony, authorize with passkey
 
-**Checkout**:
+**POS** (Point of Sale):
+The primary counter surface for a **Store**: enter CLP amount → create a **Checkout** → show QR. Customer pays; merchant sees confirmation. For new Pollar stores, settle-to is the **Org treasury wallet**.
+_Avoid_: Get paid (as the primary store CTA), register, terminal
+
+**Store reconciliation (v1)**:
+A cashier-facing view of completed **Store** charges in CLP: transaction list, today’s total, this-cycle owed (sum of completed POS CLP in a labeled period), CSV export. Not a live peso payout. PizzaToken / wallet redemptions are the Instawards token analog, not a Coffee Token settlement engine.
+_Avoid_: Settlement (as a bank payout), Coffee Token ledger (as a separate product this sprint)
 A shareable payment session with an amount and URL. Merchants use it to get paid; **NGOs** use the same primitive as a **Funding link** to top up the **Org treasury wallet**.
 _Avoid_: Invoice (unless a distinct billing object is introduced)
 
@@ -79,7 +97,11 @@ Legacy SozuPay-owned identity and signing model. Superseded for new NGO staff by
 
 ## Relationships
 
-- A **User** authenticates via **Pollar login** (**Staff Pollar identity**) and may access one or more **Organizations** (NGO path)
+- A new **User** authenticates via **Pollar login** (**Staff Pollar identity**) and may **create** at most one **Organization** (type chosen once: **Store** or **NGO**). They may still **join** other orgs via **Staff invite**.
+- A new **Store** uses the Pollar **Org treasury wallet** as settle-to for **POS**; optional passkey device lock is later, not required to charge
+- A **Store** takes counter payments via **POS**; **Store reconciliation (v1)** reports those charges in CLP without paying out fiat
+- Existing passkey **Store** treasuries stay as they are (no migration product)
+- Existing Users may still authenticate with passkey / backup PIN; that is account recovery, not a second product door
 - A **User** may have zero or one **Sozu tag** (optional; for payments / display — never for auth under the NGO Pollar path)
 - An **Organization** may have zero or one **Org Sozu tag**
 - An **NGO** has exactly one **Org treasury wallet** (server-provisioned against the org, not against a staff login)
@@ -87,7 +109,7 @@ Legacy SozuPay-owned identity and signing model. Superseded for new NGO staff by
 - An **NGO** tops up its **Org treasury wallet** via a **Funding link** (Checkout primitive, NGO-skinned; settlement destination = org treasury)
 - An authorized **User** triggers a spend after **Disbursement confirmation**; SozuPay checks roles, then the backend asks Pollar to execute from the **Org treasury wallet** (target). Actor attribution lives in SozuPay audit logs.
 - **Fallback if Pollar cannot server-spend**: **Org treasury wallet** remains bound to the creator’s **Staff Pollar identity**; other staff queue disbursements and the wallet owner approves (approval-request UX)
-- NGO passkey dual-run / migration UI is out of scope — clean break + optional test-data reset; merchants remain on passkey
+- NGO passkey dual-run / migration UI is out of scope — clean break + optional test-data reset; existing merchant passkey accounts remain sign-inable, not migrated
 - **NGO dashboard (v1)** is the default surface for distribution operators; advanced modules are not primary nav
 - Additional staff join via **Staff invite** (expiring link → Google **Pollar login** → membership + role)
 
@@ -123,12 +145,36 @@ Legacy SozuPay-owned identity and signing model. Superseded for new NGO staff by
 > **Dev:** "Is a 'microcredit org' a different product type from NGO?"
 > **Domain expert:** "No — it's an **NGO** (`type: ngo`) running distributions. We don't have a separate microcredit org type."
 
+> **Dev:** "Do we need Stellar Passport and Coffee Tokens to close Instawards?"
+> **Domain expert:** "No for this close-out. Submit the live analog: Sozu Wallet redeems PizzaToken via QR/NFC. Name the SOW mismatch in the changelog."
+
+> **Dev:** "A merchant doesn't want Gmail. Can they create a store with a passkey?"
+> **Domain expert:** "Not as a new account. **Pollar login** is the new-user door. Passkey is only if they already have an account."
+
+> **Dev:** "Should café owners go to /merchants and NGOs to /?"
+> **Domain expert:** "No. One door: `/`. `/merchants` redirects there. They choose **Store** or **NGO** when they create the organization."
+
+> **Dev:** "Is a distribution platform a new org type?"
+> **Domain expert:** "No. That's the create-org label for an **NGO**. Cards: Store with POS → `store`; Distribution platform → `ngo`."
+
+> **Dev:** "María created a store, then wants an NGO on the same Google."
+> **Domain expert:** "She cannot create a second org. One **Staff Pollar identity** wallet funds one treasury. Join an NGO with a **Staff invite**, or use a different Google account."
+
+> **Dev:** "Does the store need a passkey before POS works?"
+> **Domain expert:** "Not for new merchants. Google creates the store wallet. Face ID is optional later in Settings."
+
+> **Dev:** "Does W4 mean we pay the café in pesos?"
+> **Domain expert:** "No. **Store reconciliation (v1)** shows CLP owed and a CSV. Live CLP payout is out of Instawards scope."
+
+> **Dev:** "Should the home page sell POS or disbursements?"
+> **Domain expert:** "Neither. `/` is a neutral door. They pick **Store with POS** or **Distribution platform** at create."
+
 ## Flagged ambiguities
 
 - **Pollar server-spend capability**: spike required — confirm funds can move from a server-provisioned org wallet under SozuPay's secret key (or equivalent). Fallback is creator-bound wallet + approval queue.
-- Email OTP / passkey login for NGOs: explicitly deferred past Google-only v1.
+- Email OTP / passkey login for NGOs: explicitly deferred past Google-only v1. Passkey remains existing-account recovery on the one door.
 - Maker-checker / re-OTP for spends: deferred past v1 unless partners demand it.
 - SumUp / MercadoPago-class card rail for Checkout: follow-up shared by merchants + NGOs — out of scope for this initiative.
-- Merchant Pollar cutover: explicitly out of scope for this initiative (separate PRD later).
-- Passkey terms remain in code for merchants; NGO path is Pollar.
-- ADR recorded: `docs/adr/0001-pollar-for-ngo-staff.md`.
+- Instawards sprint close (2026-08-28): W3 submitted as Sozu Wallet + PizzaToken QR/NFC analog, not Stellar Passport / Coffee Tokens. W4 is **Store reconciliation (v1)** on existing POS CLP charges, not a Coffee Token settlement engine or live peso payout.
+- Merchant Pollar cutover: **accepted**. New Users: **Pollar login**. Passkey / PIN: existing-account recovery. `/` is a **neutral door**. `/merchants` redirects to `/`. Org type chosen once at create (**Store with POS** / **Distribution platform**).
+- ADR recorded: `docs/adr/0001-pollar-for-ngo-staff.md` (NGO Pollar). Merchant-stay-on-passkey clause superseded by `docs/adr/0002-one-pollar-door-org-type-at-create.md`.

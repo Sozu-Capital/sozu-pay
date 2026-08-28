@@ -267,6 +267,27 @@ export async function expirePendingCheckoutSessionsForOrg(
   }
 }
 
+/** Completed POS/checkout charges for store reconciliation (newest first). */
+export async function listCompletedCheckoutSessionsForOrg(
+  orgId: string,
+  limit = 200,
+): Promise<CheckoutSession[]> {
+  const { data, error } = await getSupabase()
+    .from("checkout_sessions")
+    .select("*")
+    .eq("org_id", orgId)
+    .eq("status", "completed")
+    .is("deleted_at", null)
+    .order("updated_at", { ascending: false })
+    .limit(Math.min(Math.max(limit, 1), 500));
+
+  if (error) {
+    console.error("[checkout-sessions] listCompleted error:", error.message);
+    return [];
+  }
+  return (data ?? []) as CheckoutSession[];
+}
+
 export function mapCheckoutSessionForApi(session: CheckoutSession) {
   return {
     id: session.id,

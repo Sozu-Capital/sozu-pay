@@ -46,6 +46,8 @@ For architecture, contracts, or integrations, use the folders below.
 - **First NGO partner:** [05-requirements/Requerimientos_funcionales_MUJERES_2000.pdf](05-requirements/Requerimientos_funcionales_MUJERES_2000.pdf)
 - **Instawards Week 1 (merchant foundation):** [03-planning/INSTAWARDS_WEEK1_ROUND1_CHANGELOG.md](03-planning/INSTAWARDS_WEEK1_ROUND1_CHANGELOG.md)
 - **Instawards Week 2 (POS & dynamic payments, prod):** [03-planning/INSTAWARDS_WEEK2_POS_CHANGELOG.md](03-planning/INSTAWARDS_WEEK2_POS_CHANGELOG.md)
+- **Instawards Week 3 (redemption analog):** [03-planning/INSTAWARDS_WEEK3_REDEMPTION_ANALOG.md](03-planning/INSTAWARDS_WEEK3_REDEMPTION_ANALOG.md)
+- **Instawards Week 4 (store reconciliation v1):** [03-planning/INSTAWARDS_WEEK4_RECONCILIATION.md](03-planning/INSTAWARDS_WEEK4_RECONCILIATION.md)
 - **NGO dev plan and milestones:** [03-planning/ngo-disbursement-wallet-dev-plan.md](03-planning/ngo-disbursement-wallet-dev-plan.md)
 - **Batch disbursement and persistence:** [03-planning/production-disbursements-tasks.md](03-planning/production-disbursements-tasks.md)
 - **E2E architecture:** [01-architecture/architecture-microcredit-disbursement.md](01-architecture/architecture-microcredit-disbursement.md)

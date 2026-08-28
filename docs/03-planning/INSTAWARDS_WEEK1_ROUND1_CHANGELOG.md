@@ -58,8 +58,8 @@ Caught while testing the Week 1 merchant path on `pay.sozu.capital`.
 
 ## Demo script (Round 1 / V1.1)
 
-1. Open `/merchants` → passkey signup
-2. Create organization (store) → land on **Store dashboard**
+1. Open `/` (or `/merchants`, which redirects) → Google **Pollar login**
+2. Create organization: choose **Store with POS** → land on **Store dashboard**
 3. Home and nav offer **POS** as the only create-charge entry (no Get paid)
 4. Open **POS** → enter USD amount → Create charge → local QR with amount still visible
 5. If the store wallet is missing, POS shows finish-setup instead of a silent 422

@@ -13,6 +13,7 @@ export default function OrganizationsPage() {
   const t = useTranslations("onboardingPages.organizations");
   const tCommon = useTranslations("onboardingPages");
   const [organizations, setOrganizations] = useState<Org[]>([]);
+  const [canCreate, setCanCreate] = useState(true);
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectingId, setSelectingId] = useState<string | null>(null);
@@ -31,6 +32,7 @@ export default function OrganizationsPage() {
       .then(async (d) => {
         const orgs: Org[] = d.organizations ?? [];
         setOrganizations(orgs);
+        setCanCreate(d.canCreate !== false && orgs.length === 0);
         setActiveOrgId(typeof d.activeOrgId === "string" ? d.activeOrgId : null);
         if (orgs.length === 1) {
           setSelectingId(orgs[0].id);
@@ -99,7 +101,9 @@ export default function OrganizationsPage() {
       <main className="min-h-screen flex flex-col items-center justify-center p-4 dark text-white">
         <div className="w-full max-w-md rounded-xl border border-white/10 bg-black/40 backdrop-blur-sm p-6 shadow-xl">
           <h1 className="text-xl font-semibold text-white">{t("title")}</h1>
-          <p className="mt-2 text-sm text-gray-300">{t("subtitle")}</p>
+          <p className="mt-2 text-sm text-gray-300">
+            {canCreate ? t("subtitle") : t("subtitleOwned")}
+          </p>
 
           {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
 
@@ -126,14 +130,16 @@ export default function OrganizationsPage() {
             </ul>
           )}
 
-          <div className="mt-6 flex flex-col gap-3">
-            <Link
-              href="/onboarding/create-organization"
-              className="w-full text-center rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium hover:opacity-90 transition-opacity"
-            >
-              {t("createNew")}
-            </Link>
-          </div>
+          {canCreate ? (
+            <div className="mt-6 flex flex-col gap-3">
+              <Link
+                href="/onboarding/create-organization"
+                className="w-full text-center rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium hover:opacity-90 transition-opacity"
+              >
+                {t("createNew")}
+              </Link>
+            </div>
+          ) : null}
 
           {!hasOrgs && (
             <p className="mt-4 text-sm text-gray-400">{t("noOrgHint")}</p>

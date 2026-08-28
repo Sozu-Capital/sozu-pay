@@ -70,9 +70,7 @@ export function DashboardNav({ onNavigate }: { onNavigate?: () => void } = {}) {
   const isStore = profile?.org_type === "store";
   const showDisbursementsNav = !isStore && !!profile?.org_id;
   const t = useTranslations("nav");
-  const { signOut, signingOut } = useSignOut({
-    getLandingUrl: () => (isStore ? "/merchants?fresh=1" : "/?fresh=1"),
-  });
+  const { signOut, signingOut } = useSignOut();
 
   const links = isStore
     ? storeDashboardNavLinks({ isAdmin })

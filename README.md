@@ -111,7 +111,7 @@ bun run test:e2e    # Playwright against a local Next server with fake Pollar
 bun run test:local  # both
 ```
 
-`test:e2e` starts Next on port 3010 with `POLLAR_FAKE_AUTH` so **Continue with Google** does not open a real OAuth window.
+`test:e2e` starts Next on port 3010 with `POLLAR_FAKE_AUTH` so **Continue with Google** does not open a real OAuth window. Org create then provisions a **real Stellar testnet G** (Friendbot + USDC trustline) so checkout payments are on-chain — not the fake Pollar sentinel wallet.
 
 ---
 

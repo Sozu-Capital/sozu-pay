@@ -6,6 +6,7 @@ import { resolveCanonicalActiveOrgId } from "@/lib/db/org-members";
 import { provisionOrgTestnetClassicDisbursement } from "@/lib/stellar/provisionOrgTestnetDisbursement";
 import { applyOrganizationSozuTag, getOrganizationSozuTag } from "@/lib/org-sozu-tag";
 import { getOrgReceiveDiagnostics } from "@/lib/org-receive-address";
+import { usableClassicTreasuryPublicKey } from "@/lib/pollar/types";
 
 /**
  * POST /api/profile/org/ensure-classic-wallet
@@ -40,7 +41,7 @@ export async function POST() {
   const org = await getOrganizationById(orgId);
   if (!org) return NextResponse.json({ error: "Organization not found." }, { status: 404 });
 
-  let classic_public_key = org.stellar_disbursement_public_key?.trim() || null;
+  let classic_public_key = usableClassicTreasuryPublicKey(org.stellar_disbursement_public_key);
   let provisioned = false;
 
   if (!classic_public_key) {

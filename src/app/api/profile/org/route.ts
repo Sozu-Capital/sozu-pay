@@ -117,19 +117,8 @@ export async function POST(request: NextRequest) {
       } else {
         const provisioner = createOrgTreasuryProvisioner();
         const provisioned = await provisioner.provisionForCreator(activeUser);
-        // Production path never persists the fake sentinel as receivable treasury.
-        treasuryPublicKey =
-          usableClassicTreasuryPublicKey(provisioned.publicKey) ??
-          (process.env.POLLAR_FAKE_AUTH === "true" ? provisioned.publicKey : null);
-        if (!treasuryPublicKey) {
-          return NextResponse.json(
-            {
-              error:
-                "Could not bind a real Org treasury wallet. Sign in again with Pollar so your Staff wallet is linked.",
-            },
-            { status: 422 },
-          );
-        }
+        // Never persist the fake Pollar sentinel — it cannot receive or sign.
+        treasuryPublicKey = usableClassicTreasuryPublicKey(provisioned.publicKey);
       }
     }
 
@@ -196,6 +185,50 @@ export async function POST(request: NextRequest) {
       await setSession(nextSession);
     } catch {
       // non-fatal
+    }
+
+    if (
+      pollarPath &&
+      !usableClassicTreasuryPublicKey(treasuryPublicKey) &&
+      process.env.STELLAR_NETWORK !== "public"
+    ) {
+      try {
+        const { provisionOrgTestnetClassicDisbursement } = await import(
+          "@/lib/stellar/provisionOrgTestnetDisbursement"
+        );
+        const funded = await provisionOrgTestnetClassicDisbursement(org.id);
+        treasuryPublicKey = funded?.publicKey ?? null;
+      } catch (e) {
+        console.warn("[profile/org] testnet treasury provision failed:", e);
+        return attachSessionCookie(
+          NextResponse.json(
+            {
+              error:
+                e instanceof Error
+                  ? e.message
+                  : "Could not provision a testnet Org treasury wallet.",
+              code: "TREASURY_PROVISION_FAILED",
+              organization: { id: org.id, name: org.name, type: org.type },
+            },
+            { status: 502 },
+          ),
+          nextSession,
+        );
+      }
+    }
+
+    if (pollarPath && !usableClassicTreasuryPublicKey(treasuryPublicKey)) {
+      return attachSessionCookie(
+        NextResponse.json(
+          {
+            error:
+              "Could not bind a real Org treasury wallet. Sign in again with Pollar so your Staff wallet is linked.",
+            organization: { id: org.id, name: org.name, type: org.type },
+          },
+          { status: 422 },
+        ),
+        nextSession,
+      );
     }
 
     let sozuTag: { username: string; tag: string } | null = null;

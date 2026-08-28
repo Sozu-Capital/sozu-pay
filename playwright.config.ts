@@ -31,6 +31,7 @@ export default defineConfig({
       AUTH_MOCK: "false",
       AUTH_SECRET: E2E_AUTH_SECRET,
       SESSION_COOKIE_NAME: "sozupay_session",
+      STELLAR_NETWORK: "testnet",
       POLLAR_FAKE_AUTH: "true",
       NEXT_PUBLIC_POLLAR_FAKE_AUTH: "true",
       NEXT_PUBLIC_POLLAR_FAKE_SUBJECT: "e2e-local",

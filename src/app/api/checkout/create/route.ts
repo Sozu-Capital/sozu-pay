@@ -10,6 +10,7 @@ import {
 import { resolveCheckoutSettleToAddress } from "@/lib/checkout/settle-to";
 import {
   buildPaymentRequestResponse,
+  checkoutPersistFailureBody,
   decideIdempotentReplay,
   parsePaymentRequestBody,
 } from "@/lib/checkout/create-payment-request";
@@ -179,7 +180,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     console.error("[checkout/create] DB persist error:", err);
-    // Return the URL anyway so the merchant can still share it; a background job or next call can reconcile
+    return NextResponse.json(checkoutPersistFailureBody(), { status: 503 });
   }
 
   await expirePendingCheckoutSessionsForOrg(orgId, id);

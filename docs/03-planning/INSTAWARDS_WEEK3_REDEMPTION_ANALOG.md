@@ -29,7 +29,14 @@ SOW expected output: a **Stellar Passport** user redeems **Coffee Tokens** via Q
 3. Redeem 1 PIZZA to the store org treasury.
 4. Guest sees claimed; store PIZZA balance +1.
 
+## Testnet hashes
+
+PizzaToken **activation** (WASM upload + CreateContractV2) and **≥2 redeem** transfers are collected in the Section 6 pack:
+
+→ [INSTAWARDS_SECTION6_EVIDENCE_PACK.md](./INSTAWARDS_SECTION6_EVIDENCE_PACK.md) (D3)
+
 ## Related
 
 Week 2 POS USDC loop: [INSTAWARDS_WEEK2_POS_CHANGELOG.md](./INSTAWARDS_WEEK2_POS_CHANGELOG.md)  
+Section 6 evidence pack: [INSTAWARDS_SECTION6_EVIDENCE_PACK.md](./INSTAWARDS_SECTION6_EVIDENCE_PACK.md)  
 Auth door (2026-08-28): `/` only — see ADR `docs/adr/0002-one-pollar-door-org-type-at-create.md`.

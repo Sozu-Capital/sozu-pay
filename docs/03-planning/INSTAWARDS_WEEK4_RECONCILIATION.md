@@ -53,5 +53,6 @@ Requires local env with Supabase + Stellar testnet (see `playwright.config.ts`).
 
 ## Related
 
+- Section 6 evidence pack (all hashes + deliverable links): [INSTAWARDS_SECTION6_EVIDENCE_PACK.md](./INSTAWARDS_SECTION6_EVIDENCE_PACK.md)
 - Mainnet readiness one-pager (deploy out of scope): [INSTAWARDS_MAINNET_READINESS.md](./INSTAWARDS_MAINNET_READINESS.md)
 - Week 3 redeem analog: [INSTAWARDS_WEEK3_REDEMPTION_ANALOG.md](./INSTAWARDS_WEEK3_REDEMPTION_ANALOG.md)

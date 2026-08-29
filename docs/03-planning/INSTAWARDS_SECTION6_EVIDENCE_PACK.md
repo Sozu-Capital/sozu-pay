@@ -118,8 +118,8 @@ Provenance: printed and Horizon-verified in chat [QR checkout styling issue](11a
 | Mainnet readiness one-pager | [INSTAWARDS_MAINNET_READINESS.md](./INSTAWARDS_MAINNET_READINESS.md) (PR [#26](https://github.com/Sozu-Capital/sozu-pay/pull/26) if not yet on `dev`) |
 | Pizza redeem count on recon | PR [#25](https://github.com/Sozu-Capital/sozu-pay/pull/25) |
 | W4 demo / VO script | [INSTAWARDS_W4_DEMO_SCRIPT.md](./INSTAWARDS_W4_DEMO_SCRIPT.md) |
-| Recon video (≤3 min) | *HITL — paste link after recording (#84)* |
-| Dashboard screenshot + CSV sample | *HITL — attach after recon demo* |
+| Recon video (≤3 min) | [X / @blessed_ux — W4 till / recon](https://x.com/blessed_ux/status/2093552773694370253?s=20) |
+| Dashboard screenshot + CSV sample | *Optional — attach if needed for #86* |
 
 **Mainnet deploy is out of scope** for this sprint — see the readiness one-pager.
 
@@ -138,10 +138,9 @@ Provenance: printed and Horizon-verified in chat [QR checkout styling issue](11a
 
 ---
 
-## Still human (HITL)
+## Videos (done)
 
-1. ~~W3 redeem video~~ — [posted](https://x.com/blessed_ux/status/2093542690575077509?s=20).  
-2. W4 recon video link → paste into D4 above + comment on Exponential #84.  
-3. Optional: dashboard screenshot + CSV export file attached to #86.
+1. W3 redeem — [X](https://x.com/blessed_ux/status/2093542690575077509?s=20)  
+2. W4 recon / till — [X](https://x.com/blessed_ux/status/2093552773694370253?s=20)
 
-Once the W4 video lands, mark Exponential tickets **#84** and **#86** ready for QA.
+Optional leftover for #86: dashboard screenshot + CSV sample file. Both demo videos + hashes are linked above — tickets **#84** / **#86** can move to QA.

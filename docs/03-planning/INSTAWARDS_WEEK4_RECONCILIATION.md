@@ -21,7 +21,7 @@ SOW expected output: settlement dashboard with Coffee Token count, CLP owed, exp
 | 7 | Exportable reconciliation report | **Done** | `GET /api/store/reconciliation?format=csv` |
 | 8 | End-to-end QA | **Partial** | Unit tests on summarize/CSV; prod walk of POS → paid → panel |
 | 9 | Demo preparation | **This changelog + demo script** | Below |
-| 10 | Mainnet readiness assessment | **Note** | Testnet only. Mainnet deploy is SOW out of scope. Remaining: KYC, live pesos, Passport/Coffee Token. |
+| 10 | Mainnet readiness assessment | **Done (note)** | [INSTAWARDS_MAINNET_READINESS.md](./INSTAWARDS_MAINNET_READINESS.md) — deploy out of scope |
 
 ## Demo script
 
@@ -37,3 +37,8 @@ SOW expected output: settlement dashboard with Coffee Token count, CLP owed, exp
 - `src/lib/store/reconciliation.ts`
 - `src/app/api/store/reconciliation/route.ts`
 - `src/components/StoreReconciliationPanel.tsx`
+
+## Related
+
+- Mainnet readiness one-pager (deploy out of scope): [INSTAWARDS_MAINNET_READINESS.md](./INSTAWARDS_MAINNET_READINESS.md)
+- Week 3 redeem analog: [INSTAWARDS_WEEK3_REDEMPTION_ANALOG.md](./INSTAWARDS_WEEK3_REDEMPTION_ANALOG.md)

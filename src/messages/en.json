@@ -361,6 +361,7 @@
     "today": "Today",
     "thisCycle": "This week (from {from})",
     "chargeCount": "{count} charge(s)",
+    "pizzaRedeemCount": "{count} PIZZA redeemed",
     "owedHintLabel": "Owed this cycle",
     "owedHint": "Sum of completed POS charges this week. Live peso settlement is out of scope.",
     "exportCsv": "Export CSV",

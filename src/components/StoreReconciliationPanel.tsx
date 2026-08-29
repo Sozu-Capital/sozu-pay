@@ -80,6 +80,8 @@ export function StoreReconciliationPanel({ compact = false }: StoreReconciliatio
           </p>
           <p className="text-[11px] text-gray-500">
             {t("chargeCount", { count: summary.todayChargeCount })}
+            {" · "}
+            {t("pizzaRedeemCount", { count: summary.todayPizzaRedeemCount })}
           </p>
         </div>
         <div>
@@ -90,6 +92,8 @@ export function StoreReconciliationPanel({ compact = false }: StoreReconciliatio
           </p>
           <p className="text-[11px] text-gray-500">
             {t("chargeCount", { count: summary.cycleChargeCount })}
+            {" · "}
+            {t("pizzaRedeemCount", { count: summary.cyclePizzaRedeemCount })}
           </p>
         </div>
         {!compact ? (

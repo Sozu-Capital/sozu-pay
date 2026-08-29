@@ -32,6 +32,9 @@ SOW expected output: settlement dashboard with Coffee Token count, CLP owed, exp
 5. Transactions: full table + **Export CSV**.
 6. Confirm CSV lists the payment id and `amount_clp`.
 
+**Recorded evidence:** [W4 till / recon on X](https://x.com/blessed_ux/status/2093552773694370253?s=20)  
+**VO script:** [INSTAWARDS_W4_DEMO_SCRIPT.md](./INSTAWARDS_W4_DEMO_SCRIPT.md)
+
 ## Automated till walk (W4.8)
 
 Playwright: `e2e/tx.spec.ts` — **till walk: CLP create → paid → recon panel → CSV contains payment id**.
@@ -53,5 +56,6 @@ Requires local env with Supabase + Stellar testnet (see `playwright.config.ts`).
 
 ## Related
 
+- Section 6 evidence pack (all hashes + deliverable links): [INSTAWARDS_SECTION6_EVIDENCE_PACK.md](./INSTAWARDS_SECTION6_EVIDENCE_PACK.md)
 - Mainnet readiness one-pager (deploy out of scope): [INSTAWARDS_MAINNET_READINESS.md](./INSTAWARDS_MAINNET_READINESS.md)
 - Week 3 redeem analog: [INSTAWARDS_WEEK3_REDEMPTION_ANALOG.md](./INSTAWARDS_WEEK3_REDEMPTION_ANALOG.md)

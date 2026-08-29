@@ -29,6 +29,8 @@ SOW expected output: a **Stellar Passport** user redeems **Coffee Tokens** via Q
 3. Redeem 1 PIZZA to the store org treasury.
 4. Guest sees claimed; store PIZZA balance +1.
 
+**Recorded evidence:** [W3 PizzaToken redeem on X](https://x.com/blessed_ux/status/2093542690575077509?s=20)
+
 ## Testnet hashes
 
 PizzaToken **activation** (WASM upload + CreateContractV2) and **≥2 redeem** transfers are collected in the Section 6 pack:

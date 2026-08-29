@@ -56,7 +56,7 @@ Automated till walk (CLP create → paid → recon → CSV): `e2e/tx.spec.ts` (P
 | Contract registry | [testnet-contracts.md](../02-contracts/testnet-contracts.md) |
 | Standing SKU pattern | `https://pay.sozu.capital/pay/qr/{slug}` (same URL for QR and NFC tag) |
 | Guest wallet | [https://app.sozu.capital](https://app.sozu.capital) |
-| Redeem video (≤3 min) | *HITL — paste link after recording (#84)* |
+| Redeem video (≤3 min) | [X / @blessed_ux — W3 PizzaToken redeem](https://x.com/blessed_ux/status/2093542690575077509?s=20) |
 
 ### PizzaToken identity (testnet)
 
@@ -99,6 +99,14 @@ Full addresses:
 
 Provenance: printed and Horizon-verified in chat [QR checkout styling issue](11a1b8cd-0bc9-498d-917e-015a8abbc98b); deploy pair recovered from funder history + [stellar.expert contract](https://stellar.expert/explorer/testnet/contract/CDLIQJFEKJ4HGDQ7I5KOAVXOIZLCMVVICRMPK2LL3GE6PL53BQWGS4F6).
 
+### PizzaToken distribution evidence (video + chain)
+
+| Layer | Evidence |
+| ----- | -------- |
+| Guest redeem demo | [W3 video on X](https://x.com/blessed_ux/status/2093542690575077509?s=20) — standing QR → Sozu Wallet → claimed |
+| On-chain distribution | Redeem hashes above (1 PIZZA guest → store treasury); activation txs for mint/deploy |
+| Partner context | Live analog with **Tellus Coop** Stellar activation path — PizzaToken at the counter instead of a Coffee Token ledger |
+
 ---
 
 ## D4 — Reconciliation & pilot readiness
@@ -109,6 +117,7 @@ Provenance: printed and Horizon-verified in chat [QR checkout styling issue](11a
 | Recon panel | Store home + `/dashboard/transactions` · CSV `GET /api/store/reconciliation?format=csv` |
 | Mainnet readiness one-pager | [INSTAWARDS_MAINNET_READINESS.md](./INSTAWARDS_MAINNET_READINESS.md) (PR [#26](https://github.com/Sozu-Capital/sozu-pay/pull/26) if not yet on `dev`) |
 | Pizza redeem count on recon | PR [#25](https://github.com/Sozu-Capital/sozu-pay/pull/25) |
+| W4 demo / VO script | [INSTAWARDS_W4_DEMO_SCRIPT.md](./INSTAWARDS_W4_DEMO_SCRIPT.md) |
 | Recon video (≤3 min) | *HITL — paste link after recording (#84)* |
 | Dashboard screenshot + CSV sample | *HITL — attach after recon demo* |
 
@@ -131,8 +140,8 @@ Provenance: printed and Horizon-verified in chat [QR checkout styling issue](11a
 
 ## Still human (HITL)
 
-1. W3 redeem video link → comment on Exponential #84 / paste into D3 above.  
-2. W4 recon video link → same for D4.  
+1. ~~W3 redeem video~~ — [posted](https://x.com/blessed_ux/status/2093542690575077509?s=20).  
+2. W4 recon video link → paste into D4 above + comment on Exponential #84.  
 3. Optional: dashboard screenshot + CSV export file attached to #86.
 
-Once those three land, mark Exponential tickets **#84** and **#86** ready for QA.
+Once the W4 video lands, mark Exponential tickets **#84** and **#86** ready for QA.

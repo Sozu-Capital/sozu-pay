@@ -15,7 +15,7 @@ SOW expected output: settlement dashboard with Coffee Token count, CLP owed, exp
 | 1 | Transaction history | **Done (CLP for POS)** | Store home + `/dashboard/transactions` recon panel |
 | 2 | Daily sales summary | **Done** | Today’s completed POS CLP |
 | 3 | Current settlement cycle | **v1 week** | Monday–now in `America/Santiago`, labeled “this week” |
-| 4 | Redeemed Coffee Token count | **Analog elsewhere** | PizzaToken in Sozu Wallet — not this dashboard |
+| 4 | Redeemed Coffee Token count | **Done (analog)** | Confirmed PizzaToken redeem count on recon panel + CSV (`pizza_redeem_count`) |
 | 5 | CLP equivalent calculation | **Done** | Uses stored `amount_clp` on completed checkout rows |
 | 6 | Settlement dashboard | **v1 panel** | Totals + table; not owed-vs-paid cycles |
 | 7 | Exportable reconciliation report | **Done** | `GET /api/store/reconciliation?format=csv` |

@@ -361,6 +361,7 @@
     "today": "Hoy",
     "thisCycle": "Esta semana (desde {from})",
     "chargeCount": "{count} cobro(s)",
+    "pizzaRedeemCount": "{count} PIZZA canjeados",
     "owedHintLabel": "Adeudado este ciclo",
     "owedHint": "Suma de cobros POS completados esta semana. La liquidación en pesos queda fuera de alcance.",
     "exportCsv": "Exportar CSV",

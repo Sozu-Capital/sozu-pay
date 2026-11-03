@@ -119,7 +119,7 @@ export function DashboardProfileProvider({
 
   // Poll so balances update after external deposits (e.g. Stellar Expert shows it but UI won't refresh).
   useEffect(() => {
-    const intervalMs = 10_000;
+    const intervalMs = 30_000;
     if (typeof window === "undefined") return;
 
     let timer: number | null = null;

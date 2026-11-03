@@ -81,7 +81,7 @@ export async function deployDisbursementContract(): Promise<string> {
     address: new Address(keypair.publicKey()),
     wasmHash,
     salt,
-    constructorArgs: [],
+    constructorArgs: [new Address(keypair.publicKey()).toScVal()],
   });
 
   const rawTx = new TransactionBuilder(account, {

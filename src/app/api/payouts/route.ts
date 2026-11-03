@@ -12,6 +12,7 @@ import { appendAuditEvent } from "@/lib/audit";
 import { sendUsdc, getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
 import { sendPizzaToken } from "@/lib/stellar/send-pizza";
 import { getPizzaTokenId, isPizzaTokenConfigured } from "@/lib/stellar/pizza-token";
+import { enforcePayoutCaps } from "@/lib/payouts/caps";
 import { parsePayoutAsset, parsePizzaSendAmount, pizzaSendAmountI128, type PayoutAsset } from "@/lib/payouts/asset";
 import { fundClassicAccount, ensureSpendableXlmForFees } from "@/lib/stellar/fund";
 import { invokeSorobanPayout } from "@/lib/stellar/sorobanPayout";
@@ -254,6 +255,10 @@ export async function POST(request: NextRequest) {
       }
       normalized.push(n);
     }
+    const batchCaps = enforcePayoutCaps(normalized.map((n) => n!.amount));
+    if (!batchCaps.ok) {
+      return NextResponse.json({ error: batchCaps.error, capExceeded: true }, { status: 400 });
+    }
     const hasStellarInBatch = normalized.some((n) => n != null && n.type === "to_stellar");
     let stellarSignerSecretKey: string | undefined;
     let orgSorobanContractId: string | null = null;
@@ -397,7 +402,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (body.toStellar === true && typeof body.destination === "string") {
+  const isStellarSend = body.toStellar === true && typeof body.destination === "string";
+  if (asset === "PIZZA" && !isStellarSend) {
+    return NextResponse.json({ error: "PIZZA payouts must go to a Stellar address." }, { status: 400 });
+  }
+
+  if (asset === "USDC") {
+    const singleCaps = enforcePayoutCaps([amount]);
+    if (!singleCaps.ok) {
+      return NextResponse.json({ error: singleCaps.error, capExceeded: true }, { status: 400 });
+    }
+  }
+
+  if (isStellarSend) {
     const gate = await requireStellarPayoutAccess(session.id);
     if (!gate.ok) return gate.response;
     user = gate.user;

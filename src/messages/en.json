@@ -1222,7 +1222,6 @@
     "reSecureHint": "Encrypt the wallet with a password only you know; the server will no longer be able to decrypt it.",
     "forgotPayoutPassword": "Forgot payout password?",
     "resetWithRecovery": "Reset with recovery code",
-    "revealOrgSecret": "Reveal org wallet secret",
     "loadingShort": "Loading…",
     "hide": "Hide",
     "orgPayoutWalletTitle": "Organization payout wallet",

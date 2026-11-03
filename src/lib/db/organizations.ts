@@ -1,5 +1,10 @@
 import { getSupabase } from "@/lib/supabase/server";
 import type { OrgTaxProfile } from "@/lib/org-tax";
+import {
+  hasSecretMaterial,
+  MAINNET_SECRET_PERSISTENCE_ERROR,
+  secretPersistenceAllowed,
+} from "@/lib/security/mainnet-secrets";
 
 export type OrgType = "store" | "ngo";
 
@@ -116,6 +121,12 @@ export async function createOrganization(params: {
   treasury_guardian_threshold?: number | null;
   treasury_manager_user_id?: number | null;
 }): Promise<Organization> {
+  if (
+    !secretPersistenceAllowed() &&
+    hasSecretMaterial(params.stellar_disbursement_secret_encrypted, params.recovery_encrypted_secret)
+  ) {
+    throw new Error(MAINNET_SECRET_PERSISTENCE_ERROR);
+  }
   const tax = params.tax;
   const payload: Record<string, unknown> = {
     name: params.name,
@@ -167,6 +178,10 @@ export async function updateOrganizationWallet(
   publicKey: string,
   secretEncrypted: string
 ): Promise<Organization | null> {
+  if (!secretPersistenceAllowed() && hasSecretMaterial(secretEncrypted)) {
+    console.error(`[organizations] updateOrganizationWallet: ${MAINNET_SECRET_PERSISTENCE_ERROR}`);
+    return null;
+  }
   const payload: Record<string, unknown> = {
     stellar_disbursement_public_key: publicKey,
     stellar_disbursement_secret_encrypted: secretEncrypted,
@@ -210,6 +225,10 @@ export async function updateOrganizationRecoverySecret(
   orgId: string,
   recoveryEncryptedSecret: string | null
 ): Promise<Organization | null> {
+  if (!secretPersistenceAllowed() && hasSecretMaterial(recoveryEncryptedSecret)) {
+    console.error(`[organizations] updateOrganizationRecoverySecret: ${MAINNET_SECRET_PERSISTENCE_ERROR}`);
+    return null;
+  }
   const { data, error } = await getSupabase()
     .from("organizations")
     .update({

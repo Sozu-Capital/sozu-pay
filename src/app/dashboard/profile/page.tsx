@@ -71,8 +71,6 @@ export default function ProfilePage() {
   const [migrationPasswordInput, setMigrationPasswordInput] = useState("");
   const [migrationSubmitting, setMigrationSubmitting] = useState(false);
   const [migrationError, setMigrationError] = useState<string | null>(null);
-  const [revealedOrgSecret, setRevealedOrgSecret] = useState<string | null>(null);
-  const [loadingOrgSecret, setLoadingOrgSecret] = useState(false);
 
   const [showTrustlineModal, setShowTrustlineModal] = useState(false);
   const [trustlineSecretInput, setTrustlineSecretInput] = useState("");
@@ -358,20 +356,6 @@ export default function ProfilePage() {
       setMigrationError(err instanceof Error ? err.message : t("migrationFailed"));
     } finally {
       setMigrationSubmitting(false);
-    }
-  };
-
-  const handleRevealOrgSecret = async () => {
-    setLoadingOrgSecret(true);
-    setRevealedOrgSecret(null);
-    try {
-      const res = await fetch("/api/profile/org/secret");
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.secretKey) {
-        setRevealedOrgSecret(data.secretKey);
-      }
-    } finally {
-      setLoadingOrgSecret(false);
     }
   };
 
@@ -817,39 +801,6 @@ export default function ProfilePage() {
                 {t("resetWithRecovery")}
               </button>
             </p>
-          )}
-          {profile.org_has_stored_secret && profile.org_encryption_type !== "user_derived" && (
-            <div className="mt-4">
-              <button
-                type="button"
-                onClick={handleRevealOrgSecret}
-                disabled={loadingOrgSecret}
-                className="rounded-md border border-amber-500 dark:border-amber-600 text-amber-700 dark:text-amber-400 px-3 py-2 text-sm font-medium hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50"
-              >
-                {loadingOrgSecret ? t("loadingShort") : t("revealOrgSecret")}
-              </button>
-              {revealedOrgSecret && (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <code className="flex-1 min-w-0 font-mono text-sm break-all bg-red-50 dark:bg-red-950/30 px-2 py-1.5 rounded text-red-800 dark:text-red-200">
-                    {revealedOrgSecret}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(revealedOrgSecret, "revealed-secret")}
-                    className="rounded-md border border-red-300 dark:border-red-700 px-2 py-1.5 text-xs text-red-700 dark:text-red-400 shrink-0"
-                  >
-                    {copied === "revealed-secret" ? tc("copied") : tc("copy")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRevealedOrgSecret(null)}
-                    className="rounded-md border border-gray-300 dark:border-gray-600 px-2 py-1.5 text-xs shrink-0"
-                  >
-                    {t("hide")}
-                  </button>
-                </div>
-              )}
-            </div>
           )}
         </ProfileCollapsibleCard>
       )}

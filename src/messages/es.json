@@ -1222,7 +1222,6 @@
     "reSecureHint": "Cifra la billetera con una contraseña que solo tú conozcas; el servidor ya no podrá descifrarla.",
     "forgotPayoutPassword": "¿Olvidaste la contraseña de retiros?",
     "resetWithRecovery": "Restablecer con código de recuperación",
-    "revealOrgSecret": "Revelar secreto de la billetera org",
     "loadingShort": "Cargando…",
     "hide": "Ocultar",
     "orgPayoutWalletTitle": "Billetera de retiros de la organización",

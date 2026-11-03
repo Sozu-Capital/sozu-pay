@@ -62,6 +62,14 @@ fn second_initialize_panics() {
 }
 
 #[test]
+#[should_panic(expected = "No signers")]
+fn initialize_with_no_signers_panics() {
+    let s = setup();
+    s.env.mock_all_auths();
+    s.client.initialize(&s.token, &vec![&s.env], &CAP);
+}
+
+#[test]
 #[should_panic(expected = "Error(Auth, InvalidAction)")]
 fn initialize_without_admin_auth_fails() {
     let s = setup();

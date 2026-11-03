@@ -1,0 +1,68 @@
+{
+  "strictness": 2,
+  "commentTypes": [
+    "logic",
+    "syntax"
+  ],
+  "autoReview": [
+    "open",
+    "push"
+  ],
+  "triggerOnDrafts": false,
+  "statusCheck": true,
+  "ignorePatterns": "pnpm-lock.yaml\npackage-lock.json\nbun.lock\n**/target/**\n**/test_snapshots/**\n.next/**\npublic/**\n.cursor/**\n.windsurf/**\n.agents/**",
+  "rules": [
+    {
+      "id": "no-secret-in-response",
+      "rule": "No API route may return secret key material: Stellar secret keys, seeds, mnemonics, private keys, or a decrypted org secret. decryptOrgSecret may only be used to sign server-side. Where src/lib/security/no-secret-routes.test.ts exists, it must keep passing and its allowlist must not grow without a stated reason.",
+      "scope": [
+        "src/app/api/**"
+      ],
+      "severity": "high"
+    },
+    {
+      "id": "mainnet-keys-env-only",
+      "rule": "On mainnet (STELLAR_NETWORK=public) no secret material, encrypted or not, may be written to the database. Any write path for stellar_disbursement_secret_encrypted or recovery_encrypted_secret must be refused on mainnet, using the shared secretPersistenceAllowed() guard in src/lib/security/mainnet-secrets.ts where it exists rather than a parallel check.",
+      "scope": [
+        "src/**"
+      ],
+      "severity": "high"
+    },
+    {
+      "id": "payout-caps",
+      "rule": "Every code path that builds or submits a USDC payout (contract payout, SAC transfer, classic payment, client-signed send, batch or distribution run) must check per-payout and per-run caps against all amounts in the run before building or submitting, and must fail closed when caps are missing on mainnet. Use enforcePayoutCaps from src/lib/payouts/caps.ts where it exists. Amounts are compared as bigint stroops, never as floats.",
+      "scope": [
+        "src/app/api/payouts/**",
+        "src/lib/payouts/**",
+        "src/lib/stellar/**",
+        "src/lib/pollar/**",
+        "src/lib/disbursements/**"
+      ],
+      "severity": "high"
+    },
+    {
+      "id": "session-identity",
+      "rule": "API routes take the caller's identity and org only from the server session (getSession / getUserBySessionId). Never trust a user id, org id, role or wallet address taken from the request body, query string or headers for authorization.",
+      "scope": [
+        "src/app/api/**"
+      ],
+      "severity": "high"
+    },
+    {
+      "id": "contract-safety",
+      "rule": "Soroban contracts: one-time initialization guarded by the constructor-set admin's require_auth, every privileged entry point calls require_auth, amounts are validated (positive, within caps), overflow-checks stays enabled in the release profile, and every behavior change ships with a Rust test including the failure case.",
+      "scope": [
+        "contracts/**"
+      ],
+      "severity": "high"
+    },
+    {
+      "id": "no-sensitive-logs",
+      "rule": "Do not log secret keys, unlock cookies, session values, passkey credentials, or full user/org identifiers in new console.log calls.",
+      "scope": [
+        "src/**"
+      ],
+      "severity": "medium"
+    }
+  ]
+}

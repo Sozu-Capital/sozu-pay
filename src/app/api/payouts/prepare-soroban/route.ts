@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getSession } from "@/lib/auth/session";
+import { enforcePayoutCaps } from "@/lib/payouts/caps";
 import { requireStellarPayoutAccess } from "@/lib/auth/disbursement-auth";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
@@ -53,6 +54,10 @@ export async function POST(request: NextRequest) {
   const amount = typeof body.amount === "string" ? body.amount.trim() : "";
   if (!recipientAddress || !amount) {
     return NextResponse.json({ error: "recipientAddress and amount are required." }, { status: 400 });
+  }
+  const caps = enforcePayoutCaps([amount]);
+  if (!caps.ok) {
+    return NextResponse.json({ error: caps.error, capExceeded: true }, { status: 400 });
   }
 
   const locale = readServerLocaleCookie((await cookies()).get(LOCALE_COOKIE)?.value);

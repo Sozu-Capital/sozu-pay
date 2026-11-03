@@ -13,6 +13,7 @@ import {
   xdr,
 } from "@stellar/stellar-sdk";
 import { amountToI128, getNetworkPassphrase, getSorobanRpcUrl } from "@/lib/stellar/soroban-common";
+import { enforcePayoutCaps } from "@/lib/payouts/caps";
 
 export type SorobanPayoutOptions = {
   /** Contract ID (C address) of the disbursement wallet. */
@@ -35,6 +36,8 @@ export async function invokeSorobanPayout(
   options: SorobanPayoutOptions
 ): Promise<string> {
   const { contractId, signerSecretKey, recipientAddress, amount } = options;
+  const caps = enforcePayoutCaps([amount]);
+  if (!caps.ok) throw new Error(caps.error);
   const keypair = Keypair.fromSecret(signerSecretKey);
   const callerPublicKey = keypair.publicKey();
   const networkPassphrase = getNetworkPassphrase();

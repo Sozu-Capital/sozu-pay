@@ -12,6 +12,7 @@ import {
   Operation,
   Asset,
   Networks,
+  nativeToScVal,
 } from "@stellar/stellar-sdk";
 import { getHorizon } from "@/lib/stellar/server";
 import { decryptOrgSecret } from "@/lib/org-secret";
@@ -20,6 +21,7 @@ import { amountToI128, coerceSimulateRetval, getNetworkPassphrase, getSorobanRpc
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
 import { PayoutFundsError, formatSorobanPayoutError } from "@/lib/stellar/soroban-payout-errors";
 import type { Organization } from "@/lib/db/organizations";
+import { contractPayoutCapStroops, enforcePayoutCaps } from "@/lib/payouts/caps";
 
 const USDC_ISSUER_TESTNET =
   "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
@@ -126,7 +128,9 @@ export async function initializeDisbursementContract(params: {
   const signerScVal = Address.fromString(params.memberSmartAccountContractId).toScVal();
   const signersVec = xdr.ScVal.scvVec([signerScVal]);
 
-  const op = contract.call("initialize", tokenScVal, signersVec);
+  const capScVal = nativeToScVal(contractPayoutCapStroops(), { type: "i128" });
+
+  const op = contract.call("initialize", tokenScVal, signersVec, capScVal);
 
   const rawTx = new TransactionBuilder(account, {
     fee: "100000",
@@ -206,6 +210,8 @@ export async function buildUnsignedSorobanPayout(params: {
   /** Org receive treasury (C…); USDC here is swept into disbursement before payout when needed. */
   treasuryContractId?: string | null;
 }): Promise<{ envelopeXdr: string; network: string; feePayerPublicKey: string }> {
+  const caps = enforcePayoutCaps([params.amount]);
+  if (!caps.ok) throw new Error(caps.error);
   const caller = params.callerSmartAccountId.trim().toUpperCase();
   const recipient = params.recipientAddress.trim().toUpperCase();
   const disbursement = params.disbursementContractId.trim().toUpperCase();

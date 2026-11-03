@@ -402,6 +402,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const isStellarSend = body.toStellar === true && typeof body.destination === "string";
+  if (asset === "PIZZA" && !isStellarSend) {
+    return NextResponse.json({ error: "PIZZA payouts must go to a Stellar address." }, { status: 400 });
+  }
+
   if (asset === "USDC") {
     const singleCaps = enforcePayoutCaps([amount]);
     if (!singleCaps.ok) {
@@ -409,7 +414,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  if (body.toStellar === true && typeof body.destination === "string") {
+  if (isStellarSend) {
     const gate = await requireStellarPayoutAccess(session.id);
     if (!gate.ok) return gate.response;
     user = gate.user;

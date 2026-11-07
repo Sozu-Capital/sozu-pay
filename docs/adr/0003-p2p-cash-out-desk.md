@@ -1,6 +1,6 @@
 # P2P cash-out desk: one shared order table, escrow key on the dashboard
 
-**Status:** Proposed (Nov 6, 2026). Needs Joaquín's sign-off on the escrow account type before szp #89 deploys anything.
+**Status:** Accepted (Nov 6, 2026). Joaquín approved the classic `G` escrow.
 **Ticket:** szp #88. Unblocks szp #91–#96.
 
 The Mujeres 2000 pilot needs a cash-out desk: she sells USDC for ARS, her USDC waits in escrow, Joaquín sends pesos from his bank, she confirms, escrow releases. It spans both apps. Sozu Wallet is where she places and confirms the order. Sozu Pay is where the desk sees the order and marks it paid. Both apps already use the same Supabase project, so they don't need to call each other.

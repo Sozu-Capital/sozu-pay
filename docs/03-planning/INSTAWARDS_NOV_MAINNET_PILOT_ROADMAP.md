@@ -103,6 +103,24 @@ Target the edited video by Nov 26 and the closeout PR by Nov 28, so there is buf
 - **Relayer:** live on mainnet, paying fees for a smart-account deploy and one transfer, with a balance alert.
 - **Keys:** distribution, escrow, desk receiving, and fee account created on mainnet, stored only in prod env, none of them the testnet funder.
 
+## Mainnet keys (szp #89)
+
+Four new keys, none of them the testnet funder. The escrow is a classic `G` with a USDC trustline ([ADR 0003](../adr/0003-p2p-cash-out-desk.md)). Created and checked with `scripts/pilot-mainnet-keys.ts`:
+
+1. `npx tsx scripts/pilot-mainnet-keys.ts generate --keys <path outside any repo>`. Offline; prints public keys only.
+2. Send XLM from an exchange: distribution 5, escrow 5, desk receiving 2, fee payer 100 (estimates until the smoke test measures fees).
+3. `… setup --keys <file>` adds the USDC trustlines.
+4. Send 615 USDC to the distribution key (600 pool + 15 smoke-test float, personal donation).
+5. Copy the secrets into the password manager and the Vercel production env that `verify` lists. The desk receiving secret goes in the password manager only.
+6. `… verify --keys <file>` must exit 0. Paste its table below, then move the keys file offline.
+
+| Role | Public address | Secret lives in | Check |
+| --- | --- | --- | --- |
+| distribution | _pending_ | `PILOT_DISTRIBUTION_SECRET` (sozu-pay prod) | |
+| escrow | _pending_ | `DESK_ESCROW_SECRET` (sozu-pay prod) | |
+| desk_receiving | _pending_ | password manager only | |
+| fee_payer | _pending_ | `STELLAR_FUNDER_SECRET` (sozu-wallet prod) | |
+
 ## Open questions
 
 - Who on the team has an Argentine bank account to receive ARS in the smoke test? The desk pays from Joaquín's personal account, so it can't be Joaquín.

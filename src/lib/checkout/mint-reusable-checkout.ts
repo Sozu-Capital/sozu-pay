@@ -8,8 +8,8 @@ import { payerCheckoutUrl } from "@/lib/dashboard/payment-link";
 import { createCheckoutSession } from "@/lib/db/checkout-sessions";
 import { getOrganizationById } from "@/lib/db/organizations";
 
-function requestHost(request?: NextRequest): string | null {
-  return request?.headers.get("x-forwarded-host") ?? request?.headers.get("host") ?? null;
+function requestHost(request?: NextRequest, hostHeader?: string | null): string | null {
+  return hostHeader ?? request?.headers.get("x-forwarded-host") ?? request?.headers.get("host") ?? null;
 }
 
 /**
@@ -22,6 +22,7 @@ export async function mintReusableCheckout(params: {
   reference: string;
   fxSource: string;
   request?: NextRequest;
+  hostHeader?: string | null;
 }): Promise<
   | { ok: true; id: string; checkoutUrl: string }
   | { ok: false; status: number; error: string }
@@ -38,7 +39,7 @@ export async function mintReusableCheckout(params: {
   const id = `cs_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const checkoutUrl = payerCheckoutUrl(
     id,
-    requestHost(params.request),
+    requestHost(params.request, params.hostHeader),
     process.env.NEXT_PUBLIC_SOZU_WALLET_URL,
   );
 

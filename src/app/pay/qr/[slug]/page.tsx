@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   PizzaClaimedConfirmation,
@@ -8,11 +9,10 @@ import {
   getCheckoutSession,
   getLatestPendingCheckoutForOrg,
 } from "@/lib/db/checkout-sessions";
-import { PayStandingLink } from "@/components/PayStandingLink";
+import { mintReusableCheckout } from "@/lib/checkout/mint-reusable-checkout";
 import { getQRPointBySlug } from "@/lib/db/merchant-qr-points";
-import { getOrganizationById } from "@/lib/db/organizations";
 import { getPizzaRedeem } from "@/lib/db/pizza-redeems";
-import { checkoutSessionUrl } from "@/lib/checkout-url";
+import { payerCheckoutUrl, STANDING_LINK_FX_SOURCE } from "@/lib/dashboard/payment-link";
 import { routePayQrPoint } from "@/lib/dashboard/merchant-qr";
 import { getWalletOrigin, nextPizzaSkuGuestAction, pizzaWalletCheckoutUrl } from "@/lib/pizza/redeem";
 
@@ -117,16 +117,28 @@ export default async function PayQRPage({ params, searchParams }: Props) {
     redirect(pizzaWalletCheckoutUrl({ walletOrigin, slug }));
   }
 
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+
   if (route.kind === "standing_price") {
-    const org = await getOrganizationById(route.orgId);
-    return (
-      <PayStandingLink
-        slug={route.slug}
-        storeName={org?.name ?? "Tienda"}
-        itemName={route.name}
-        amountUsd={route.amountUsd}
-      />
-    );
+    const minted = await mintReusableCheckout({
+      orgId: route.orgId,
+      amountUsd: route.amountUsd,
+      reference: route.name,
+      fxSource: STANDING_LINK_FX_SOURCE,
+      hostHeader: host,
+    });
+    if (!minted.ok) {
+      return (
+        <main className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
+          <div className="w-full max-w-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 text-center">
+            <p className="text-lg font-semibold text-gray-900 dark:text-white">No se pudo abrir el pago</p>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{minted.error}</p>
+          </div>
+        </main>
+      );
+    }
+    redirect(minted.checkoutUrl);
   }
 
   const checkoutId = await resolveLiveCheckoutId(route.orgId, route.destinationRef);
@@ -150,5 +162,5 @@ export default async function PayQRPage({ params, searchParams }: Props) {
     );
   }
 
-  redirect(checkoutSessionUrl(checkoutId));
+  redirect(payerCheckoutUrl(checkoutId, host, process.env.NEXT_PUBLIC_SOZU_WALLET_URL));
 }

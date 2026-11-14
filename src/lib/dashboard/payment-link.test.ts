@@ -5,7 +5,9 @@ import {
   normalizeUsdAmount,
   parseStandingPriceUsd,
   checkoutOriginFromHeaders,
+  isStubRampCheckoutUrl,
   originOfRedirect,
+  payerCheckoutUrl,
   slugFromTitle,
   standingPriceRef,
   STANDING_LINK_FX_SOURCE,
@@ -46,6 +48,24 @@ describe("checkout host", () => {
       ),
       "https://dev.pay.sozu.capital",
     );
+  });
+});
+
+describe("payer checkout", () => {
+  it("sends a staging payment link to the staging wallet, not the ramp stub or the waitlisted app", () => {
+    assert.equal(
+      payerCheckoutUrl("cs_1", "dev.pay.sozu.capital", "https://app.sozu.capital"),
+      "https://dev.sozu.capital/checkout/cs_1",
+    );
+    assert.equal(
+      payerCheckoutUrl("cs_1", "pay.sozu.capital"),
+      "https://app.sozu.capital/checkout/cs_1",
+    );
+    assert.equal(
+      isStubRampCheckoutUrl("https://dev.pay.sozu.capital/ramp/stub-checkout?ref=cs_1"),
+      true,
+    );
+    assert.equal(isStubRampCheckoutUrl("https://dev.sozu.capital/checkout/cs_1"), false);
   });
 });
 

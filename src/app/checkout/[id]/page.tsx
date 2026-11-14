@@ -1,4 +1,6 @@
 import { getCheckoutSession } from "@/lib/db/checkout-sessions";
+import { isStubRampCheckoutUrl, payerCheckoutUrl } from "@/lib/dashboard/payment-link";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -50,8 +52,18 @@ export default async function CheckoutPage({ params }: Props) {
     );
   }
 
-  // Redirect to the provider-hosted payment UI
+  // The ramp stub is a demo. Testnet payers use the wallet checkout (passkey + USDC).
   if (session.provider_url) {
+    if (isStubRampCheckoutUrl(session.provider_url)) {
+      const h = await headers();
+      redirect(
+        payerCheckoutUrl(
+          id,
+          h.get("x-forwarded-host") ?? h.get("host"),
+          process.env.NEXT_PUBLIC_SOZU_WALLET_URL,
+        ),
+      );
+    }
     redirect(session.provider_url);
   }
 

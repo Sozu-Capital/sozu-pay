@@ -4,6 +4,8 @@ import {
   isReusableCharge,
   normalizeUsdAmount,
   parseStandingPriceUsd,
+  checkoutOriginFromHeaders,
+  originOfRedirect,
   slugFromTitle,
   standingPriceRef,
   STANDING_LINK_FX_SOURCE,
@@ -28,6 +30,22 @@ describe("standing price", () => {
     const ref = standingPriceRef("12.50");
     assert.equal(parseStandingPriceUsd(ref), "12.50");
     assert.equal(parseStandingPriceUsd("cs_live"), null);
+  });
+});
+
+describe("checkout host", () => {
+  it("keeps a staging payment on the host that opened the link", () => {
+    assert.equal(
+      checkoutOriginFromHeaders("dev.pay.sozu.capital", "https", "https://pay.sozu.capital"),
+      "https://dev.pay.sozu.capital",
+    );
+    assert.equal(
+      originOfRedirect(
+        "https://dev.pay.sozu.capital/checkout/cs_1/success",
+        "https://pay.sozu.capital",
+      ),
+      "https://dev.pay.sozu.capital",
+    );
   });
 });
 

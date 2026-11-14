@@ -40,6 +40,32 @@ export function parseStandingPriceUsd(ref: string | null | undefined): string | 
   return normalizeUsdAmount(ref.slice(STANDING_PRICE_PREFIX.length));
 }
 
+/** Host that should own this checkout. Prefer the request host so staging stays on dev.pay. */
+export function checkoutOriginFromHeaders(
+  hostHeader: string | null | undefined,
+  protoHeader: string | null | undefined,
+  fallback: string,
+): string {
+  const fallbackOrigin = fallback.replace(/\/$/, "") || "http://localhost:3000";
+  const host = hostHeader?.split(",")[0]?.trim();
+  if (!host) return fallbackOrigin;
+  const proto =
+    protoHeader?.split(",")[0]?.trim() ||
+    (host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https");
+  return `${proto}://${host}`;
+}
+
+/** Keep a stub checkout on the same host as its success URL. */
+export function originOfRedirect(redirectUrl: string, fallback: string): string {
+  try {
+    const url = new URL(redirectUrl);
+    if (url.protocol === "https:" || url.protocol === "http:") return url.origin;
+  } catch {
+    /* use fallback */
+  }
+  return fallback.replace(/\/$/, "") || "http://localhost:3000";
+}
+
 /** POS "new sale" expires other one-shot checkouts. Reusable charges stay pending. */
 export function isReusableCharge(fxSource: string | null | undefined): boolean {
   return fxSource === STANDING_LINK_FX_SOURCE || fxSource === OPEN_AMOUNT_FX_SOURCE;

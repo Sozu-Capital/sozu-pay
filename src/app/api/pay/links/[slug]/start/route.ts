@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { STANDING_LINK_FX_SOURCE } from "@/lib/dashboard/payment-link";
 import { mintReusableCheckout } from "@/lib/checkout/mint-reusable-checkout";
 import { getQRPointBySlug } from "@/lib/db/merchant-qr-points";
@@ -8,10 +8,10 @@ type Params = { params: Promise<{ slug: string }> };
 
 /**
  * POST /api/pay/links/[slug]/start
- * Opens a fresh wallet checkout for a standing payment link.
+ * Opens a fresh checkout on this host for a standing payment link.
  * Paying once does not consume the link.
  */
-export async function POST(_request: Request, { params }: Params) {
+export async function POST(request: NextRequest, { params }: Params) {
   const { slug } = await params;
   const qr = await getQRPointBySlug(slug);
   if (!qr) {
@@ -31,6 +31,7 @@ export async function POST(_request: Request, { params }: Params) {
     amountUsd: route.amountUsd,
     reference: route.name,
     fxSource: STANDING_LINK_FX_SOURCE,
+    request,
   });
   if (!minted.ok) {
     return NextResponse.json({ error: minted.error }, { status: minted.status });
@@ -40,6 +41,6 @@ export async function POST(_request: Request, { params }: Params) {
     id: minted.id,
     amountUsd: route.amountUsd,
     itemName: route.name,
-    walletCheckoutUrl: minted.walletCheckoutUrl,
+    checkoutUrl: minted.checkoutUrl,
   });
 }

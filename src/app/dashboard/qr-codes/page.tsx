@@ -218,7 +218,7 @@ export default function QRCodesPage() {
 
       <div className="mt-8">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t("listTitle")}</h2>
-        {!loading && (
+        {!loading && orgPizzasDeposited > 0 && (
           <p className="mt-2 text-sm text-gray-400">{t("orgAccountPizzas", { count: orgPizzasDeposited })}</p>
         )}
         {loading ? (
@@ -284,9 +284,11 @@ export default function QRCodesPage() {
                           : t("liveCheckoutWaiting");
                       })()}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-300 mt-1">
-                      {t("pizzasOnCard", { count: qr.pizzasDeposited })}
-                    </p>
+                    {qr.destinationType === "pizza_sku" && (
+                      <p className="text-xs text-gray-500 dark:text-gray-300 mt-1">
+                        {t("pizzasOnCard", { count: qr.pizzasDeposited })}
+                      </p>
+                    )}
                   </div>
                   {qr.pointType === "qr" && (
                     <img
@@ -298,12 +300,16 @@ export default function QRCodesPage() {
                 </button>
                 {isOpen && (
                   <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4 space-y-2">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {t("orgAccountPizzas", { count: orgPizzasDeposited })}
-                    </p>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
-                      {t("thisChipPizzas", { count: qr.pizzasDeposited })}
-                    </p>
+                    {qr.destinationType === "pizza_sku" && (
+                      <>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                          {t("orgAccountPizzas", { count: orgPizzasDeposited })}
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                          {t("thisChipPizzas", { count: qr.pizzasDeposited })}
+                        </p>
+                      </>
+                    )}
                     <div className="flex flex-wrap items-center gap-2 pt-1">
                       <a
                         href={getPointUrl(qr)}

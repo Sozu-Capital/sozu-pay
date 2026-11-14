@@ -24,12 +24,12 @@ export function PayStandingLink({
         method: "POST",
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || typeof data.walletCheckoutUrl !== "string") {
+      if (!res.ok || typeof data.checkoutUrl !== "string") {
         setError(typeof data.error === "string" ? data.error : "No se pudo abrir el pago");
         setBusy(false);
         return;
       }
-      window.location.assign(data.walletCheckoutUrl);
+      window.location.assign(data.checkoutUrl);
     } catch {
       setError("No se pudo abrir el pago");
       setBusy(false);

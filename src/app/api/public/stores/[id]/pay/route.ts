@@ -34,6 +34,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       amountUsd: item.amountUsd,
       reference: item.name,
       fxSource: STANDING_LINK_FX_SOURCE,
+      request,
     });
     if (!minted.ok) {
       return NextResponse.json({ error: minted.error }, { status: minted.status });
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       amountUsd: item.amountUsd,
       itemName: item.name,
       storeName: store.name,
-      walletCheckoutUrl: minted.walletCheckoutUrl,
+      checkoutUrl: minted.checkoutUrl,
     });
   }
 
@@ -57,6 +58,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     amountUsd,
     reference: store.name,
     fxSource: OPEN_AMOUNT_FX_SOURCE,
+    request,
   });
   if (!minted.ok) {
     return NextResponse.json({ error: minted.error }, { status: minted.status });
@@ -67,6 +69,6 @@ export async function POST(request: NextRequest, { params }: Params) {
     amountUsd,
     itemName: null,
     storeName: store.name,
-    walletCheckoutUrl: minted.walletCheckoutUrl,
+    checkoutUrl: minted.checkoutUrl,
   });
 }

@@ -7,7 +7,7 @@ import {
 } from "./nav-links.js";
 
 describe("storeDashboardNavLinks", () => {
-  it("includes POS and QR & NFC, not Get paid / checkout", () => {
+  it("includes payment link and new sale, not the NGO funding checkout", () => {
     const links = storeDashboardNavLinks();
     const hrefs = links.map((l) => l.href);
     const kinds = links.map((l) => l.kind);
@@ -25,12 +25,12 @@ describe("storeDashboardNavLinks", () => {
 });
 
 describe("storeHomeActions", () => {
-  it("offers POS as the create-charge action and keeps QR & NFC", () => {
+  it("offers a reusable payment link and a one-time new sale", () => {
     const actions = storeHomeActions();
     const hrefs = actions.map((a) => a.href);
     const kinds = actions.map((a) => a.kind);
 
-    assert.equal(kinds[0], "pos");
+    assert.equal(kinds[0], "qr-codes");
     assert.ok(hrefs.includes("/dashboard/pos"));
     assert.ok(hrefs.includes("/dashboard/qr-codes"));
     assert.ok(hrefs.includes("/dashboard/send"));

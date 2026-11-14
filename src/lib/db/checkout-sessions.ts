@@ -1,3 +1,4 @@
+import { OPEN_AMOUNT_FX_SOURCE, STANDING_LINK_FX_SOURCE } from "@/lib/dashboard/payment-link";
 import { getSupabase } from "@/lib/supabase/server";
 
 export type CheckoutSessionStatus = "pending" | "completed" | "failed" | "expired";
@@ -248,7 +249,10 @@ export async function softDeleteCheckoutSession(
   return true;
 }
 
-/** One live checkout per org — supersede older pending links when a new one is created. */
+/**
+ * One live one-shot sale per org. Standing payment links and open-amount
+ * sends stay pending — a new sale must not kill them.
+ */
 export async function expirePendingCheckoutSessionsForOrg(
   orgId: string,
   exceptId: string,
@@ -260,7 +264,10 @@ export async function expirePendingCheckoutSessionsForOrg(
     .eq("org_id", orgId)
     .eq("status", "pending")
     .is("deleted_at", null)
-    .neq("id", exceptId);
+    .neq("id", exceptId)
+    .or(
+      `fx_source.is.null,fx_source.not.in.(${STANDING_LINK_FX_SOURCE},${OPEN_AMOUNT_FX_SOURCE})`,
+    );
 
   if (error) {
     console.error("[checkout-sessions] expire pending error:", error.message);

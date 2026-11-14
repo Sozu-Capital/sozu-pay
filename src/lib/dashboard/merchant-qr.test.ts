@@ -90,6 +90,24 @@ describe("routePayQrPoint", () => {
     });
   });
 
+  it("treats a priced checkout point as a standing payment link", () => {
+    const route = routePayQrPoint({
+      name: "House latte",
+      slug: "house-latte",
+      orgId: "org-cafe",
+      isOnline: true,
+      destinationType: "checkout",
+      destinationRef: "price:4.50",
+    });
+    assert.deepEqual(route, {
+      kind: "standing_price",
+      name: "House latte",
+      slug: "house-latte",
+      orgId: "org-cafe",
+      amountUsd: "4.50",
+    });
+  });
+
   it("does not fall through to live checkout resolution for pizza_sku", () => {
     const route = routePayQrPoint({
       name: "Thursday NFC",

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
-import { createQRPoint, listQRPointsForOrg } from "@/lib/db/merchant-qr-points";
+import { allocateQrSlug, createQRPoint, listQRPointsForOrg } from "@/lib/db/merchant-qr-points";
+import { normalizeUsdAmount, standingPriceRef } from "@/lib/dashboard/payment-link";
 import { listSubmittedPizzaRedeemsForOrg } from "@/lib/db/pizza-redeems";
 import { getLatestPendingCheckoutForOrg } from "@/lib/db/checkout-sessions";
 import {
@@ -55,8 +56,11 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
   const name = typeof body.name === "string" ? body.name.trim() : "";
-  const slug = typeof body.slug === "string" ? body.slug.trim().toLowerCase() : "";
-  const destinationType = parseQrPointDestinationType(body.destinationType);
+  const requestedSlug = typeof body.slug === "string" ? body.slug.trim().toLowerCase() : "";
+  const amountUsd = normalizeUsdAmount(body.amountUsd);
+  const destinationType = amountUsd
+    ? "checkout"
+    : parseQrPointDestinationType(body.destinationType);
   const destinationRef = typeof body.destinationRef === "string" ? body.destinationRef.trim() : undefined;
   const isOnline = typeof body.isOnline === "boolean" ? body.isOnline : true;
   const pointType = body.pointType === "nfc" ? "nfc" : "qr";
@@ -64,23 +68,36 @@ export async function POST(request: NextRequest) {
   if (!name) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
   }
-  if (!slug || !/^[a-z0-9_-]+$/.test(slug)) {
-    return NextResponse.json({ error: "Invalid slug (use lowercase letters, numbers, dash, underscore)" }, { status: 400 });
+  if (!amountUsd && body.amountUsd != null && body.amountUsd !== "") {
+    return NextResponse.json({ error: "Enter a price greater than 0" }, { status: 400 });
   }
   if (!destinationType) {
     return NextResponse.json({ error: "Invalid destination type" }, { status: 400 });
   }
 
   try {
-    const latest =
-      destinationType === "checkout"
-        ? await getLatestPendingCheckoutForOrg(orgId)
-        : null;
-    const finalDestinationRef = destinationRefForQrCreate({
-      destinationType,
-      destinationRef,
-      latestCheckoutId: latest?.id ?? null,
-    });
+    const slug =
+      requestedSlug && /^[a-z0-9_-]+$/.test(requestedSlug)
+        ? requestedSlug
+        : await allocateQrSlug(name);
+    if (!/^[a-z0-9_-]+$/.test(slug)) {
+      return NextResponse.json({ error: "Invalid slug" }, { status: 400 });
+    }
+
+    let finalDestinationRef: string | undefined;
+    if (amountUsd) {
+      finalDestinationRef = standingPriceRef(amountUsd);
+    } else {
+      const latest =
+        destinationType === "checkout"
+          ? await getLatestPendingCheckoutForOrg(orgId)
+          : null;
+      finalDestinationRef = destinationRefForQrCreate({
+        destinationType,
+        destinationRef,
+        latestCheckoutId: latest?.id ?? null,
+      });
+    }
 
     const qrPoint = await createQRPoint({
       orgId,

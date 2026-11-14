@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { qrPointScanUrl } from "@/lib/dashboard/merchant-qr";
 import type { QrPointDestinationType } from "@/lib/dashboard/merchant-qr";
+import { parseStandingPriceUsd, slugFromTitle } from "@/lib/dashboard/payment-link";
 
 type QRPoint = {
   id: string;
@@ -25,10 +26,7 @@ export default function QRCodesPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [pointType, setPointType] = useState<"qr" | "nfc">("qr");
-  const [destinationType, setDestinationType] = useState<QrPointDestinationType>("checkout");
-  const [destinationRef, setDestinationRef] = useState("");
+  const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,12 +63,8 @@ export default function QRCodesPage() {
       setError(t("errorNameRequired"));
       return;
     }
-    if (!slug.trim()) {
-      setError(t("errorSlugRequired"));
-      return;
-    }
-    if (destinationType === "custom_url" && !destinationRef.trim()) {
-      setError(t("errorUrlRequired"));
+    if (!amount.trim() || Number(amount.replace(",", ".")) <= 0) {
+      setError(t("errorAmount"));
       return;
     }
 
@@ -81,11 +75,7 @@ export default function QRCodesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
-          slug: slug.trim(),
-          pointType,
-          destinationType,
-          destinationRef:
-            destinationType === "pizza_sku" ? undefined : destinationRef.trim() || undefined,
+          amountUsd: amount.trim().replace(",", "."),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -94,10 +84,7 @@ export default function QRCodesPage() {
         return;
       }
       setName("");
-      setSlug("");
-      setPointType("qr");
-      setDestinationType("checkout");
-      setDestinationRef("");
+      setAmount("");
       setShowForm(false);
       load();
     } finally {
@@ -182,98 +169,26 @@ export default function QRCodesPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              {t("slugLabel")}
+              {t("amountLabel")}
             </label>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500 dark:text-gray-400">/pay/qr/</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400">USD</span>
               <input
                 type="text"
-                value={slug}
-                onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
-                placeholder={t("slugPlaceholder")}
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, ""))}
+                placeholder={t("amountPlaceholder")}
                 className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
                 required
               />
             </div>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("slugHint")}</p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("amountHint")}</p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t("channelLabel")}
-            </label>
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  checked={pointType === "qr"}
-                  onChange={() => setPointType("qr")}
-                  className="text-blue-600"
-                />
-                <span className="text-gray-700 dark:text-gray-300">{t("channelQr")}</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  checked={pointType === "nfc"}
-                  onChange={() => setPointType("nfc")}
-                  className="text-blue-600"
-                />
-                <span className="text-gray-700 dark:text-gray-300">{t("channelNfc")}</span>
-              </label>
-            </div>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("channelHint")}</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t("destinationLabel")}
-            </label>
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  checked={destinationType === "checkout"}
-                  onChange={() => setDestinationType("checkout")}
-                  className="text-blue-600"
-                />
-                <span className="text-gray-700 dark:text-gray-300">{t("destinationLiveCheckout")}</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  checked={destinationType === "custom_url"}
-                  onChange={() => setDestinationType("custom_url")}
-                  className="text-blue-600"
-                />
-                <span className="text-gray-700 dark:text-gray-300">{t("destinationCustomUrl")}</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  checked={destinationType === "pizza_sku"}
-                  onChange={() => setDestinationType("pizza_sku")}
-                  className="text-blue-600"
-                />
-                <span className="text-gray-700 dark:text-gray-300">{t("destinationPizzaSku")}</span>
-              </label>
-            </div>
-          </div>
-
-          {destinationType === "custom_url" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {t("urlLabel")}
-              </label>
-              <input
-                type="url"
-                value={destinationRef}
-                onChange={(e) => setDestinationRef(e.target.value)}
-                placeholder="https://example.com/checkout"
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
-              />
-            </div>
-          )}
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {t("slugPreview", { slug: slugFromTitle(name || t("namePlaceholder")) })}
+          </p>
 
           {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
@@ -291,8 +206,7 @@ export default function QRCodesPage() {
                 setShowForm(false);
                 setError(null);
                 setName("");
-                setSlug("");
-                setDestinationRef("");
+                setAmount("");
               }}
               className="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium"
             >
@@ -358,13 +272,17 @@ export default function QRCodesPage() {
                     </div>
                     <p className="mt-1 text-sm text-gray-400 break-all font-mono">{getPointUrl(qr)}</p>
                     <p className="text-xs text-gray-400 mt-1">
-                      {qr.destinationType === "checkout"
-                        ? qr.destinationRef
+                      {(() => {
+                        const price = parseStandingPriceUsd(qr.destinationRef);
+                        if (price) return t("reusablePrice", { amount: price });
+                        if (qr.destinationType === "pizza_sku") return t("pizzaSkuLinked");
+                        if (qr.destinationType === "custom_url") {
+                          return t("customUrlLinked", { url: qr.destinationRef ?? "" });
+                        }
+                        return qr.destinationRef
                           ? t("liveCheckoutLinked", { id: qr.destinationRef })
-                          : t("liveCheckoutWaiting")
-                        : qr.destinationType === "pizza_sku"
-                          ? t("pizzaSkuLinked")
-                          : t("customUrlLinked", { url: qr.destinationRef ?? "" })}
+                          : t("liveCheckoutWaiting");
+                      })()}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-300 mt-1">
                       {t("pizzasOnCard", { count: qr.pizzasDeposited })}

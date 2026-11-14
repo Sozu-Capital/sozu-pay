@@ -1,4 +1,5 @@
 import type { QrPointDestinationType } from "@/lib/dashboard/merchant-qr";
+import { slugFromTitle, STANDING_PRICE_PREFIX } from "@/lib/dashboard/payment-link";
 import { getSupabase } from "@/lib/supabase/server";
 
 export type QRPointDestinationType = QrPointDestinationType;
@@ -78,6 +79,17 @@ export async function listQRPointsForOrg(orgId: string): Promise<MerchantQRPoint
   return (data ?? []).map(fromDb);
 }
 
+/** First free slug derived from a title. Global uniqueness matches the pay URL. */
+export async function allocateQrSlug(title: string): Promise<string> {
+  const root = slugFromTitle(title);
+  for (let i = 0; i < 40; i++) {
+    const candidate = i === 0 ? root : `${root.slice(0, 36)}-${i + 1}`;
+    const existing = await getQRPointBySlug(candidate);
+    if (!existing) return candidate;
+  }
+  throw new Error("Could not allocate a unique slug");
+}
+
 export async function getQRPointBySlug(slug: string): Promise<MerchantQRPoint | null> {
   const { data, error } = await getSupabase()
     .from("merchant_qr_points")
@@ -106,7 +118,8 @@ export async function syncLiveCheckoutForOrg(
       updated_at: now,
     })
     .eq("org_id", orgId)
-    .eq("destination_type", "checkout");
+    .eq("destination_type", "checkout")
+    .or(`destination_ref.is.null,destination_ref.not.like.${STANDING_PRICE_PREFIX}*`);
 
   if (error) {
     console.error("[qr-points] syncLiveCheckoutForOrg error:", error.message);

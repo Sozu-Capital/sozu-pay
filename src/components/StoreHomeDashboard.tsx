@@ -113,7 +113,7 @@ export default function StoreHomeDashboard() {
           </>
         )}
 
-        {/* Quick actions — POS is the only create-charge CTA */}
+        {/* Quick actions — payment link is reusable; new sale is one charge */}
         <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {actions.map((action) => (
             <Link

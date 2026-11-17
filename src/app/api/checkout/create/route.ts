@@ -20,7 +20,7 @@ import {
   getCheckoutSessionByIdempotencyKey,
 } from "@/lib/db/checkout-sessions";
 import { syncLiveCheckoutForOrg } from "@/lib/db/merchant-qr-points";
-import { checkoutSessionUrl, checkoutSuccessUrl } from "@/lib/checkout-url";
+import { checkoutSessionUrl, checkoutSuccessUrl, sozuWalletCheckoutUrl } from "@/lib/checkout-url";
 import { rampProvider } from "@/lib/ramp/provider";
 import { getUsdToLocalRate } from "@/lib/fx";
 import { buildClpPricingQuote } from "@/lib/pos/clp-pricing";
@@ -142,19 +142,39 @@ export async function POST(request: NextRequest) {
   const expiresAt = computeCheckoutExpiresAt();
   const redirectUrl = checkoutSuccessUrl(id, request);
 
-  let depositSession;
-  try {
-    depositSession = await rampProvider.createDepositSession({
-      orgId,
-      amountUsd,
-      destinationStellarAddress: destinationAddress!,
-      externalRef: id,
-      redirectUrl,
-      paymentMethod: parsed.paymentMethod,
-    });
-  } catch (err) {
-    console.error("[checkout/create] ramp provider error:", err);
-    return NextResponse.json({ error: "Failed to create deposit session" }, { status: 502 });
+  // One-shot POS charges settle on the same Sozu Wallet screen as a payment link.
+  // Collectible receipts stay on standing links that opted in (fx source), never POS.
+  const posSozuCheckout = parsed.amount.kind === "clp";
+  let providerSessionId = id;
+  let providerUrl = sozuWalletCheckoutUrl(id);
+  let providerExpiresAt: string | undefined;
+  let paymentMethod: string | undefined = "sozu";
+  let allowDebit = false;
+  let allowCredit = false;
+  let allowBankTransfer = false;
+
+  if (!posSozuCheckout) {
+    let depositSession;
+    try {
+      depositSession = await rampProvider.createDepositSession({
+        orgId,
+        amountUsd,
+        destinationStellarAddress: destinationAddress!,
+        externalRef: id,
+        redirectUrl,
+        paymentMethod: parsed.paymentMethod,
+      });
+    } catch (err) {
+      console.error("[checkout/create] ramp provider error:", err);
+      return NextResponse.json({ error: "Failed to create deposit session" }, { status: 502 });
+    }
+    providerSessionId = depositSession.sessionId;
+    providerUrl = depositSession.url;
+    providerExpiresAt = depositSession.expiresAt;
+    paymentMethod = parsed.paymentMethod;
+    allowDebit = parsed.allowDebit;
+    allowCredit = parsed.allowCredit;
+    allowBankTransfer = parsed.allowBankTransfer;
   }
 
   try {
@@ -169,14 +189,14 @@ export async function POST(request: NextRequest) {
       idempotencyKey: parsed.idempotencyKey,
       reference: parsed.reference,
       destinationStellarAddress: destinationAddress!,
-      providerSessionId: depositSession.sessionId,
-      providerUrl: depositSession.url,
-      providerExpiresAt: depositSession.expiresAt,
+      providerSessionId,
+      providerUrl,
+      providerExpiresAt,
       expiresAt,
-      paymentMethod: parsed.paymentMethod,
-      allowDebit: parsed.allowDebit,
-      allowCredit: parsed.allowCredit,
-      allowBankTransfer: parsed.allowBankTransfer,
+      paymentMethod,
+      allowDebit,
+      allowCredit,
+      allowBankTransfer,
     });
   } catch (err) {
     console.error("[checkout/create] DB persist error:", err);
@@ -196,7 +216,7 @@ export async function POST(request: NextRequest) {
       clpPerUsdc: fxRateClpPerUsdc ?? null,
       fxSource: fxSource ?? null,
       reference: parsed.reference ?? null,
-      providerSessionId: depositSession.sessionId,
+      providerSessionId,
       expiresAt,
       idempotentReplay: false,
     }),

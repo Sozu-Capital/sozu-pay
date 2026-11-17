@@ -6,11 +6,18 @@ import { useTranslations } from "next-intl";
 import { OrgTreasurySetup } from "@/components/OrgTreasurySetup";
 import { ProfileAddressRow } from "@/components/profile/ProfileAddressRow";
 import { ProfileCollapsibleCard } from "@/components/profile/ProfileCollapsibleCard";
+import { AccountAvatar } from "@/components/AccountAvatar";
+import { SozuLoadingMark } from "@/components/SozuLoadingMark";
+import { orgAvatarStorageKey, userAvatarStorageKey } from "@/lib/avatar";
 import { resolveAccountDisplayName } from "@/lib/display-name";
+import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 
 type ProfileData = {
   email: string;
   username?: string | null;
+  user_id?: number | null;
+  user_avatar_url?: string | null;
+  org_avatar_url?: string | null;
   stellar_public_key: string | null;
   stellar_payout_public_key: string | null;
   org_payout_wallet_public_key: string | null;
@@ -42,6 +49,7 @@ const REGISTRATION_MESSAGE_PREFIX = "SozuPay wallet registration";
 export default function ProfilePage() {
   const t = useTranslations("profilePage");
   const tc = useTranslations("common");
+  const dashboard = useDashboardProfile();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [requestingActivation, setRequestingActivation] = useState(false);
@@ -174,7 +182,6 @@ export default function ProfilePage() {
     t("userFallback"),
     profile?.username
   );
-  const avatarUrl = null;
   const orgDisplayName = profile?.org_name?.trim() || t("organizationFallback");
 
   const handleRequestActivation = async () => {
@@ -408,9 +415,7 @@ export default function ProfilePage() {
   };
 
   if (loading) {
-    return (
-      <div className="text-gray-500 dark:text-gray-400">{t("loadingProfile")}</div>
-    );
+    return <SozuLoadingMark />;
   }
 
   if (!profile) {
@@ -449,12 +454,17 @@ export default function ProfilePage() {
           {t("personalSectionLabel")}
         </p>
         <div className="mt-3 flex items-center gap-4">
-          <div
-            className="h-16 w-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xl font-semibold text-gray-600 dark:text-gray-400 overflow-hidden"
-            style={avatarUrl ? { backgroundImage: `url(${avatarUrl})`, backgroundSize: "cover" } : undefined}
-          >
-            {!avatarUrl && displayName.slice(0, 2).toUpperCase()}
-          </div>
+          <AccountAvatar
+            name={displayName}
+            imageUrl={profile.user_avatar_url}
+            storageKey={userAvatarStorageKey(profile.user_id)}
+            uploadUrl="/api/profile/avatar"
+            size={64}
+            onChange={(url) => {
+              setProfile((prev) => (prev ? { ...prev, user_avatar_url: url } : prev));
+              dashboard?.refetch();
+            }}
+          />
           <div className="min-w-0">
             <p className="font-semibold text-gray-900 dark:text-white truncate">{displayName}</p>
             <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{profile.email}</p>
@@ -502,7 +512,20 @@ export default function ProfilePage() {
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
             {t("organizationSectionLabel")}
           </p>
-          <h2 className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{orgDisplayName}</h2>
+          <div className="mt-3 flex items-center gap-4">
+            <AccountAvatar
+              name={orgDisplayName}
+              imageUrl={profile.org_avatar_url}
+              storageKey={orgAvatarStorageKey(profile.org_id)}
+              uploadUrl="/api/profile/org/avatar"
+              size={64}
+              onChange={(url) => {
+                setProfile((prev) => (prev ? { ...prev, org_avatar_url: url } : prev));
+                dashboard?.refetch();
+              }}
+            />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{orgDisplayName}</h2>
+          </div>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("organizationReceiveBody")}</p>
           <div className="mt-4 space-y-4">
             {profile.org_soroban_contract_id ? (

@@ -90,6 +90,56 @@ describe("routePayQrPoint", () => {
     });
   });
 
+  it("treats a priced checkout point as a standing payment link", () => {
+    const route = routePayQrPoint({
+      name: "House latte",
+      slug: "house-latte",
+      orgId: "org-cafe",
+      isOnline: true,
+      destinationType: "checkout",
+      destinationRef: "price:4.50",
+    });
+    assert.deepEqual(route, {
+      kind: "standing_price",
+      name: "House latte",
+      slug: "house-latte",
+      orgId: "org-cafe",
+      amountUsd: "4.50",
+      productKind: "product",
+      collectibleReceipt: false,
+    });
+  });
+
+  it("keeps a collectible product and refuses a collectible drink", () => {
+    const shirt = routePayQrPoint({
+      name: "Shirt",
+      slug: "shirt",
+      orgId: "org-cafe",
+      isOnline: true,
+      destinationType: "checkout",
+      destinationRef: "price:15.00|collectible",
+    });
+    assert.equal(shirt.kind, "standing_price");
+    if (shirt.kind === "standing_price") {
+      assert.equal(shirt.collectibleReceipt, true);
+      assert.equal(shirt.productKind, "product");
+    }
+
+    const drink = routePayQrPoint({
+      name: "House latte",
+      slug: "house-latte",
+      orgId: "org-cafe",
+      isOnline: true,
+      destinationType: "checkout",
+      destinationRef: "price:4.50|drink|collectible",
+    });
+    assert.equal(drink.kind, "standing_price");
+    if (drink.kind === "standing_price") {
+      assert.equal(drink.productKind, "drink");
+      assert.equal(drink.collectibleReceipt, false);
+    }
+  });
+
   it("does not fall through to live checkout resolution for pizza_sku", () => {
     const route = routePayQrPoint({
       name: "Thursday NFC",

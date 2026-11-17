@@ -6,6 +6,7 @@ import {
 import { getOrganizationById } from "@/lib/db/organizations";
 import { getAppBaseUrl } from "@/lib/app-url";
 import { effectiveCheckoutStatus } from "@/lib/checkout/expiration";
+import { isCollectibleCheckout } from "@/lib/dashboard/payment-link";
 
 const ALLOWED_ORIGIN = getAppBaseUrl();
 
@@ -72,6 +73,7 @@ export async function GET(request: NextRequest) {
         expiresAt: session.expires_at,
         stellarTxHash: session.stellar_tx_hash,
         completedPaymentMethod: session.completed_payment_method,
+        collectibleReceipt: isCollectibleCheckout(session.fx_source),
       },
       { status: 410, headers: corsHeaders() }
     );
@@ -102,6 +104,7 @@ export async function GET(request: NextRequest) {
       allowBankTransfer: session.allow_bank_transfer,
       createdAt: session.created_at,
       expiresAt: session.expires_at,
+      collectibleReceipt: isCollectibleCheckout(session.fx_source),
     },
     { headers: corsHeaders() }
   );

@@ -9,6 +9,7 @@ import { resolveOrgDisbursementContractId } from "@/lib/stellar/org-treasury";
 import { isUserDerivedEncrypted } from "@/lib/org-wallet-encryption";
 import { canManageDisbursements, repairOrgCreatorAccess } from "@/lib/auth/disbursement-auth";
 import { orgOnboardingFlags } from "@/lib/org/onboarding-flags";
+import { readStoredAvatar } from "@/lib/avatar";
 
 /**
  * GET /api/profile – current user's profile from DB (for Profile page).
@@ -79,6 +80,9 @@ export async function GET() {
   return NextResponse.json({
     email: activeUser.email,
     username: activeUser.username ?? null,
+    user_id: activeUser.id,
+    user_avatar_url: readStoredAvatar(activeUser.avatar_url),
+    org_avatar_url: readStoredAvatar(org?.avatar_url),
     org_name: org?.name ?? null,
     stellar_public_key: activeUser.stellar_public_key,
     stellar_payout_public_key: activeUser.stellar_payout_public_key ?? null,

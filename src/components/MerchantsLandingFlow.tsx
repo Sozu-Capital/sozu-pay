@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { HomeLandingTransitionProvider } from "@/components/HomeLandingTransition";
-import { HomeSplineBackground } from "@/components/HomeSplineBackground";
 import { HomePageIntro } from "@/components/HomePageIntro";
 import { HomeLandingFooter } from "@/components/HomeLandingFooter";
 import { ScfCommunityFundToast } from "@/components/ScfCommunityFundToast";
@@ -37,7 +36,6 @@ function MerchantsLandingInner({ returnTo }: MerchantsLandingFlowProps) {
 
   return (
     <div className="relative isolate flex min-h-[100dvh] min-h-screen flex-col overflow-hidden font-manrope">
-      <HomeSplineBackground />
       {step === "beta" ? (
         <div
           className="pointer-events-none fixed inset-0 z-[6] bg-black/55 backdrop-blur-2xl md:absolute"

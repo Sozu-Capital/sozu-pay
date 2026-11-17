@@ -4,9 +4,9 @@ import { cn } from "@/lib/utils";
 interface DarkGradientBgProps {
   children?: React.ReactNode;
   className?: string;
-  /** Stronger texture for landing so pattern shows behind Spline. */
+  /** Stronger texture for the landing ground. */
   landing?: boolean;
-  /** Standard auth background on desktop; stronger texture on mobile (behind Spline). */
+  /** Standard auth background on desktop; stronger texture on mobile. */
   mobileLanding?: boolean;
 }
 
@@ -16,12 +16,6 @@ export function DarkGradientBg({
   landing = false,
   mobileLanding = false,
 }: DarkGradientBgProps) {
-  const patternOpacity =
-    landing || mobileLanding
-      ? mobileLanding && !landing
-        ? "opacity-5 max-md:opacity-[0.12]"
-        : "opacity-[0.12]"
-      : "opacity-5";
   const dotsOpacity =
     landing || mobileLanding
       ? mobileLanding && !landing
@@ -93,13 +87,6 @@ export function DarkGradientBg({
         </div>
       </div>
 
-      <div
-        className={cn("absolute inset-0 bg-repeat", patternOpacity)}
-        style={{
-          backgroundImage: `url("https://images.unsplash.com/photo-1557683316-973673baf926?w=200&q=10")`,
-          backgroundSize: "149.76px",
-        }}
-      />
       {/* Subtle dot pattern overlay */}
       <div
         className={cn("absolute inset-0", dotsOpacity)}
@@ -118,7 +105,18 @@ export function DarkGradientBg({
         }}
       />
 
-      {/* Content (landing layers use z-[5] spline + z-20 copy above) */}
+      {/* November mark — large, centered, behind every screen that uses this ground */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/brand/november-2026/mark.png"
+        alt=""
+        width={512}
+        height={512}
+        decoding="async"
+        fetchPriority="low"
+        className="pointer-events-none fixed left-1/2 top-1/2 z-[1] h-[min(40vmin,18rem)] w-[min(40vmin,18rem)] -translate-x-1/2 -translate-y-1/2 object-contain opacity-[0.22]"
+      />
+
       <div className="relative z-10 min-h-screen">{children}</div>
     </div>
   );

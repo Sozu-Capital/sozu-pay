@@ -34,8 +34,8 @@ export function storeDashboardNavLinks(options: { isAdmin?: boolean } = {}): Das
   const links: DashboardNavLink[] = [
     { href: "/dashboard", kind: "overview" },
     { href: "/dashboard/transactions", kind: "transactions" },
-    { href: "/dashboard/pos", kind: "pos" },
     { href: "/dashboard/qr-codes", kind: "qr-codes" },
+    { href: "/dashboard/pos", kind: "pos" },
     { href: "/dashboard/send", kind: "send" },
     { href: "/dashboard/recipients", kind: "pay-supplier" },
     { href: "/dashboard/cashout", kind: "cash-out" },
@@ -75,13 +75,13 @@ export function ngoDashboardNavLinks(options: { showDisbursements?: boolean } = 
   return links;
 }
 
-/** Store home quick actions. POS is the only create-charge tile. */
+/** Store home quick actions, left to right: link, POS, pay supplier, send, bank desk. */
 export function storeHomeActions(): StoreHomeAction[] {
   return [
-    { href: "/dashboard/pos", kind: "pos" },
     { href: "/dashboard/qr-codes", kind: "qr-codes" },
-    { href: "/dashboard/send", kind: "send" },
+    { href: "/dashboard/pos", kind: "pos" },
     { href: "/dashboard/recipients", kind: "pay-supplier" },
+    { href: "/dashboard/send", kind: "send" },
     { href: "/dashboard/cashout", kind: "cash-out" },
   ];
 }

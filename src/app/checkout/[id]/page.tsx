@@ -1,5 +1,9 @@
 import { getCheckoutSession } from "@/lib/db/checkout-sessions";
-import { redirect } from "next/navigation";
+import { getOrganizationById } from "@/lib/db/organizations";
+import { sozuWalletCheckoutUrl } from "@/lib/checkout-url";
+import { effectiveCheckoutStatus } from "@/lib/checkout/expiration";
+import { isCollectibleCheckout, isReusableCharge } from "@/lib/dashboard/payment-link";
+import { PayStandingLink } from "@/components/PayStandingLink";
 import Link from "next/link";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string>> };
@@ -29,6 +33,24 @@ export default async function CheckoutPage({ params }: Props) {
     );
   }
 
+  const liveStatus = effectiveCheckoutStatus({
+    status: session.status,
+    expiresAt: session.expires_at,
+  });
+
+  if (liveStatus === "expired") {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
+        <div className="w-full max-w-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 text-center">
+          <p className="text-lg font-semibold text-gray-900 dark:text-white">Este cobro ya no está abierto</p>
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            El link de esta venta venció. Pedile al local un cobro nuevo.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   if (session.status === "completed") {
     return (
       <main className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
@@ -50,25 +72,17 @@ export default async function CheckoutPage({ params }: Props) {
     );
   }
 
-  // Redirect to the provider-hosted payment UI
-  if (session.provider_url) {
-    redirect(session.provider_url);
-  }
-
-  // Fallback: show payment summary if provider URL is missing (e.g. DB-only session)
+  const org = await getOrganizationById(session.org_id);
+  const reusable = isReusableCharge(session.fx_source);
   return (
-    <main className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
-      <div className="w-full max-w-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 text-center">
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white">SozuPay Checkout</h1>
-        <p className="mt-4 text-3xl font-bold">${session.amount_usd}</p>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">USD</p>
-        {session.reference && (
-          <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">Ref: {session.reference}</p>
-        )}
-        <p className="mt-6 text-sm text-gray-600 dark:text-gray-400">
-          Complete your payment to send funds directly to the merchant&apos;s account.
-        </p>
-      </div>
-    </main>
+    <PayStandingLink
+      slug={session.id}
+      storeName={org?.name ?? "Tienda"}
+      itemName={session.reference?.trim() || (reusable ? "Pago" : "Venta")}
+      amountUsd={session.amount_usd}
+      collectibleReceipt={isCollectibleCheckout(session.fx_source)}
+      oneShot={!reusable}
+      directWalletCheckoutUrl={sozuWalletCheckoutUrl(session.id)}
+    />
   );
 }

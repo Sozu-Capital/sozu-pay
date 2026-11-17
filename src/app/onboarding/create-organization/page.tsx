@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { PollarCreateOrganizationForm } from "@/components/onboarding/PollarCreateOrganizationForm";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { SozuLoadingMark } from "@/components/SozuLoadingMark";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
 import { checkUsernameAvailable } from "@/lib/auth/passkey-client";
@@ -83,7 +84,7 @@ export default function CreateOrganizationPage() {
     return (
       <DarkGradientBg>
         <main className="flex min-h-screen items-center justify-center p-4 text-white">
-          <p className="text-sm text-gray-300">…</p>
+          <SozuLoadingMark />
         </main>
       </DarkGradientBg>
     );

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { qrPointScanUrl } from "@/lib/dashboard/merchant-qr";
 import type { QrPointDestinationType } from "@/lib/dashboard/merchant-qr";
+import { parseStandingLink, parseStandingPriceUsd, slugFromTitle } from "@/lib/dashboard/payment-link";
 
 type QRPoint = {
   id: string;
@@ -14,21 +15,18 @@ type QRPoint = {
   destinationRef: string | null;
   isOnline: boolean;
   createdAt: string;
-  pizzasDeposited: number;
 };
 
 export default function QRCodesPage() {
   const t = useTranslations("qrNfcPage");
   const [qrPoints, setQRPoints] = useState<QRPoint[]>([]);
-  const [orgPizzasDeposited, setOrgPizzasDeposited] = useState(0);
   const [openPointId, setOpenPointId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [pointType, setPointType] = useState<"qr" | "nfc">("qr");
-  const [destinationType, setDestinationType] = useState<QrPointDestinationType>("checkout");
-  const [destinationRef, setDestinationRef] = useState("");
+  const [amount, setAmount] = useState("");
+  const [productKind, setProductKind] = useState<"product" | "drink">("product");
+  const [collectibleOn, setCollectibleOn] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,13 +40,7 @@ export default function QRCodesPage() {
     fetch("/api/merchant/qr-points")
       .then((r) => (r.ok ? r.json() : { qrPoints: [] }))
       .then((d) => {
-        setQRPoints(
-          (d.qrPoints ?? []).map((p: QRPoint) => ({
-            ...p,
-            pizzasDeposited: Number(p.pizzasDeposited) || 0,
-          })),
-        );
-        setOrgPizzasDeposited(Number(d.orgPizzasDeposited) || 0);
+        setQRPoints(d.qrPoints ?? []);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -65,12 +57,8 @@ export default function QRCodesPage() {
       setError(t("errorNameRequired"));
       return;
     }
-    if (!slug.trim()) {
-      setError(t("errorSlugRequired"));
-      return;
-    }
-    if (destinationType === "custom_url" && !destinationRef.trim()) {
-      setError(t("errorUrlRequired"));
+    if (!amount.trim() || Number(amount.replace(",", ".")) <= 0) {
+      setError(t("errorAmount"));
       return;
     }
 
@@ -81,11 +69,9 @@ export default function QRCodesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
-          slug: slug.trim(),
-          pointType,
-          destinationType,
-          destinationRef:
-            destinationType === "pizza_sku" ? undefined : destinationRef.trim() || undefined,
+          amountUsd: amount.trim().replace(",", "."),
+          productKind,
+          collectibleReceipt: productKind === "product" && collectibleOn,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -94,10 +80,9 @@ export default function QRCodesPage() {
         return;
       }
       setName("");
-      setSlug("");
-      setPointType("qr");
-      setDestinationType("checkout");
-      setDestinationRef("");
+      setAmount("");
+      setProductKind("product");
+      setCollectibleOn(true);
       setShowForm(false);
       load();
     } finally {
@@ -182,98 +167,66 @@ export default function QRCodesPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              {t("slugLabel")}
+              {t("amountLabel")}
             </label>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500 dark:text-gray-400">/pay/qr/</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400">USD</span>
               <input
                 type="text"
-                value={slug}
-                onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
-                placeholder={t("slugPlaceholder")}
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, ""))}
+                placeholder={t("amountPlaceholder")}
                 className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
                 required
               />
             </div>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("slugHint")}</p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("amountHint")}</p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t("channelLabel")}
-            </label>
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  checked={pointType === "qr"}
-                  onChange={() => setPointType("qr")}
-                  className="text-blue-600"
-                />
-                <span className="text-gray-700 dark:text-gray-300">{t("channelQr")}</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  checked={pointType === "nfc"}
-                  onChange={() => setPointType("nfc")}
-                  className="text-blue-600"
-                />
-                <span className="text-gray-700 dark:text-gray-300">{t("channelNfc")}</span>
-              </label>
+          <fieldset>
+            <legend className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              {t("productKindLabel")}
+            </legend>
+            <div className="flex gap-2">
+              {(["product", "drink"] as const).map((kind) => {
+                const selected = productKind === kind;
+                return (
+                  <button
+                    key={kind}
+                    type="button"
+                    onClick={() => setProductKind(kind)}
+                    className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                      selected
+                        ? "border-emerald-600 bg-emerald-600 text-white"
+                        : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200"
+                    }`}
+                    aria-pressed={selected}
+                  >
+                    {kind === "drink" ? t("productKindDrink") : t("productKindProduct")}
+                  </button>
+                );
+              })}
             </div>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("channelHint")}</p>
-          </div>
+          </fieldset>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t("destinationLabel")}
-            </label>
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  checked={destinationType === "checkout"}
-                  onChange={() => setDestinationType("checkout")}
-                  className="text-blue-600"
-                />
-                <span className="text-gray-700 dark:text-gray-300">{t("destinationLiveCheckout")}</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  checked={destinationType === "custom_url"}
-                  onChange={() => setDestinationType("custom_url")}
-                  className="text-blue-600"
-                />
-                <span className="text-gray-700 dark:text-gray-300">{t("destinationCustomUrl")}</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  checked={destinationType === "pizza_sku"}
-                  onChange={() => setDestinationType("pizza_sku")}
-                  className="text-blue-600"
-                />
-                <span className="text-gray-700 dark:text-gray-300">{t("destinationPizzaSku")}</span>
-              </label>
-            </div>
-          </div>
+          <label className={`flex items-start gap-3 text-sm ${productKind === "drink" ? "opacity-60" : ""}`}>
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={productKind === "product" && collectibleOn}
+              disabled={productKind === "drink"}
+              onChange={(e) => setCollectibleOn(e.target.checked)}
+            />
+            <span>
+              <span className="font-medium text-gray-900 dark:text-white">{t("collectibleToggle")}</span>
+              <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">{t("collectibleHint")}</span>
+            </span>
+          </label>
 
-          {destinationType === "custom_url" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {t("urlLabel")}
-              </label>
-              <input
-                type="url"
-                value={destinationRef}
-                onChange={(e) => setDestinationRef(e.target.value)}
-                placeholder="https://example.com/checkout"
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
-              />
-            </div>
-          )}
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {t("slugPreview", { slug: slugFromTitle(name || t("namePlaceholder")) })}
+          </p>
 
           {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
@@ -291,8 +244,9 @@ export default function QRCodesPage() {
                 setShowForm(false);
                 setError(null);
                 setName("");
-                setSlug("");
-                setDestinationRef("");
+                setAmount("");
+                setProductKind("product");
+                setCollectibleOn(true);
               }}
               className="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium"
             >
@@ -304,9 +258,6 @@ export default function QRCodesPage() {
 
       <div className="mt-8">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t("listTitle")}</h2>
-        {!loading && (
-          <p className="mt-2 text-sm text-gray-400">{t("orgAccountPizzas", { count: orgPizzasDeposited })}</p>
-        )}
         {loading ? (
           <div className="mt-4 space-y-3">
             {[0, 1, 2].map((i) => (
@@ -355,20 +306,35 @@ export default function QRCodesPage() {
                       >
                         {qr.isOnline ? t("online") : t("offline")}
                       </span>
+                      {(() => {
+                        const offer = parseStandingLink(qr.destinationRef);
+                        if (!offer) return null;
+                        return (
+                          <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-200">
+                            {offer.productKind === "drink"
+                              ? t("drinkBadge")
+                              : offer.collectibleReceipt
+                                ? t("collectibleBadge")
+                                : t("productKindProduct")}
+                          </span>
+                        );
+                      })()}
                     </div>
                     <p className="mt-1 text-sm text-gray-400 break-all font-mono">{getPointUrl(qr)}</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {qr.destinationType === "checkout"
-                        ? qr.destinationRef
-                          ? t("liveCheckoutLinked", { id: qr.destinationRef })
-                          : t("liveCheckoutWaiting")
-                        : qr.destinationType === "pizza_sku"
-                          ? t("pizzaSkuLinked")
-                          : t("customUrlLinked", { url: qr.destinationRef ?? "" })}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-300 mt-1">
-                      {t("pizzasOnCard", { count: qr.pizzasDeposited })}
-                    </p>
+                    {(() => {
+                      const price = parseStandingPriceUsd(qr.destinationRef);
+                      const status = price
+                        ? t("reusablePrice", { amount: price })
+                        : qr.destinationType === "custom_url"
+                          ? t("customUrlLinked", { url: qr.destinationRef ?? "" })
+                          : qr.destinationType === "checkout"
+                            ? qr.destinationRef
+                              ? t("liveCheckoutLinked", { id: qr.destinationRef })
+                              : t("liveCheckoutWaiting")
+                            : null;
+                      if (!status) return null;
+                      return <p className="text-xs text-gray-400 mt-1">{status}</p>;
+                    })()}
                   </div>
                   {qr.pointType === "qr" && (
                     <img
@@ -380,13 +346,7 @@ export default function QRCodesPage() {
                 </button>
                 {isOpen && (
                   <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4 space-y-2">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {t("orgAccountPizzas", { count: orgPizzasDeposited })}
-                    </p>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
-                      {t("thisChipPizzas", { count: qr.pizzasDeposited })}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <div className="flex flex-wrap items-center gap-2">
                       <a
                         href={getPointUrl(qr)}
                         target="_blank"

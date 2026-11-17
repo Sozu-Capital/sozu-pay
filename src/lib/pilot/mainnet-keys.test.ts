@@ -5,6 +5,8 @@ import {
   assertKeysFileOutsideRepo,
   checkAccount,
   findReusedKeys,
+  maxWithdrawableXlm,
+  minimumBalanceXlm,
   parseKeysFile,
   PILOT_KEY_SPECS,
   type PilotKeyRole,
@@ -68,6 +70,24 @@ describe("findReusedKeys", () => {
     const k = keys();
     k.escrow.publicKey = k.distribution.publicKey;
     assert.match(findReusedKeys(k, [])[0], /escrow and distribution are the same key/);
+  });
+});
+
+describe("minimumBalanceXlm", () => {
+  it("locks 1 XLM on an empty account and 0.5 more per subentry", () => {
+    assert.equal(minimumBalanceXlm(0), 1);
+    assert.equal(minimumBalanceXlm(1), 1.5);
+  });
+});
+
+describe("maxWithdrawableXlm", () => {
+  it("leaves the reserve and the fee", () => {
+    assert.equal(maxWithdrawableXlm(100, 0, 0.00001), 98.9999899);
+    assert.equal(maxWithdrawableXlm(2, 0, 0.00001), 0.9999899);
+  });
+
+  it("returns zero when only the reserve is left", () => {
+    assert.equal(maxWithdrawableXlm(1, 0, 0.00001), 0);
   });
 });
 

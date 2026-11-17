@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { getAppBaseUrl } from "@/lib/app-url";
+import { getWalletOrigin } from "@/lib/pizza/redeem";
 
 /**
  * Public payer checkout host — this dashboard (`pay.sozu.capital`).
@@ -25,6 +26,11 @@ export function getCheckoutBaseUrl(request?: NextRequest): string {
 
 export function checkoutSessionUrl(sessionId: string, request?: NextRequest): string {
   return `${getCheckoutBaseUrl(request)}/checkout/${sessionId}`;
+}
+
+/** Sozu Wallet screen where the payer taps Pay with Sozu and the transfer settles. */
+export function sozuWalletCheckoutUrl(sessionId: string): string {
+  return `${getWalletOrigin()}/checkout/${encodeURIComponent(sessionId)}`;
 }
 
 export function checkoutSuccessUrl(sessionId: string, request?: NextRequest): string {

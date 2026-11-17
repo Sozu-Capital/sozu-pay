@@ -8,7 +8,9 @@ import {
   getCheckoutSession,
   getLatestPendingCheckoutForOrg,
 } from "@/lib/db/checkout-sessions";
+import { PayStandingLink } from "@/components/PayStandingLink";
 import { getQRPointBySlug } from "@/lib/db/merchant-qr-points";
+import { getOrganizationById } from "@/lib/db/organizations";
 import { getPizzaRedeem } from "@/lib/db/pizza-redeems";
 import { checkoutSessionUrl } from "@/lib/checkout-url";
 import { routePayQrPoint } from "@/lib/dashboard/merchant-qr";
@@ -115,15 +117,28 @@ export default async function PayQRPage({ params, searchParams }: Props) {
     redirect(pizzaWalletCheckoutUrl({ walletOrigin, slug }));
   }
 
+  if (route.kind === "standing_price") {
+    const org = await getOrganizationById(route.orgId);
+    return (
+      <PayStandingLink
+        slug={route.slug}
+        storeName={org?.name ?? "Tienda"}
+        itemName={route.name}
+        amountUsd={route.amountUsd}
+        collectibleReceipt={route.collectibleReceipt}
+      />
+    );
+  }
+
   const checkoutId = await resolveLiveCheckoutId(route.orgId, route.destinationRef);
 
   if (!checkoutId) {
     return (
       <main className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
         <div className="w-full max-w-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 text-center">
-          <p className="text-lg font-semibold text-gray-900 dark:text-white">No active payment</p>
+          <p className="text-lg font-semibold text-gray-900 dark:text-white">Este link no tiene precio</p>
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-            {route.name} is ready, but the merchant has not opened a live checkout yet. Scan again once they create a payment link.
+            {route.name} todavía no es un link de pago. El local tiene que publicarlo con un título y un precio.
           </p>
           <Link
             href="/"

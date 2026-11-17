@@ -33,6 +33,7 @@ export default function CashOutPage() {
   const [bankRoutingCode, setBankRoutingCode] = useState("");
   const [bankCurrency, setBankCurrency] = useState("CLP");
 
+  const [attested, setAttested] = useState(false);
   const [busy, setBusy] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -86,6 +87,10 @@ export default function CashOutPage() {
       setError(t("bankRequired"));
       return;
     }
+    if (!attested) {
+      setError(t("attestationRequired"));
+      return;
+    }
 
     setBusy(true);
     try {
@@ -99,6 +104,7 @@ export default function CashOutPage() {
           bankAccountNumber: bankAccountNumber.trim(),
           bankRoutingCode: bankRoutingCode.trim() || undefined,
           bankCurrency: bankCurrency.trim().toUpperCase() || undefined,
+          attested: true,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -110,7 +116,8 @@ export default function CashOutPage() {
         );
         return;
       }
-      setSuccess(t("withdrawQueuedNoEta"));
+      setSuccess(t("deskRequestCreated"));
+      setAttested(false);
       setAmountUsd("");
       loadBalance();
       loadHistory();
@@ -283,6 +290,18 @@ export default function CashOutPage() {
             />
           </div>
         </div>
+
+        <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input
+            type="checkbox"
+            checked={attested}
+            onChange={(e) => setAttested(e.target.checked)}
+            disabled={!!activeWithdrawal}
+            className="mt-1"
+            required
+          />
+          <span>{t("attestationLabel")}</span>
+        </label>
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         {success && <p className="text-sm text-emerald-600 dark:text-emerald-400">{success}</p>}

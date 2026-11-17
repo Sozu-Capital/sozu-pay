@@ -113,7 +113,12 @@ export async function POST(request: NextRequest) {
   }
 
   if (type === "org_treasury") {
-    await updateOrganizationTreasuryContract(user.org_id, contractId);
+    const org = await getOrganizationById(user.org_id);
+    const existingTreasury = org?.treasury_contract_id?.trim().toUpperCase() ?? "";
+    const stored = smart.contract_id.trim().toUpperCase();
+    if (!existingTreasury.startsWith("C") || existingTreasury === stored) {
+      await updateOrganizationTreasuryContract(user.org_id, stored);
+    }
   }
 
   return NextResponse.json({ ok: true, smartAccount: smart });

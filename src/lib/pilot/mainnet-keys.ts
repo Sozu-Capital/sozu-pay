@@ -1,5 +1,8 @@
 import path from "node:path";
 
+/** Protocol base reserve on public and testnet. An empty account must hold two of these. */
+export const BASE_RESERVE_XLM = 0.5;
+
 export const MAINNET_USDC_ISSUER = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN";
 export const MAINNET_USDC_SAC = "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75";
 export const MAINNET_HORIZON_URL = "https://horizon.stellar.org";
@@ -101,6 +104,27 @@ export function findReusedKeys(
     seen.set(pk, role);
   }
   return problems;
+}
+
+/** Minimum XLM that must stay on the account: (2 + subentries) × base reserve. */
+export function minimumBalanceXlm(subentryCount: number): number {
+  if (!Number.isInteger(subentryCount) || subentryCount < 0) {
+    throw new Error("subentryCount must be a non-negative integer.");
+  }
+  return (2 + subentryCount) * BASE_RESERVE_XLM;
+}
+
+/**
+ * XLM that can be paid out while leaving the reserve and the transaction fee.
+ * Rounded down to stroops so the payment cannot eat into the reserve.
+ */
+export function maxWithdrawableXlm(balanceXlm: number, subentryCount: number, feeXlm: number): number {
+  if (!Number.isFinite(balanceXlm) || !Number.isFinite(feeXlm) || feeXlm < 0) {
+    throw new Error("balance and fee must be finite, and fee cannot be negative.");
+  }
+  const stroops =
+    Math.round(balanceXlm * 1e7) - Math.round(minimumBalanceXlm(subentryCount) * 1e7) - Math.ceil(feeXlm * 1e7);
+  return Math.max(0, stroops) / 1e7;
 }
 
 /** The keys file holds mainnet secrets; it must never land inside a repo. */

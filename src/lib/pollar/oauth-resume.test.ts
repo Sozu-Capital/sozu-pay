@@ -6,10 +6,12 @@ import {
   clientSessionIdFromCallbackSearch,
   clientSessionIdFromOAuthUrl,
   hashApiKeyPrefix,
+  isInAppBrowser,
   isPollarOAuthPopupWindow,
   pollarOAuthCallbackUrl,
   pollarSessionStorageKey,
   sanitizeReturnTo,
+  shouldReserveOAuthPopup,
   shouldUseSameWindowOAuth,
 } from "./oauth-resume.js";
 
@@ -100,6 +102,55 @@ describe("pollar storage helpers", () => {
     assert.equal(
       shouldUseSameWindowOAuth(
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/122",
+      ),
+      false,
+    );
+  });
+
+  it("does not reserve an OAuth popup on phones", () => {
+    assert.equal(
+      shouldReserveOAuthPopup(
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+      ),
+      false,
+    );
+    assert.equal(
+      shouldReserveOAuthPopup(
+        "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/122.0.0.0",
+      ),
+      false,
+    );
+  });
+
+  it("reserves an OAuth popup on desktop Mac", () => {
+    assert.equal(
+      shouldReserveOAuthPopup(
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/122",
+      ),
+      true,
+    );
+  });
+
+  it("does not reserve an OAuth popup on Macintosh with touch", () => {
+    assert.equal(
+      shouldReserveOAuthPopup(
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15",
+        5,
+      ),
+      false,
+    );
+  });
+
+  it("detects in-app browsers that swallow Google return", () => {
+    assert.equal(isInAppBrowser("Mozilla/5.0 (iPhone) Instagram 123.0"), true);
+    assert.equal(
+      isInAppBrowser("Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 FBAN/FBIOS FBAV/1.0"),
+      true,
+    );
+    assert.equal(isInAppBrowser("Mozilla/5.0 Line/14.0.0"), true);
+    assert.equal(
+      isInAppBrowser(
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
       ),
       false,
     );

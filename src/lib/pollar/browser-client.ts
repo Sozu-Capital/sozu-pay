@@ -7,7 +7,7 @@ import {
   persistPendingPollarOAuth,
   POLLAR_OAUTH_WINDOW_NAME,
   pollarOAuthCallbackUrl,
-  shouldUseSameWindowOAuth,
+  shouldReserveOAuthPopup,
 } from "@/lib/pollar/oauth-resume";
 
 const POLLAR_STORAGE_PREFIX = "pollar:";
@@ -17,13 +17,6 @@ let client: PollarClient | null = null;
 let clientApiKey: string | null = null;
 let reservedPopup: Window | null = null;
 let oauthPopup: Window | null = null;
-
-function mobileOAuthUserAgent(): boolean {
-  if (typeof window === "undefined") return false;
-  const ua = window.navigator.userAgent;
-  const iPadDesktop = ua.includes("Macintosh") && window.navigator.maxTouchPoints > 1;
-  return shouldUseSameWindowOAuth(ua) || iPadDesktop;
-}
 
 export function getPollarPublishableKey(): string {
   return (process.env.NEXT_PUBLIC_POLLAR_PUBLISHABLE_KEY ?? "").trim();
@@ -35,17 +28,18 @@ export function isPollarFakeAuth(): boolean {
 
 /**
  * Must run synchronously in the Google click handler, before any await.
- * iOS WebKit only honors window.open inside the original user-gesture tick,
- * and it rejects `window.open` when a feature string is passed.
- * The opened tab keeps `window.name` so the callback can finish sign-in there
- * if this page is frozen in the background.
+ * Desktop reserves a named popup so Google can finish there. Phones must
+ * no-op — a second tab never returns to /auth/pollar/callback.
  */
 export function reservePollarOAuthPopup(): Window | null {
   if (typeof window === "undefined") return null;
   closePollarOAuthPopup();
-  const popup = mobileOAuthUserAgent()
-    ? window.open("about:blank", POLLAR_OAUTH_WINDOW_NAME)
-    : window.open("about:blank", POLLAR_OAUTH_WINDOW_NAME, "popup=yes,width=480,height=720");
+  if (!shouldReserveOAuthPopup(window.navigator.userAgent, window.navigator.maxTouchPoints ?? 0)) {
+    reservedPopup = null;
+    oauthPopup = null;
+    return null;
+  }
+  const popup = window.open("about:blank", POLLAR_OAUTH_WINDOW_NAME, "popup=yes,width=480,height=720");
   if (!popup || popup.closed) {
     reservedPopup = null;
     oauthPopup = null;

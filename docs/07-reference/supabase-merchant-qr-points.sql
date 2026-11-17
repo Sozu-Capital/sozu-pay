@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS merchant_qr_points (
   slug TEXT NOT NULL,
   destination_type TEXT NOT NULL CHECK (destination_type IN ('checkout', 'custom_url', 'pizza_sku')),
   destination_ref TEXT,
+  image_url TEXT,
   is_online BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -23,3 +24,4 @@ COMMENT ON COLUMN merchant_qr_points.slug IS 'Item slug, unique per store. Publi
 COMMENT ON COLUMN merchant_qr_points.destination_type IS 'checkout = live checkout session; custom_url = external URL; pizza_sku = standing Margherita redeem (no checkout_session)';
 COMMENT ON COLUMN merchant_qr_points.destination_ref IS 'Checkout session ID or custom URL';
 COMMENT ON COLUMN merchant_qr_points.is_online IS 'Toggle whether this QR point is active';
+COMMENT ON COLUMN merchant_qr_points.image_url IS 'Optional product photo as a JPEG, PNG, or WebP data URL';

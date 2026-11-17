@@ -39,6 +39,7 @@ export async function startStandingSale(params: {
   amountUsd: string;
   collectibleReceipt: boolean;
   editionSize: number | null;
+  hostHeader?: string | null;
 }): Promise<StandingSaleResult> {
   const fxSource = standingLinkFxSource(params.collectibleReceipt);
   if (!params.collectibleReceipt || !params.editionSize) {
@@ -47,6 +48,7 @@ export async function startStandingSale(params: {
       amountUsd: params.amountUsd,
       reference: params.name,
       fxSource,
+      hostHeader: params.hostHeader,
     });
     if (!minted.ok) return { ok: false, status: minted.status, error: minted.error };
     return {
@@ -105,6 +107,7 @@ export async function startStandingSale(params: {
       reference,
       fxSource,
       idempotencyKey: editionClaimKey(params.slug, number, size),
+      hostHeader: params.hostHeader,
     });
     if (minted.ok) {
       return {

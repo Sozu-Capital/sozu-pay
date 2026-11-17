@@ -3,8 +3,12 @@ import { describe, it } from "node:test";
 import {
   isReusableCharge,
   normalizeUsdAmount,
+  checkoutOriginFromHeaders,
+  isStubRampCheckoutUrl,
+  originOfRedirect,
   parseStandingLink,
   parseStandingPriceUsd,
+  payerCheckoutUrl,
   resolveCollectibleReceipt,
   slugFromTitle,
   standingPriceRef,
@@ -72,6 +76,40 @@ describe("standing price", () => {
       parseStandingLink("price:4.50|drink|collectible|edition:10")?.editionSize,
       null,
     );
+  });
+});
+
+describe("checkout host", () => {
+  it("keeps a staging payment on the host that opened the link", () => {
+    assert.equal(
+      checkoutOriginFromHeaders("dev.pay.sozu.capital", "https", "https://pay.sozu.capital"),
+      "https://dev.pay.sozu.capital",
+    );
+    assert.equal(
+      originOfRedirect(
+        "https://dev.pay.sozu.capital/checkout/cs_1/success",
+        "https://pay.sozu.capital",
+      ),
+      "https://dev.pay.sozu.capital",
+    );
+  });
+});
+
+describe("payer checkout", () => {
+  it("sends a staging payment link to the staging wallet, not the ramp stub or the waitlisted app", () => {
+    assert.equal(
+      payerCheckoutUrl("cs_1", "dev.pay.sozu.capital", "https://app.sozu.capital"),
+      "https://dev.sozu.capital/checkout/cs_1",
+    );
+    assert.equal(
+      payerCheckoutUrl("cs_1", "pay.sozu.capital"),
+      "https://app.sozu.capital/checkout/cs_1",
+    );
+    assert.equal(
+      isStubRampCheckoutUrl("https://dev.pay.sozu.capital/ramp/stub-checkout?ref=cs_1"),
+      true,
+    );
+    assert.equal(isStubRampCheckoutUrl("https://dev.sozu.capital/checkout/cs_1"), false);
   });
 });
 

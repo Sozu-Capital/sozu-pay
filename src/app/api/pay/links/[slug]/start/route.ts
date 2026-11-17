@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { startStandingSale } from "@/lib/checkout/start-standing-sale";
 import { getQRPointBySlug } from "@/lib/db/merchant-qr-points";
 import { routePayQrPoint } from "@/lib/dashboard/merchant-qr";
@@ -10,8 +10,9 @@ type Params = { params: Promise<{ slug: string }> };
  * Opens a fresh wallet checkout for a standing payment link.
  * Paying once does not consume the link.
  */
-export async function POST(_request: Request, { params }: Params) {
+export async function POST(request: NextRequest, { params }: Params) {
   const { slug } = await params;
+  const hostHeader = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
   const qr = await getQRPointBySlug(slug);
   if (!qr) {
     return NextResponse.json({ error: "Payment link not found" }, { status: 404 });
@@ -32,6 +33,7 @@ export async function POST(_request: Request, { params }: Params) {
     amountUsd: route.amountUsd,
     collectibleReceipt: route.collectibleReceipt,
     editionSize: route.editionSize,
+    hostHeader,
   });
   if (!minted.ok) {
     return NextResponse.json({ error: minted.error }, { status: minted.status });

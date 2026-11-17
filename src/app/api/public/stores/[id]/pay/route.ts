@@ -33,6 +33,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       amountUsd: item.amountUsd,
       collectibleReceipt: item.collectibleReceipt,
       editionSize: item.editionSize,
+      hostHeader: request.headers.get("x-forwarded-host") ?? request.headers.get("host"),
     });
     if (!minted.ok) {
       return NextResponse.json({ error: minted.error }, { status: minted.status });
@@ -59,6 +60,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     amountUsd,
     reference: store.name,
     fxSource: OPEN_AMOUNT_FX_SOURCE,
+    request,
   });
   if (!minted.ok) {
     return NextResponse.json({ error: minted.error }, { status: minted.status });

@@ -1,19 +1,25 @@
 import "server-only";
 
+import type { NextRequest } from "next/server";
 import { computeCheckoutExpiresAt } from "@/lib/checkout/expiration";
 import { CHECKOUT_NO_SETTLE_TO_ERROR, isCheckoutSettleReady } from "@/lib/checkout/ready";
 import { resolveCheckoutSettleToAddress } from "@/lib/checkout/settle-to";
+import { payerCheckoutUrl } from "@/lib/dashboard/payment-link";
 import { createCheckoutSession } from "@/lib/db/checkout-sessions";
 import { getOrganizationById } from "@/lib/db/organizations";
-import { sozuWalletCheckoutUrl } from "@/lib/checkout-url";
 
 /**
  * A fresh Sozu-wallet checkout for a standing payment link or an open amount.
  * Does not expire other charges and does not retarget other links.
+ * The wallet host follows the pay host so staging does not open the production wallet.
  */
 function isUniqueViolation(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
   return /duplicate key|unique constraint|23505/i.test(message);
+}
+
+function requestHost(request?: NextRequest, hostHeader?: string | null): string | null {
+  return hostHeader ?? request?.headers.get("x-forwarded-host") ?? request?.headers.get("host") ?? null;
 }
 
 export async function mintReusableCheckout(params: {
@@ -23,6 +29,8 @@ export async function mintReusableCheckout(params: {
   fxSource: string;
   /** Locks one numbered collectible, for example edition:liquid-society:6/10. */
   idempotencyKey?: string;
+  request?: NextRequest;
+  hostHeader?: string | null;
 }): Promise<
   | { ok: true; id: string; walletCheckoutUrl: string }
   | { ok: false; status: number; error: string; conflict?: boolean }
@@ -37,7 +45,11 @@ export async function mintReusableCheckout(params: {
   }
 
   const id = `cs_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-  const walletCheckoutUrl = sozuWalletCheckoutUrl(id);
+  const walletCheckoutUrl = payerCheckoutUrl(
+    id,
+    requestHost(params.request, params.hostHeader),
+    process.env.NEXT_PUBLIC_SOZU_WALLET_URL,
+  );
 
   try {
     await createCheckoutSession({

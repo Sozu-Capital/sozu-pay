@@ -1,8 +1,8 @@
+import { headers } from "next/headers";
 import { getCheckoutSession } from "@/lib/db/checkout-sessions";
 import { getOrganizationById } from "@/lib/db/organizations";
-import { sozuWalletCheckoutUrl } from "@/lib/checkout-url";
 import { effectiveCheckoutStatus } from "@/lib/checkout/expiration";
-import { isCollectibleCheckout, isReusableCharge } from "@/lib/dashboard/payment-link";
+import { isCollectibleCheckout, isReusableCharge, payerCheckoutUrl } from "@/lib/dashboard/payment-link";
 import { PayStandingLink } from "@/components/PayStandingLink";
 import Link from "next/link";
 
@@ -74,6 +74,7 @@ export default async function CheckoutPage({ params }: Props) {
 
   const org = await getOrganizationById(session.org_id);
   const reusable = isReusableCharge(session.fx_source);
+  const h = await headers();
   return (
     <PayStandingLink
       slug={session.id}
@@ -82,7 +83,11 @@ export default async function CheckoutPage({ params }: Props) {
       amountUsd={session.amount_usd}
       collectibleReceipt={isCollectibleCheckout(session.fx_source)}
       oneShot={!reusable}
-      directWalletCheckoutUrl={sozuWalletCheckoutUrl(session.id)}
+      directWalletCheckoutUrl={payerCheckoutUrl(
+        session.id,
+        h.get("x-forwarded-host") ?? h.get("host"),
+        process.env.NEXT_PUBLIC_SOZU_WALLET_URL,
+      )}
     />
   );
 }

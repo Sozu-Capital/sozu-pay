@@ -11,6 +11,7 @@ export type StoreDirectoryItem = {
   amountUsd: string;
   collectibleReceipt: boolean;
   editionSize: number | null;
+  hasImage: boolean;
 };
 
 export type StoreDirectoryCard = {
@@ -65,6 +66,7 @@ export async function getStoreProfile(id: string): Promise<StoreDirectoryProfile
       amountUsd: offer.amountUsd,
       collectibleReceipt: offer.collectibleReceipt,
       editionSize: offer.editionSize,
+      hasImage: point.imageUrl != null,
     });
   }
   items.sort((a, b) => a.name.localeCompare(b.name));

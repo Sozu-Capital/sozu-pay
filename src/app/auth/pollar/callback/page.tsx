@@ -13,6 +13,7 @@ import {
 import { completeHostedOAuthSession } from "@/lib/pollar/oauth-complete";
 import {
   clearPendingPollarOAuth,
+  clientSessionIdFromCallbackSearch,
   readPendingPollarOAuth,
   readPollarReturnTo,
   sanitizeReturnTo,
@@ -25,51 +26,79 @@ import {
 export default function PollarOAuthCallbackPage() {
   const t = useTranslations("login");
   const [error, setError] = useState("");
+  const [showContinue, setShowContinue] = useState(false);
   const ran = useRef(false);
+
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted && !ran.current) {
+        window.location.replace(window.location.href);
+      }
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setShowContinue(true), 4000);
+    return () => window.clearTimeout(id);
+  }, []);
 
   useEffect(() => {
     if (ran.current) return;
     ran.current = true;
     void (async () => {
       try {
-        if (window.opener && !window.opener.closed) {
-          window.close();
-          return;
-        }
+        const returnTo = readPollarReturnTo();
+        const fallback = returnTo ?? "/onboarding/organizations";
 
+        const sendHome = (path: string) => {
+          clearPendingPollarOAuth();
+          window.location.replace(path);
+        };
+
+        const sessionAlreadyThere = async () => {
+          const res = await fetch("/api/auth/session", { credentials: "include" });
+          const body = (await res.json().catch(() => null)) as { user?: unknown } | null;
+          return !!body?.user;
+        };
+
+        const fromUrl = clientSessionIdFromCallbackSearch(window.location.search);
         const pending = readPendingPollarOAuth();
+        const clientSessionId = fromUrl ?? pending?.clientSessionId ?? null;
         const apiKey = getPollarPublishableKey();
         let token: string | null = null;
 
         const client = getPollarBrowserClient();
         if (client) {
-          await client.ready();
+          await Promise.race([
+            client.ready(),
+            new Promise((resolve) => setTimeout(resolve, 4000)),
+          ]);
           const state = client.getAuthState();
           if (state.step === "authenticated") {
             token = state.session?.token?.accessToken ?? null;
           }
         }
 
-        if (!token && pending && apiKey) {
+        if (!token && clientSessionId && apiKey) {
           token = await completeHostedOAuthSession({
-            clientSessionId: pending.clientSessionId,
+            clientSessionId,
             apiKey,
           });
           if (token) resetPollarBrowserClient();
         }
 
         if (!token) {
-          clearPendingPollarOAuth();
-          try {
-            window.close();
-          } catch {
-            // ignore
+          if (await sessionAlreadyThere()) {
+            sendHome(fallback);
+            return;
           }
-          window.location.replace(readPollarReturnTo() ?? "/");
+          clearPendingPollarOAuth();
+          window.location.replace(returnTo ?? "/");
           return;
         }
 
-        const returnTo = readPollarReturnTo();
         const res = await fetch("/api/auth/pollar/verify", {
           method: "POST",
           credentials: "include",
@@ -78,14 +107,16 @@ export default function PollarOAuthCallbackPage() {
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
+          if (await sessionAlreadyThere()) {
+            sendHome(fallback);
+            return;
+          }
           throw new Error(typeof data.error === "string" ? data.error : t("failedToSignIn"));
         }
-        clearPendingPollarOAuth();
         const redirect =
           sanitizeReturnTo(typeof data.redirect === "string" ? data.redirect : undefined) ??
-          returnTo ??
-          "/onboarding/organizations";
-        window.location.replace(redirect);
+          fallback;
+        sendHome(redirect);
       } catch (err) {
         setError(err instanceof Error ? err.message : t("failedToSignIn"));
       }
@@ -106,7 +137,14 @@ export default function PollarOAuthCallbackPage() {
             </Link>
           </div>
         ) : (
-          <SozuLoadingMark />
+          <div className="flex flex-col items-center gap-4">
+            <SozuLoadingMark />
+            {showContinue ? (
+              <Link href="/" className="text-sm underline underline-offset-2">
+                {t("googleReturnContinue")}
+              </Link>
+            ) : null}
+          </div>
         )}
       </main>
     </DarkGradientBg>

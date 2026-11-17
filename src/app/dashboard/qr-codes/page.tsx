@@ -1,10 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
+import { PaymentLinkQrDownload } from "@/components/PaymentLinkQrDownload";
+import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 import { qrPointScanUrl } from "@/lib/dashboard/merchant-qr";
 import type { QrPointDestinationType } from "@/lib/dashboard/merchant-qr";
 import { normalizeEditionSize } from "@/lib/dashboard/collectible-edition";
+import {
+  formatPaymentLinkPrice,
+  paymentLinkStoreLabel,
+} from "@/lib/dashboard/payment-link-card";
 import { parseStandingLink, parseStandingPriceUsd, slugFromTitle } from "@/lib/dashboard/payment-link";
 
 type QRPoint = {
@@ -20,9 +26,12 @@ type QRPoint = {
 
 export default function QRCodesPage() {
   const t = useTranslations("qrNfcPage");
+  const profile = useDashboardProfile();
   const [qrPoints, setQRPoints] = useState<QRPoint[]>([]);
   const [storeSlug, setStoreSlug] = useState("");
   const [openPointId, setOpenPointId] = useState<string | null>(null);
+  const [freshId, setFreshId] = useState<string | null>(null);
+  const pendingScrollId = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
@@ -52,6 +61,13 @@ export default function QRCodesPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const id = pendingScrollId.current;
+    if (!id || loading) return;
+    pendingScrollId.current = null;
+    document.getElementById(`payment-link-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [loading, qrPoints]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,12 +106,18 @@ export default function QRCodesPage() {
         setError((data.error as string) ?? t("errorCreateFailed"));
         return;
       }
+      const createdId = typeof data.qrPoint?.id === "string" ? data.qrPoint.id : null;
       setName("");
       setAmount("");
       setProductKind("product");
       setCollectibleOn(true);
       setEditionSize("");
       setShowForm(false);
+      if (createdId) {
+        setOpenPointId(createdId);
+        setFreshId(createdId);
+        pendingScrollId.current = createdId;
+      }
       load();
     } finally {
       setBusy(false);
@@ -133,9 +155,16 @@ export default function QRCodesPage() {
       ? qrPointScanUrl({ ...qr, storeSlug }, baseUrl)
       : `${baseUrl.replace(/\/$/, "")}/pay/qr/${qr.slug}`;
 
-  const getQRImageUrl = (qr: QRPoint) => {
-    const payUrl = getPointUrl(qr);
-    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payUrl)}`;
+  const storeLabel = paymentLinkStoreLabel(profile?.profile?.org_name, storeSlug);
+
+  const qrDownloadLabels = {
+    downloadLabel: t("downloadQr"),
+    hint: t("downloadQrHint"),
+    downloadedLabel: t("downloaded"),
+    copyLabel: t("copyUrl"),
+    copiedLabel: t("copiedUrl"),
+    shareLabel: t("shareLink"),
+    sharedLabel: t("shared"),
   };
 
   return (
@@ -308,17 +337,19 @@ export default function QRCodesPage() {
               return (
               <div
                 key={qr.id}
+                id={`payment-link-${qr.id}`}
                 className={`rounded-lg border bg-white dark:bg-gray-800/50 p-4 ${
                   isOpen
                     ? "border-indigo-400 dark:border-indigo-500"
                     : "border-gray-200 dark:border-gray-700"
                 }`}
               >
+                <div className="flex items-start justify-between gap-4">
                 <button
                   type="button"
                   onClick={() => setOpenPointId(isOpen ? null : qr.id)}
                   aria-expanded={isOpen}
-                  className="flex w-full items-start justify-between gap-4 text-left rounded-md -m-1 p-1 hover:bg-gray-50 dark:hover:bg-gray-800/80"
+                  className="flex min-w-0 flex-1 items-start text-left rounded-md -m-1 p-1 hover:bg-gray-50 dark:hover:bg-gray-800/80"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -378,16 +409,33 @@ export default function QRCodesPage() {
                       return <p className="text-xs text-gray-400 mt-1">{status}</p>;
                     })()}
                   </div>
-                  {qr.pointType === "qr" && (
-                    <img
-                      src={getQRImageUrl(qr)}
-                      alt=""
-                      className="w-20 h-20 rounded border border-gray-200 dark:border-gray-700 shrink-0"
-                    />
-                  )}
                 </button>
+                {qr.pointType === "qr" && (
+                  <PaymentLinkQrDownload
+                    variant="thumb"
+                    payUrl={getPointUrl(qr)}
+                    item={qr.name}
+                    store={storeLabel}
+                    price={formatPaymentLinkPrice(parseStandingPriceUsd(qr.destinationRef))}
+                    {...qrDownloadLabels}
+                  />
+                )}
+                </div>
                 {isOpen && (
-                  <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4 space-y-2">
+                  <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4 space-y-4">
+                    {freshId === qr.id && (
+                      <p className="text-sm text-emerald-700 dark:text-emerald-300">{t("createdReady")}</p>
+                    )}
+                    {qr.pointType === "qr" && (
+                      <PaymentLinkQrDownload
+                        variant="card"
+                        payUrl={getPointUrl(qr)}
+                        item={qr.name}
+                        store={storeLabel}
+                        price={formatPaymentLinkPrice(parseStandingPriceUsd(qr.destinationRef))}
+                        {...qrDownloadLabels}
+                      />
+                    )}
                     <div className="flex flex-wrap items-center gap-2">
                       <a
                         href={getPointUrl(qr)}

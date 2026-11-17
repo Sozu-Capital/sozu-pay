@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import type { PollarClient } from "@pollar/core";
 import {
+  closePollarOAuthPopup,
   discardReservedPollarOAuthPopup,
   getPollarBrowserClient,
   getPollarPublishableKey,
@@ -102,6 +103,7 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
         stored ??
         "/onboarding/organizations";
       clearPendingPollarOAuth();
+      closePollarOAuthPopup();
       window.location.assign(redirect);
     },
     [returnTo, t],

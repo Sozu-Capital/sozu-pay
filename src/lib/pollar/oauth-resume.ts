@@ -1,7 +1,9 @@
-/** Session keys for Pollar hosted OAuth across same-window mobile redirects. */
+/** Session keys for Pollar hosted OAuth across the Google redirect. */
 export const POLLAR_RETURN_TO_KEY = "sozupay_pollar_return_to";
 export const POLLAR_PENDING_OAUTH_KEY = "sozupay_pollar_pending_oauth";
 export const POLLAR_OAUTH_CALLBACK_PATH = "/auth/pollar/callback";
+/** `window.name` of the tab opened for Google. The main app window never uses this. */
+export const POLLAR_OAUTH_WINDOW_NAME = "pollar-oauth";
 
 export type PendingPollarOAuth = {
   clientSessionId: string;
@@ -28,6 +30,17 @@ export function clientSessionIdFromOAuthUrl(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+/** Pollar may append `client_session_id` when it sends the browser back to the callback. */
+export function clientSessionIdFromCallbackSearch(search: string): string | null {
+  const raw = search.startsWith("?") ? search.slice(1) : search;
+  const id = new URLSearchParams(raw).get("client_session_id")?.trim();
+  return id || null;
+}
+
+export function isPollarOAuthPopupWindow(name: string): boolean {
+  return name === POLLAR_OAUTH_WINDOW_NAME;
 }
 
 export function accessTokenFromLoginResponse(body: unknown): string | null {
@@ -57,56 +70,116 @@ async function sha256Bytes(data: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(digest);
 }
 
-export function persistPollarReturnTo(returnTo?: string): void {
-  if (typeof sessionStorage === "undefined") return;
-  const clean = sanitizeReturnTo(returnTo);
-  if (clean) sessionStorage.setItem(POLLAR_RETURN_TO_KEY, clean);
-  else sessionStorage.removeItem(POLLAR_RETURN_TO_KEY);
-}
-
-export function readPollarReturnTo(): string | undefined {
-  if (typeof sessionStorage === "undefined") return undefined;
-  return sanitizeReturnTo(sessionStorage.getItem(POLLAR_RETURN_TO_KEY));
-}
-
-export function clearPollarReturnTo(): void {
-  if (typeof sessionStorage === "undefined") return;
-  sessionStorage.removeItem(POLLAR_RETURN_TO_KEY);
-}
-
-export function persistPendingPollarOAuth(clientSessionId: string): void {
-  if (typeof sessionStorage === "undefined") return;
-  const pending: PendingPollarOAuth = { clientSessionId, createdAt: Date.now() };
-  sessionStorage.setItem(POLLAR_PENDING_OAUTH_KEY, JSON.stringify(pending));
-}
-
-export function readPendingPollarOAuth(now: number = Date.now()): PendingPollarOAuth | null {
-  if (typeof sessionStorage === "undefined") return null;
-  const raw = sessionStorage.getItem(POLLAR_PENDING_OAUTH_KEY);
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as PendingPollarOAuth;
-    if (!parsed?.clientSessionId || typeof parsed.createdAt !== "number") return null;
-    if (now - parsed.createdAt > PENDING_MAX_AGE_MS) {
-      sessionStorage.removeItem(POLLAR_PENDING_OAUTH_KEY);
-      return null;
+/**
+ * sessionStorage is wiped by some mobile browsers on the Google hop, and a
+ * popup cannot see the opener's sessionStorage. localStorage covers both.
+ */
+function pollarStores(): Storage[] {
+  if (typeof window === "undefined") return [];
+  const stores: Storage[] = [];
+  for (const store of [window.sessionStorage, window.localStorage]) {
+    try {
+      if (store) stores.push(store);
+    } catch {
+      // private mode
     }
-    return parsed;
-  } catch {
-    return null;
+  }
+  return stores;
+}
+
+export function persistPollarReturnTo(returnTo?: string): void {
+  const clean = sanitizeReturnTo(returnTo);
+  for (const store of pollarStores()) {
+    try {
+      if (clean) store.setItem(POLLAR_RETURN_TO_KEY, clean);
+      else store.removeItem(POLLAR_RETURN_TO_KEY);
+    } catch {
+      // quota / private mode
+    }
   }
 }
 
+export function readPollarReturnTo(): string | undefined {
+  for (const store of pollarStores()) {
+    try {
+      const value = sanitizeReturnTo(store.getItem(POLLAR_RETURN_TO_KEY));
+      if (value) return value;
+    } catch {
+      // ignore
+    }
+  }
+  return undefined;
+}
+
+export function clearPollarReturnTo(): void {
+  for (const store of pollarStores()) {
+    try {
+      store.removeItem(POLLAR_RETURN_TO_KEY);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+export function persistPendingPollarOAuth(clientSessionId: string): void {
+  const pending: PendingPollarOAuth = { clientSessionId, createdAt: Date.now() };
+  const raw = JSON.stringify(pending);
+  for (const store of pollarStores()) {
+    try {
+      store.setItem(POLLAR_PENDING_OAUTH_KEY, raw);
+    } catch {
+      // quota / private mode
+    }
+  }
+}
+
+export function readPendingPollarOAuth(now: number = Date.now()): PendingPollarOAuth | null {
+  for (const store of pollarStores()) {
+    let raw: string | null = null;
+    try {
+      raw = store.getItem(POLLAR_PENDING_OAUTH_KEY);
+    } catch {
+      continue;
+    }
+    if (!raw) continue;
+    try {
+      const parsed = JSON.parse(raw) as PendingPollarOAuth;
+      if (!parsed?.clientSessionId || typeof parsed.createdAt !== "number") continue;
+      if (now - parsed.createdAt > PENDING_MAX_AGE_MS) {
+        try {
+          store.removeItem(POLLAR_PENDING_OAUTH_KEY);
+        } catch {
+          // ignore
+        }
+        continue;
+      }
+      return parsed;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 export function clearPendingPollarOAuth(): void {
-  if (typeof sessionStorage === "undefined") return;
-  sessionStorage.removeItem(POLLAR_PENDING_OAUTH_KEY);
+  for (const store of pollarStores()) {
+    try {
+      store.removeItem(POLLAR_PENDING_OAUTH_KEY);
+    } catch {
+      // ignore
+    }
+  }
 }
 
 export function pollarOAuthCallbackUrl(origin: string): string {
   return `${origin.replace(/\/$/, "")}${POLLAR_OAUTH_CALLBACK_PATH}`;
 }
 
-/** Popup OAuth is unreliable on iOS/Android WebKit; use same-window redirect instead. */
+/**
+ * Phones and tablets. `window.open(..., features)` often returns null here;
+ * open the OAuth tab with no feature string. Same-window is only the fallback
+ * when that open is blocked.
+ */
 export function shouldUseSameWindowOAuth(userAgent: string): boolean {
   return /iPhone|iPad|iPod|Android/i.test(userAgent);
 }

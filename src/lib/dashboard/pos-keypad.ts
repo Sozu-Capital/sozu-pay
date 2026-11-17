@@ -65,11 +65,42 @@ export function applyPosKeypadKey(
 }
 
 /** Map a physical keyboard event to a keypad key. Null when the key is not amount input. */
-export function posKeyFromKeyboard(key: string): PosKeypadKey | null {
+export function posKeyFromKeyboard(key: string, code?: string): PosKeypadKey | null {
   if (key === "Backspace" || key === "Delete") return "backspace";
-  if (key === "." || key === ",") return ".";
+  if (key === "." || key === "," || code === "NumpadDecimal") return ".";
   if (/^[0-9]$/.test(key)) return key as PosKeypadKey;
+  if (code?.startsWith("Numpad")) {
+    const digit = code.slice("Numpad".length);
+    if (/^[0-9]$/.test(digit)) return digit as PosKeypadKey;
+  }
+  if (code?.startsWith("Digit")) {
+    const digit = code.slice("Digit".length);
+    if (/^[0-9]$/.test(digit)) return digit as PosKeypadKey;
+  }
   return null;
+}
+
+/**
+ * Replace the amount with what a focused field would contain after typing or paste.
+ * Whole-peso CLP ignores separators, so "15.000" and "15000" are the same entry.
+ */
+export function amountFromPosTyping(
+  raw: string,
+  options: ApplyPosKeypadOptions = {},
+): string {
+  const maxFractionDigits = options.maxFractionDigits ?? DEFAULT_MAX_FRACTION_DIGITS;
+  const maxIntegerDigits = options.maxIntegerDigits ?? DEFAULT_MAX_INTEGER_DIGITS;
+  if (maxFractionDigits <= 0) {
+    const digits = raw.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+    return digits.slice(0, maxIntegerDigits);
+  }
+
+  let next = "";
+  for (const ch of raw) {
+    const key = posKeyFromKeyboard(ch);
+    if (key && key !== "backspace") next = applyPosKeypadKey(next, key, options);
+  }
+  return next;
 }
 
 /** Enter confirms the charge from a desktop keyboard. */

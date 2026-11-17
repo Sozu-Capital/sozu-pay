@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { applyPosKeypadKey, formatPosKeypadDisplay, isPosSubmitKey, posKeyFromKeyboard } from "./pos-keypad.js";
+import {
+  amountFromPosTyping,
+  applyPosKeypadKey,
+  formatPosKeypadDisplay,
+  isPosSubmitKey,
+  posKeyFromKeyboard,
+} from "./pos-keypad.js";
 
 describe("applyPosKeypadKey", () => {
   it("appends digits from empty", () => {
@@ -58,8 +64,19 @@ describe("posKeyFromKeyboard", () => {
     assert.equal(posKeyFromKeyboard("Backspace"), "backspace");
     assert.equal(posKeyFromKeyboard("Delete"), "backspace");
     assert.equal(posKeyFromKeyboard("a"), null);
+    assert.equal(posKeyFromKeyboard("Unidentified", "Numpad5"), "5");
+    assert.equal(posKeyFromKeyboard("Delete", "NumpadDecimal"), "backspace");
+    assert.equal(posKeyFromKeyboard(".", "NumpadDecimal"), ".");
     assert.equal(isPosSubmitKey("Enter"), true);
     assert.equal(isPosSubmitKey(" "), false);
+  });
+});
+
+describe("amountFromPosTyping", () => {
+  it("keeps whole pesos and drops thousand separators", () => {
+    assert.equal(amountFromPosTyping("15.000", { maxFractionDigits: 0 }), "15000");
+    assert.equal(amountFromPosTyping("00012", { maxFractionDigits: 0 }), "12");
+    assert.equal(amountFromPosTyping("", { maxFractionDigits: 0 }), "");
   });
 });
 

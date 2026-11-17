@@ -89,13 +89,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   }, [mobileOpen, closeMobile]);
 
   return (
-    <div className="dark flex min-h-screen flex-col text-white md:flex-row">
-      {/* Desktop sidebar */}
+    <div className="dark flex min-h-screen flex-col text-white md:h-dvh md:min-h-0 md:flex-row md:overflow-hidden">
+      {/* Desktop sidebar is viewport-tall so the footer stays on screen */}
       <aside
-        className="hidden md:flex md:w-56 md:flex-col md:border-r md:border-white/10 md:bg-black/40 md:backdrop-blur-sm md:p-4 md:min-h-0 shrink-0"
+        className="hidden md:flex md:h-full md:w-56 md:min-h-0 md:shrink-0 md:flex-col md:overflow-hidden md:border-r md:border-white/10 md:bg-black/40 md:backdrop-blur-sm md:p-4"
         aria-label={t("navAria")}
       >
-        <DashboardBrandHeader className="mb-6" switcherOpen={switcherOpen} onOpenSwitcher={openSwitcher} />
+        <DashboardBrandHeader className="mb-6 shrink-0" switcherOpen={switcherOpen} onOpenSwitcher={openSwitcher} />
         <DashboardNav onNavigate={closeMobile} />
       </aside>
 
@@ -133,13 +133,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       ) : null}
       <aside
         id="dashboard-mobile-nav"
-        className={`md:hidden fixed inset-y-0 right-0 z-50 w-[min(18rem,85vw)] flex flex-col border-l border-white/10 bg-black/90 backdrop-blur-md p-4 transition-transform duration-200 ease-out ${
+        className={`md:hidden fixed inset-y-0 right-0 z-50 flex h-dvh min-h-0 w-[min(18rem,85vw)] flex-col overflow-hidden border-l border-white/10 bg-black/90 p-4 backdrop-blur-md transition-transform duration-200 ease-out ${
           mobileOpen ? "translate-x-0" : "translate-x-full pointer-events-none"
         }`}
         aria-label={t("navAria")}
         aria-hidden={!mobileOpen}
       >
-        <div className="mb-4 flex items-center justify-between gap-2">
+        <div className="mb-4 flex shrink-0 items-center justify-between gap-2">
           <DashboardBrandHeader className="min-w-0 flex-1" switcherOpen={switcherOpen} onOpenSwitcher={openSwitcher} />
           <button
             type="button"
@@ -155,7 +155,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         <DashboardNav onNavigate={closeMobile} />
       </aside>
 
-      <main className="flex-1 p-4 text-white md:p-8" role="main">
+      <main className="flex-1 p-4 text-white md:min-h-0 md:overflow-y-auto md:p-8" role="main">
         {children}
       </main>
 

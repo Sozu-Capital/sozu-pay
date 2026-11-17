@@ -5,6 +5,7 @@ import type { AuthUrlOpener } from "@pollar/core";
 import {
   clientSessionIdFromOAuthUrl,
   persistPendingPollarOAuth,
+  POLLAR_OAUTH_WINDOW_NAME,
   pollarOAuthCallbackUrl,
   shouldUseSameWindowOAuth,
 } from "@/lib/pollar/oauth-resume";
@@ -15,6 +16,14 @@ const POLLAR_KEYS_DB = "pollar-keys";
 let client: PollarClient | null = null;
 let clientApiKey: string | null = null;
 let reservedPopup: Window | null = null;
+let oauthPopup: Window | null = null;
+
+function mobileOAuthUserAgent(): boolean {
+  if (typeof window === "undefined") return false;
+  const ua = window.navigator.userAgent;
+  const iPadDesktop = ua.includes("Macintosh") && window.navigator.maxTouchPoints > 1;
+  return shouldUseSameWindowOAuth(ua) || iPadDesktop;
+}
 
 export function getPollarPublishableKey(): string {
   return (process.env.NEXT_PUBLIC_POLLAR_PUBLISHABLE_KEY ?? "").trim();
@@ -26,66 +35,77 @@ export function isPollarFakeAuth(): boolean {
 
 /**
  * Must run synchronously in the Google click handler, before any await.
- * iOS WebKit only honors window.open inside the original user-gesture tick;
- * Pollar's SDK opens the popup after Promise.then + /auth/session, which is too late.
+ * iOS WebKit only honors window.open inside the original user-gesture tick,
+ * and it rejects `window.open` when a feature string is passed.
+ * The opened tab keeps `window.name` so the callback can finish sign-in there
+ * if this page is frozen in the background.
  */
 export function reservePollarOAuthPopup(): Window | null {
   if (typeof window === "undefined") return null;
-  discardReservedPollarOAuthPopup();
-  if (shouldUseSameWindowOAuth(window.navigator.userAgent)) {
+  closePollarOAuthPopup();
+  const popup = mobileOAuthUserAgent()
+    ? window.open("about:blank", POLLAR_OAUTH_WINDOW_NAME)
+    : window.open("about:blank", POLLAR_OAUTH_WINDOW_NAME, "popup=yes,width=480,height=720");
+  if (!popup || popup.closed) {
     reservedPopup = null;
+    oauthPopup = null;
     return null;
   }
-  const popup = window.open("about:blank", "pollar-oauth", "popup=yes,width=480,height=720");
-  if (popup) {
-    try {
-      popup.opener = null;
-    } catch {
-      // ignore
-    }
+  reservedPopup = popup;
+  oauthPopup = popup;
+  return popup;
+}
+
+function popupIsBackOnApp(popup: Window): boolean {
+  try {
+    return popup.location.href.startsWith(window.location.origin);
+  } catch {
+    return false;
   }
-  reservedPopup = popup && !popup.closed ? popup : null;
-  return reservedPopup;
+}
+
+/** Close the Google tab while it is still on Pollar or Google. Leave it once it has returned to this app. */
+export function closePollarOAuthPopup(): void {
+  const popup = oauthPopup ?? reservedPopup;
+  oauthPopup = null;
+  reservedPopup = null;
+  if (!popup || popup.closed || popupIsBackOnApp(popup)) return;
+  try {
+    popup.close();
+  } catch {
+    // ignore
+  }
 }
 
 export function discardReservedPollarOAuthPopup(): void {
-  if (reservedPopup && !reservedPopup.closed) {
-    try {
-      reservedPopup.close();
-    } catch {
-      // ignore
-    }
-  }
-  reservedPopup = null;
+  closePollarOAuthPopup();
 }
 
 const sozuOpenAuthUrl: AuthUrlOpener = async ({ getUrl }) => {
-  const popup = reservedPopup && !reservedPopup.closed ? reservedPopup : null;
+  const popup =
+    (reservedPopup && !reservedPopup.closed ? reservedPopup : null) ??
+    (oauthPopup && !oauthPopup.closed ? oauthPopup : null);
   reservedPopup = null;
 
   const url = await getUrl();
   if (!url) {
-    popup?.close();
+    closePollarOAuthPopup();
     return;
-  }
-
-  if (popup && !popup.closed && !shouldUseSameWindowOAuth(window.navigator.userAgent)) {
-    popup.location.href = url;
-    return;
-  }
-  if (popup && !popup.closed) {
-    try {
-      popup.close();
-    } catch {
-      // ignore
-    }
   }
 
   const sessionId = clientSessionIdFromOAuthUrl(url);
   if (sessionId) persistPendingPollarOAuth(sessionId);
+
+  if (popup && !popup.closed) {
+    oauthPopup = popup;
+    popup.location.href = url;
+    return;
+  }
+
+  oauthPopup = null;
   window.location.assign(url);
   await new Promise<void>(() => {
-    /* page navigates away */
+    /* page navigates away; the callback finishes sign-in */
   });
 };
 

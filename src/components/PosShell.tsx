@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { PosPaymentQrCard } from "@/components/PosPaymentQrCard";
@@ -11,7 +11,13 @@ import {
   isCheckoutWalletNotReadyHttpStatus,
 } from "@/lib/checkout/ready";
 import { posPaneState } from "@/lib/dashboard/pos-pane";
-import { applyPosKeypadKey, isPosSubmitKey, posKeyFromKeyboard, type PosKeypadKey } from "@/lib/dashboard/pos-keypad";
+import {
+  amountFromPosTyping,
+  applyPosKeypadKey,
+  isPosSubmitKey,
+  posKeyFromKeyboard,
+  type PosKeypadKey,
+} from "@/lib/dashboard/pos-keypad";
 import {
   POS_CLP_FRACTION_DIGITS,
   formatClpDisplay,
@@ -58,7 +64,7 @@ function BackspaceIcon() {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
-      className="h-[30px] w-[34px]"
+      className="h-6 w-7"
     >
       <path
         d="M12.5 4H29a3 3 0 0 1 3 3v16a3 3 0 0 1-3 3H12.5L3 15l9.5-11Z"
@@ -93,6 +99,7 @@ export default function PosShell() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [showReceipt, setShowReceipt] = useState(false);
   const [keypadEpoch, setKeypadEpoch] = useState(0);
+  const amountInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -254,7 +261,7 @@ export default function PosShell() {
         if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) return;
       }
       if (event.metaKey || event.ctrlKey || event.altKey) return;
-      const key = posKeyFromKeyboard(event.key);
+      const key = posKeyFromKeyboard(event.key, event.code);
       if (key) {
         event.preventDefault();
         pressKey(key);
@@ -265,9 +272,13 @@ export default function PosShell() {
         void handleCreate();
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [amountClp, busy, paid, reference, result]);
+
+  useEffect(() => {
+    amountInputRef.current?.focus({ preventScroll: true });
+  }, [keypadEpoch]);
 
   const handleRegenerate = async () => {
     const nextAmount = amountClpForRegeneration({
@@ -324,7 +335,7 @@ export default function PosShell() {
     });
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto w-full max-w-4xl space-y-4 lg:space-y-3">
       <header>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
           {t("title")}
@@ -350,24 +361,49 @@ export default function PosShell() {
       )}
 
       {walletReady !== false && (
-        <div className="overflow-hidden rounded-[48px] border border-[#f3f4f6] bg-white shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] lg:flex">
-          <div className="flex flex-1 flex-col items-center justify-center bg-[rgba(249,250,251,0.3)] px-6 py-10 sm:px-12 lg:px-16 lg:py-16">
-            <div className="mb-10 flex w-full max-w-md flex-col items-center gap-4">
-              <p className="text-center text-2xl font-bold tracking-wide text-[#9ca3af]">
+        <div className="overflow-hidden rounded-[32px] border border-[#f3f4f6] bg-white shadow-[0px_16px_40px_-18px_rgba(0,0,0,0.25)] lg:flex lg:rounded-3xl">
+          <div className="flex flex-1 flex-col items-center justify-center bg-[rgba(249,250,251,0.3)] px-6 py-8 sm:px-8 lg:px-8 lg:py-6">
+            <div className="mb-6 flex w-full max-w-sm flex-col items-center gap-2 lg:mb-4">
+              <p className="text-center text-lg font-bold tracking-wide text-[#9ca3af] lg:text-base">
                 {t("currencyLabel")}
               </p>
-              <p
-                className="max-w-full truncate text-center text-6xl font-extrabold tracking-tighter text-[#050505] sm:text-7xl lg:text-[7.5rem] lg:leading-none"
-                data-testid="pos-amount-display"
-                aria-live="polite"
-              >
-                {displayAmount}
-              </p>
+              <div className="relative w-full">
+                <p
+                  className="max-w-full truncate text-center text-5xl font-extrabold tracking-tighter text-[#050505] sm:text-6xl lg:text-5xl lg:leading-none"
+                  data-testid="pos-amount-display"
+                  aria-hidden="true"
+                >
+                  {displayAmount}
+                </p>
+                <input
+                  ref={amountInputRef}
+                  autoFocus
+                  inputMode="numeric"
+                  autoComplete="off"
+                  enterKeyHint="done"
+                  aria-label={t("keypadAria")}
+                  value={amountClp}
+                  onChange={(e) =>
+                    setAmountClp(
+                      amountFromPosTyping(e.target.value, {
+                        maxFractionDigits: POS_CLP_FRACTION_DIGITS,
+                      }),
+                    )
+                  }
+                  onKeyDown={(e) => {
+                    if (isPosSubmitKey(e.key) && !result && !busy && !paid) {
+                      e.preventDefault();
+                      void handleCreate();
+                    }
+                  }}
+                  className="absolute inset-0 h-full w-full cursor-text bg-transparent text-center text-transparent caret-transparent outline-none"
+                />
+              </div>
             </div>
 
             <div
               key={keypadEpoch}
-              className="grid w-full max-w-md grid-cols-3 gap-3 sm:gap-4"
+              className="grid w-full max-w-sm grid-cols-3 gap-2.5 sm:gap-3 lg:max-w-xs lg:gap-2"
               role="group"
               aria-label={t("keypadAria")}
             >
@@ -378,6 +414,7 @@ export default function PosShell() {
                   <button
                     key={key}
                     type="button"
+                    onMouseDown={(event) => event.preventDefault()}
                     onClick={() => pressKey(key)}
                     disabled={isDecimalDisabled}
                     aria-label={
@@ -389,10 +426,10 @@ export default function PosShell() {
                     }
                     className={
                       isBackspace
-                        ? "flex items-center justify-center rounded-3xl border border-[#e5e7eb] bg-[#f3f4f6] px-4 py-6 text-[#050505] transition-transform active:scale-[0.98]"
+                        ? "flex items-center justify-center rounded-2xl border border-[#e5e7eb] bg-[#f3f4f6] px-3 py-4 text-[#050505] transition-transform active:scale-[0.98] lg:py-3"
                         : isDecimalDisabled
-                          ? "flex items-center justify-center rounded-3xl border border-[#f3f4f6] bg-[#f9fafb] px-4 py-6 text-3xl font-extrabold tracking-widest text-[#d1d5db]"
-                          : "flex items-center justify-center rounded-3xl border border-[#f3f4f6] bg-white px-4 py-6 text-3xl font-extrabold tracking-widest text-[#050505] shadow-sm transition-transform active:scale-[0.98]"
+                          ? "flex items-center justify-center rounded-2xl border border-[#f3f4f6] bg-[#f9fafb] px-3 py-4 text-2xl font-extrabold tracking-widest text-[#d1d5db] lg:py-3 lg:text-xl"
+                          : "flex items-center justify-center rounded-2xl border border-[#f3f4f6] bg-white px-3 py-4 text-2xl font-extrabold tracking-widest text-[#050505] shadow-sm transition-transform active:scale-[0.98] lg:py-3 lg:text-xl"
                     }
                   >
                     {isBackspace ? <BackspaceIcon /> : key}
@@ -401,7 +438,7 @@ export default function PosShell() {
               })}
             </div>
 
-            <div className="mt-8 w-full max-w-md space-y-3">
+            <div className="mt-6 w-full max-w-sm space-y-3 lg:mt-4 lg:max-w-xs">
               <label className="block text-sm font-medium text-gray-600">
                 {tc("referenceLabel")}
                 <input
@@ -424,13 +461,14 @@ export default function PosShell() {
                   type="button"
                   onClick={() => void handleCreate()}
                   disabled={busy}
-                  className="w-full rounded-[28px] bg-[#050505] py-5 text-xl font-extrabold text-white shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.2)] transition-opacity disabled:opacity-50"
+                  className="w-full rounded-2xl bg-[#050505] py-4 text-lg font-extrabold text-white shadow-[0px_16px_30px_-16px_rgba(0,0,0,0.35)] transition-opacity disabled:opacity-50 lg:py-3"
                 >
                   {busy ? t("creating") : t("createCharge")}
                 </button>
               )}
+            </div>
 
-              <p className="text-center text-xs text-gray-500">
+            <p className="mt-8 max-w-sm text-center text-xs text-gray-500 lg:mt-10">
                 {t("managePoints")}{" "}
                 <Link
                   href="/dashboard/qr-codes"
@@ -438,11 +476,10 @@ export default function PosShell() {
                 >
                   {t("managePointsLink")}
                 </Link>
-              </p>
-            </div>
+            </p>
           </div>
 
-          <div className="relative flex w-full flex-col justify-between border-t border-[#f3f4f6] bg-white p-8 lg:w-[426px] lg:shrink-0 lg:border-l lg:border-t-0 lg:p-12">
+          <div className="relative flex w-full flex-col justify-between border-t border-[#f3f4f6] bg-white p-6 lg:w-[380px] lg:shrink-0 lg:border-l lg:border-t-0 lg:p-5">
             {pane === "empty" && (
               <div className="flex flex-1 items-center justify-center text-center text-sm text-gray-500">
                 {t("emptyHint")}
@@ -454,7 +491,7 @@ export default function PosShell() {
                 <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#9ca3af]">
                   {t("totalCharge")}
                 </p>
-                <p className="text-5xl font-extrabold tabular-nums text-[#050505]">
+                <p className="text-4xl font-extrabold tabular-nums text-[#050505] lg:text-3xl">
                   {sideTotal}
                 </p>
                 <p className="text-sm font-bold text-[#9ca3af]">{t("currencyLabel")}</p>

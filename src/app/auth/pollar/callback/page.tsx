@@ -47,6 +47,19 @@ export default function PollarOAuthCallbackPage() {
 
   useEffect(() => {
     if (ran.current) return;
+    if (window.opener && !window.opener.closed) {
+      ran.current = true;
+      try {
+        window.opener.focus();
+      } catch {
+        // ignore
+      }
+      window.close();
+      window.setTimeout(() => {
+        window.location.replace(sanitizeReturnTo(readPollarReturnTo()) ?? "/");
+      }, 400);
+      return;
+    }
     ran.current = true;
     void (async () => {
       try {

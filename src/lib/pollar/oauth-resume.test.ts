@@ -6,12 +6,19 @@ import {
   clientSessionIdFromCallbackSearch,
   clientSessionIdFromOAuthUrl,
   hashApiKeyPrefix,
+  isAllowedPollarHandoffUrl,
   isInAppBrowser,
+  isPhoneLikeBrowser,
   isPollarOAuthPopupWindow,
   parsePendingPollarOAuth,
+  parsePollarHandoffUrl,
   pendingOAuthFromCookieHeader,
   pollarOAuthCallbackUrl,
+  pollarOAuthHandoffHref,
+  pollarOAuthOpenPlan,
   pollarSessionStorageKey,
+  POLLAR_DESKTOP_OAUTH_FEATURES,
+  POLLAR_OAUTH_WINDOW_NAME,
   POLLAR_PENDING_OAUTH_KEY,
   sanitizeReturnTo,
   shouldReserveOAuthPopup,
@@ -147,6 +154,83 @@ describe("pollar storage helpers", () => {
         5,
       ),
       true,
+    );
+  });
+
+  it("opens iPhone and Android Google login as _blank with no features", () => {
+    assert.deepEqual(pollarOAuthOpenPlan(IPHONE_SAFARI), {
+      mode: "new-tab",
+      target: "_blank",
+      features: "",
+    });
+    assert.deepEqual(pollarOAuthOpenPlan(ANDROID_CHROME), {
+      mode: "new-tab",
+      target: "_blank",
+      features: "",
+    });
+  });
+
+  it("opens desktop Mac Google login as a named window with desktop features", () => {
+    assert.deepEqual(pollarOAuthOpenPlan(MAC_CHROME), {
+      mode: "new-tab",
+      target: POLLAR_OAUTH_WINDOW_NAME,
+      features: POLLAR_DESKTOP_OAUTH_FEATURES,
+    });
+  });
+
+  it("treats iPadOS Macintosh+touch as _blank", () => {
+    const ipadOs =
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15";
+    assert.equal(isPhoneLikeBrowser(ipadOs, 5), true);
+    assert.deepEqual(pollarOAuthOpenPlan(ipadOs, 5), {
+      mode: "new-tab",
+      target: "_blank",
+      features: "",
+    });
+  });
+
+  it("allows Pollar and Google handoff URLs and rejects others", () => {
+    assert.equal(
+      isAllowedPollarHandoffUrl("https://sdk.api.pollar.xyz/v2/auth/google?client_session_id=1"),
+      true,
+    );
+    assert.equal(isAllowedPollarHandoffUrl("https://api.pollar.xyz/v2/auth/google"), true);
+    assert.equal(isAllowedPollarHandoffUrl("https://www.pollar.xyz/auth"), true);
+    assert.equal(isAllowedPollarHandoffUrl("https://pollar.xyz/auth"), true);
+    assert.equal(isAllowedPollarHandoffUrl("https://accounts.google.com/o/oauth2/v2/auth"), true);
+    assert.equal(isAllowedPollarHandoffUrl("https://accounts.youtube.com/accounts"), true);
+    assert.equal(isAllowedPollarHandoffUrl("https://evil.example/phish"), false);
+    assert.equal(isAllowedPollarHandoffUrl("javascript:alert(1)"), false);
+    assert.equal(isAllowedPollarHandoffUrl("http://sdk.api.pollar.xyz/v2/auth/google"), false);
+  });
+
+  it("parses a fresh handoff URL and rejects expired or disallowed payloads", () => {
+    const now = 1_700_000_000_000;
+    const url = "https://sdk.api.pollar.xyz/v2/auth/google";
+    assert.equal(
+      parsePollarHandoffUrl(JSON.stringify({ url, createdAt: now }), now),
+      url,
+    );
+    assert.equal(
+      parsePollarHandoffUrl(
+        JSON.stringify({ url, createdAt: now - 11 * 60 * 1000 }),
+        now,
+      ),
+      null,
+    );
+    assert.equal(
+      parsePollarHandoffUrl(
+        JSON.stringify({ url: "https://evil.example", createdAt: now }),
+        now,
+      ),
+      null,
+    );
+  });
+
+  it("builds the same-origin Google handoff href", () => {
+    assert.equal(
+      pollarOAuthHandoffHref("https://pay.sozu.capital/", 123),
+      "https://pay.sozu.capital/auth/pollar/google?t=123",
     );
   });
 

@@ -12,6 +12,8 @@ import {
   logoutPollarBrowserClient,
   reservePollarOAuthPopup,
   resetPollarBrowserClient,
+  subscribePollarGoogleOpen,
+  type PollarGoogleOpen,
 } from "@/lib/pollar/browser-client";
 import { completeHostedOAuthSession } from "@/lib/pollar/oauth-complete";
 import {
@@ -63,6 +65,23 @@ function waitForAccessToken(client: PollarClient, fallbackMessage: string): Prom
   });
 }
 
+async function enterIfAlreadySignedIn(returnTo?: string): Promise<boolean> {
+  try {
+    const res = await fetch("/api/auth/session", { credentials: "include", cache: "no-store" });
+    const body = (await res.json().catch(() => null)) as { user?: unknown } | null;
+    if (!body?.user) return false;
+    const stored = readPollarReturnTo();
+    const redirect =
+      sanitizeReturnTo(stored) ?? sanitizeReturnTo(returnTo) ?? "/onboarding/organizations";
+    clearPendingPollarOAuth();
+    closePollarOAuthPopup();
+    window.location.assign(redirect);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function waitForPendingThenComplete(apiKey: string): Promise<string | null> {
   const deadline = Date.now() + 15_000;
   let pending = readPendingPollarOAuth();
@@ -90,6 +109,7 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
   const [inAppHint, setInAppHint] = useState(false);
   const [showContinueHere, setShowContinueHere] = useState(false);
   const [googleStuck, setGoogleStuck] = useState(false);
+  const [googleOpen, setGoogleOpen] = useState<PollarGoogleOpen>({ url: null, needsTap: false });
   const resumeRef = useRef(false);
 
   const fakeAuth = isPollarFakeAuth();
@@ -131,11 +151,12 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
 
   const resumePendingOAuth = useCallback(() => {
     if (fakeAuth || resumeRef.current) return;
-    const pending = readPendingPollarOAuth();
-    if (!pending) return;
-    resumeRef.current = true;
-    setBusyState(true);
     void (async () => {
+      if (await enterIfAlreadySignedIn(returnTo)) return;
+      const pending = readPendingPollarOAuth();
+      if (!pending || resumeRef.current) return;
+      resumeRef.current = true;
+      setBusyState(true);
       try {
         persistPollarReturnTo(returnTo);
         const apiKey = getPollarPublishableKey();
@@ -168,6 +189,23 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
   useEffect(() => {
     setInAppHint(isInAppBrowser(window.navigator.userAgent));
   }, []);
+
+  useEffect(() => subscribePollarGoogleOpen(setGoogleOpen), []);
+
+  useEffect(() => {
+    if (!busy) return;
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      await enterIfAlreadySignedIn(returnTo);
+    };
+    const id = window.setInterval(() => void tick(), 2000);
+    void tick();
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [busy, returnTo]);
 
   useEffect(() => {
     if (!busy) {
@@ -202,12 +240,15 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
   function handleContinueHere() {
     resumeRef.current = false;
     setShowContinueHere(false);
-    if (readPendingPollarOAuth()) {
-      resumePendingOAuth();
-      return;
-    }
-    setGoogleStuck(true);
-    setBusyState(false);
+    void (async () => {
+      if (await enterIfAlreadySignedIn(returnTo)) return;
+      if (readPendingPollarOAuth()) {
+        resumePendingOAuth();
+        return;
+      }
+      setGoogleStuck(true);
+      setBusyState(false);
+    })();
   }
 
   async function handleGoogle() {
@@ -284,6 +325,20 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
       </button>
       {busy ? (
         <p className="text-center text-sm text-white/70">{t("googleWaitingHint")}</p>
+      ) : null}
+      {busy && googleOpen.url ? (
+        <a
+          href={googleOpen.url}
+          target="_blank"
+          rel="noopener"
+          className={
+            googleOpen.needsTap
+              ? "inline-flex min-h-[48px] items-center justify-center rounded-full bg-white px-6 text-center text-sm font-semibold text-black transition hover:bg-white/90"
+              : "text-center text-sm text-white/80 underline underline-offset-2"
+          }
+        >
+          {t("googleOpenNewTab")}
+        </a>
       ) : null}
       {showContinueHere ? (
         <button

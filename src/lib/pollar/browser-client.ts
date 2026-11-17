@@ -5,9 +5,13 @@ import type { AuthUrlOpener } from "@pollar/core";
 import {
   clientSessionIdFromOAuthUrl,
   persistPendingPollarOAuth,
-  POLLAR_OAUTH_WINDOW_NAME,
   pollarOAuthCallbackUrl,
+  pollarOAuthHandoffHref,
+  pollarOAuthOpenPlan,
+  POLLAR_OAUTH_HANDOFF_MESSAGE,
+  publishPollarHandoffUrl,
   shouldReserveOAuthPopup,
+  shouldUseSameWindowOAuth,
   withSessionIdOnRedirectUri,
 } from "@/lib/pollar/oauth-resume";
 
@@ -19,6 +23,33 @@ let clientApiKey: string | null = null;
 let reservedPopup: Window | null = null;
 let oauthPopup: Window | null = null;
 
+export type PollarGoogleOpen = {
+  url: string | null;
+  needsTap: boolean;
+};
+
+type GoogleOpenListener = (state: PollarGoogleOpen) => void;
+
+let googleOpenState: PollarGoogleOpen = { url: null, needsTap: false };
+const googleOpenListeners = new Set<GoogleOpenListener>();
+
+function setGoogleOpen(state: PollarGoogleOpen): void {
+  googleOpenState = state;
+  for (const listener of googleOpenListeners) listener(state);
+}
+
+export function subscribePollarGoogleOpen(listener: GoogleOpenListener): () => void {
+  googleOpenListeners.add(listener);
+  listener(googleOpenState);
+  return () => {
+    googleOpenListeners.delete(listener);
+  };
+}
+
+function isUsablePopup(popup: Window | null): popup is Window {
+  return !!popup && !popup.closed && popup !== window;
+}
+
 export function getPollarPublishableKey(): string {
   return (process.env.NEXT_PUBLIC_POLLAR_PUBLISHABLE_KEY ?? "").trim();
 }
@@ -27,25 +58,55 @@ export function isPollarFakeAuth(): boolean {
   return process.env.NEXT_PUBLIC_POLLAR_FAKE_AUTH === "true" || !getPollarPublishableKey();
 }
 
+function openHandoffWithAnchor(url: string): void {
+  try {
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.target = "_blank";
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  } catch {
+    // ignore
+  }
+}
+
 /**
  * Must run synchronously in the Google click handler, before any await.
- * Open Google in another tab so this SozuPay tab stays alive. Pollar's hosted
- * success page only window.close()s — it never sends the browser back here.
+ * Open a same-origin handoff tab so this SozuPay tab stays alive. Pollar's
+ * hosted success page only window.close()s — it never sends the browser back here.
  */
 export function reservePollarOAuthPopup(): Window | null {
   if (typeof window === "undefined") return null;
   closePollarOAuthPopup();
-  if (!shouldReserveOAuthPopup(window.navigator.userAgent, window.navigator.maxTouchPoints ?? 0)) {
+  const ua = window.navigator.userAgent;
+  const maxTouchPoints = window.navigator.maxTouchPoints ?? 0;
+  if (!shouldReserveOAuthPopup(ua, maxTouchPoints)) {
     reservedPopup = null;
     oauthPopup = null;
     return null;
   }
-  const ua = window.navigator.userAgent;
-  // iOS ignores window.open with a feature string; open a named tab instead.
-  const popup = /iPhone|iPad|iPod|Android/i.test(ua)
-    ? window.open("about:blank", POLLAR_OAUTH_WINDOW_NAME)
-    : window.open("about:blank", POLLAR_OAUTH_WINDOW_NAME, "popup=yes,width=480,height=720");
-  if (!popup || popup.closed) {
+  const plan = pollarOAuthOpenPlan(ua, maxTouchPoints);
+  if (plan.mode !== "new-tab") {
+    reservedPopup = null;
+    oauthPopup = null;
+    return null;
+  }
+  const url = pollarOAuthHandoffHref(window.location.origin);
+  let popup: Window | null = null;
+  try {
+    popup = plan.features
+      ? window.open(url, plan.target, plan.features)
+      : window.open(url, plan.target);
+  } catch {
+    popup = null;
+  }
+  if (!isUsablePopup(popup)) {
+    openHandoffWithAnchor(url);
+    popup = null;
+  }
+  if (!isUsablePopup(popup)) {
     reservedPopup = null;
     oauthPopup = null;
     return null;
@@ -68,7 +129,8 @@ export function closePollarOAuthPopup(): void {
   const popup = oauthPopup ?? reservedPopup;
   oauthPopup = null;
   reservedPopup = null;
-  if (!popup || popup.closed || popupIsBackOnApp(popup)) return;
+  setGoogleOpen({ url: null, needsTap: false });
+  if (!popup || popup.closed || popup === window || popupIsBackOnApp(popup)) return;
   try {
     popup.close();
   } catch {
@@ -80,10 +142,26 @@ export function discardReservedPollarOAuthPopup(): void {
   closePollarOAuthPopup();
 }
 
+function sendUrlToHandoffTab(popup: Window | null, url: string): void {
+  publishPollarHandoffUrl(url);
+  if (!isUsablePopup(popup)) return;
+  oauthPopup = popup;
+  try {
+    popup.location.replace(url);
+  } catch {
+    // still try postMessage
+  }
+  try {
+    popup.postMessage({ type: POLLAR_OAUTH_HANDOFF_MESSAGE, url }, window.location.origin);
+  } catch {
+    // ignore
+  }
+}
+
 const sozuOpenAuthUrl: AuthUrlOpener = async ({ getUrl }) => {
   const popup =
-    (reservedPopup && !reservedPopup.closed ? reservedPopup : null) ??
-    (oauthPopup && !oauthPopup.closed ? oauthPopup : null);
+    (reservedPopup && isUsablePopup(reservedPopup) ? reservedPopup : null) ??
+    (oauthPopup && isUsablePopup(oauthPopup) ? oauthPopup : null);
   reservedPopup = null;
 
   const rawUrl = await getUrl();
@@ -96,14 +174,14 @@ const sozuOpenAuthUrl: AuthUrlOpener = async ({ getUrl }) => {
   const sessionId = clientSessionIdFromOAuthUrl(url);
   if (sessionId) persistPendingPollarOAuth(sessionId);
 
-  if (popup && !popup.closed) {
-    oauthPopup = popup;
-    popup.location.href = url;
+  if (shouldUseSameWindowOAuth(window.navigator.userAgent)) {
+    window.location.assign(url);
     return;
   }
 
-  oauthPopup = null;
-  window.location.assign(url);
+  const needsTap = !isUsablePopup(popup);
+  setGoogleOpen({ url, needsTap });
+  sendUrlToHandoffTab(popup, url);
 };
 
 /** One client per publishable key. Pollar warns (and can TDZ) if we construct/destroy per mount. */

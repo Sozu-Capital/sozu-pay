@@ -3,13 +3,17 @@ import { describe, it } from "node:test";
 import {
   isReusableCharge,
   normalizeUsdAmount,
-  parseStandingPriceUsd,
   checkoutOriginFromHeaders,
   isStubRampCheckoutUrl,
   originOfRedirect,
+  parseStandingLink,
+  parseStandingPriceUsd,
   payerCheckoutUrl,
+  resolveCollectibleReceipt,
+  paymentLinkPath,
   slugFromTitle,
   standingPriceRef,
+  STANDING_LINK_COLLECTIBLE_FX_SOURCE,
   STANDING_LINK_FX_SOURCE,
 } from "./payment-link.js";
 
@@ -24,6 +28,17 @@ describe("slugFromTitle", () => {
   });
 });
 
+describe("paymentLinkPath", () => {
+  it("puts the store ahead of the item so the link is not global", () => {
+    assert.equal(
+      paymentLinkPath("liquid-society", "liquid-society-tee"),
+      "/pay/qr/liquid-society/liquid-society-tee",
+    );
+    assert.equal(paymentLinkPath("not a store", "tee"), null);
+    assert.equal(paymentLinkPath("liquid-society", "../tee"), null);
+  });
+});
+
 describe("standing price", () => {
   it("normalizes a USD amount and round-trips it on the link", () => {
     assert.equal(normalizeUsdAmount("12,5"), "12.50");
@@ -32,6 +47,47 @@ describe("standing price", () => {
     const ref = standingPriceRef("12.50");
     assert.equal(parseStandingPriceUsd(ref), "12.50");
     assert.equal(parseStandingPriceUsd("cs_live"), null);
+    assert.equal(parseStandingPriceUsd("price:15.00|collectible"), "15.00");
+  });
+
+  it("lets a product opt into a collectible receipt and keeps drinks simple", () => {
+    assert.equal(resolveCollectibleReceipt("drink", true), false);
+    assert.equal(resolveCollectibleReceipt("product", false), false);
+    assert.equal(resolveCollectibleReceipt("product", true), true);
+    assert.deepEqual(parseStandingLink(standingPriceRef("15.00", { collectibleReceipt: true })), {
+      amountUsd: "15.00",
+      productKind: "product",
+      collectibleReceipt: true,
+      editionSize: null,
+    });
+    assert.deepEqual(
+      parseStandingLink(
+        standingPriceRef("15.00", { collectibleReceipt: true, editionSize: 10 }),
+      ),
+      {
+        amountUsd: "15.00",
+        productKind: "product",
+        collectibleReceipt: true,
+        editionSize: 10,
+      },
+    );
+    assert.equal(
+      standingPriceRef("15.00", { collectibleReceipt: true, editionSize: 10 }),
+      "price:15.00|collectible|edition:10",
+    );
+    assert.deepEqual(
+      parseStandingLink(standingPriceRef("4.50", { productKind: "drink", collectibleReceipt: true })),
+      {
+        amountUsd: "4.50",
+        productKind: "drink",
+        collectibleReceipt: false,
+        editionSize: null,
+      },
+    );
+    assert.equal(
+      parseStandingLink("price:4.50|drink|collectible|edition:10")?.editionSize,
+      null,
+    );
   });
 });
 
@@ -72,6 +128,7 @@ describe("payer checkout", () => {
 describe("isReusableCharge", () => {
   it("keeps standing links and open-amount sends out of the one-sale expiry", () => {
     assert.equal(isReusableCharge(STANDING_LINK_FX_SOURCE), true);
+    assert.equal(isReusableCharge(STANDING_LINK_COLLECTIBLE_FX_SOURCE), true);
     assert.equal(isReusableCharge("OPEN_AMOUNT"), true);
     assert.equal(isReusableCharge("POS_CLP_PER_USDC"), false);
     assert.equal(isReusableCharge(null), false);

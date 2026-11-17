@@ -32,6 +32,10 @@ ALTER TABLE organizations ADD COLUMN IF NOT EXISTS treasury_contract_id TEXT;
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS treasury_guardian_threshold INT;
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS treasury_manager_user_id BIGINT;
 
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS slug TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_organizations_slug ON organizations (slug) WHERE slug IS NOT NULL;
+COMMENT ON COLUMN organizations.slug IS 'Public store segment for payment links (/pay/qr/{slug}/{item}).';
+
 CREATE INDEX IF NOT EXISTS idx_organizations_type ON organizations(type);
 
 -- users.org_id references organizations.id (as text). Add FK when ready:

@@ -36,6 +36,11 @@ function formatTagLabel(tag: string): string {
   return `$${tag.replace(/^\$+/, "")}`;
 }
 
+function shortStellarAddress(address: string): string {
+  if (address.length <= 8) return address;
+  return `${address.slice(0, 4)}…${address.slice(-4)}`;
+}
+
 export default function SendUsdcForm({
   onSent,
   onFailed,
@@ -379,7 +384,7 @@ export default function SendUsdcForm({
           <p className="mt-1 text-xs text-red-600 dark:text-red-400">{resolveError}</p>
         ) : resolvedTag && resolvedAddress ? (
           <p className="mt-1 text-xs text-green-700 dark:text-green-400">
-            {t("resolvedTo", { tag: formatTagLabel(resolvedTag), address: resolvedAddress.slice(0, 8) })}
+            {t("resolvedTo", { tag: formatTagLabel(resolvedTag), address: shortStellarAddress(resolvedAddress) })}
           </p>
         ) : directAddress ? (
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("directAddress")}</p>

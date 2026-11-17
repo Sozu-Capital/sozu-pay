@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { qrPointScanUrl } from "@/lib/dashboard/merchant-qr";
 import type { QrPointDestinationType } from "@/lib/dashboard/merchant-qr";
-import { parseStandingPriceUsd, slugFromTitle } from "@/lib/dashboard/payment-link";
+import { normalizeEditionSize } from "@/lib/dashboard/collectible-edition";
+import { parseStandingLink, parseStandingPriceUsd, slugFromTitle } from "@/lib/dashboard/payment-link";
 
 type QRPoint = {
   id: string;
@@ -15,18 +16,20 @@ type QRPoint = {
   destinationRef: string | null;
   isOnline: boolean;
   createdAt: string;
-  pizzasDeposited: number;
 };
 
 export default function QRCodesPage() {
   const t = useTranslations("qrNfcPage");
   const [qrPoints, setQRPoints] = useState<QRPoint[]>([]);
-  const [orgPizzasDeposited, setOrgPizzasDeposited] = useState(0);
+  const [storeSlug, setStoreSlug] = useState("");
   const [openPointId, setOpenPointId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
+  const [productKind, setProductKind] = useState<"product" | "drink">("product");
+  const [collectibleOn, setCollectibleOn] = useState(true);
+  const [editionSize, setEditionSize] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,13 +43,8 @@ export default function QRCodesPage() {
     fetch("/api/merchant/qr-points")
       .then((r) => (r.ok ? r.json() : { qrPoints: [] }))
       .then((d) => {
-        setQRPoints(
-          (d.qrPoints ?? []).map((p: QRPoint) => ({
-            ...p,
-            pizzasDeposited: Number(p.pizzasDeposited) || 0,
-          })),
-        );
-        setOrgPizzasDeposited(Number(d.orgPizzasDeposited) || 0);
+        setQRPoints(d.qrPoints ?? []);
+        setStoreSlug(typeof d.storeSlug === "string" ? d.storeSlug : "");
       })
       .finally(() => setLoading(false));
   }, []);
@@ -67,6 +65,12 @@ export default function QRCodesPage() {
       setError(t("errorAmount"));
       return;
     }
+    const collectibleReceipt = productKind === "product" && collectibleOn;
+    const edition = collectibleReceipt ? normalizeEditionSize(editionSize) : null;
+    if (collectibleReceipt && editionSize.trim() && edition == null) {
+      setError(t("errorEdition"));
+      return;
+    }
 
     setBusy(true);
     try {
@@ -76,6 +80,9 @@ export default function QRCodesPage() {
         body: JSON.stringify({
           name: name.trim(),
           amountUsd: amount.trim().replace(",", "."),
+          productKind,
+          collectibleReceipt,
+          editionSize: edition,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -85,6 +92,9 @@ export default function QRCodesPage() {
       }
       setName("");
       setAmount("");
+      setProductKind("product");
+      setCollectibleOn(true);
+      setEditionSize("");
       setShowForm(false);
       load();
     } finally {
@@ -118,7 +128,10 @@ export default function QRCodesPage() {
     }
   };
 
-  const getPointUrl = (qr: QRPoint) => qrPointScanUrl(qr, baseUrl);
+  const getPointUrl = (qr: QRPoint) =>
+    storeSlug
+      ? qrPointScanUrl({ ...qr, storeSlug }, baseUrl)
+      : `${baseUrl.replace(/\/$/, "")}/pay/qr/${qr.slug}`;
 
   const getQRImageUrl = (qr: QRPoint) => {
     const payUrl = getPointUrl(qr);
@@ -186,8 +199,67 @@ export default function QRCodesPage() {
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("amountHint")}</p>
           </div>
 
+          <fieldset>
+            <legend className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              {t("productKindLabel")}
+            </legend>
+            <div className="flex gap-2">
+              {(["product", "drink"] as const).map((kind) => {
+                const selected = productKind === kind;
+                return (
+                  <button
+                    key={kind}
+                    type="button"
+                    onClick={() => setProductKind(kind)}
+                    className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                      selected
+                        ? "border-emerald-600 bg-emerald-600 text-white"
+                        : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200"
+                    }`}
+                    aria-pressed={selected}
+                  >
+                    {kind === "drink" ? t("productKindDrink") : t("productKindProduct")}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          <label className={`flex items-start gap-3 text-sm ${productKind === "drink" ? "opacity-60" : ""}`}>
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={productKind === "product" && collectibleOn}
+              disabled={productKind === "drink"}
+              onChange={(e) => setCollectibleOn(e.target.checked)}
+            />
+            <span>
+              <span className="font-medium text-gray-900 dark:text-white">{t("collectibleToggle")}</span>
+              <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">{t("collectibleHint")}</span>
+            </span>
+          </label>
+
+          {productKind === "product" && collectibleOn && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {t("editionLabel")}
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={editionSize}
+                onChange={(e) => setEditionSize(e.target.value.replace(/[^\d]/g, ""))}
+                placeholder={t("editionPlaceholder")}
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("editionHint")}</p>
+            </div>
+          )}
+
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {t("slugPreview", { slug: slugFromTitle(name || t("namePlaceholder")) })}
+            {t("slugPreview", {
+              slug: `${storeSlug ? `${storeSlug}/` : ""}${slugFromTitle(name || t("namePlaceholder"))}`,
+            })}
           </p>
 
           {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
@@ -207,6 +279,9 @@ export default function QRCodesPage() {
                 setError(null);
                 setName("");
                 setAmount("");
+                setProductKind("product");
+                setCollectibleOn(true);
+                setEditionSize("");
               }}
               className="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium"
             >
@@ -218,9 +293,6 @@ export default function QRCodesPage() {
 
       <div className="mt-8">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t("listTitle")}</h2>
-        {!loading && orgPizzasDeposited > 0 && (
-          <p className="mt-2 text-sm text-gray-400">{t("orgAccountPizzas", { count: orgPizzasDeposited })}</p>
-        )}
         {loading ? (
           <div className="mt-4 space-y-3">
             {[0, 1, 2].map((i) => (
@@ -269,26 +341,42 @@ export default function QRCodesPage() {
                       >
                         {qr.isOnline ? t("online") : t("offline")}
                       </span>
+                      {(() => {
+                        const offer = parseStandingLink(qr.destinationRef);
+                        if (!offer) return null;
+                        return (
+                          <>
+                            <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-200">
+                              {offer.productKind === "drink"
+                                ? t("drinkBadge")
+                                : offer.collectibleReceipt
+                                  ? t("collectibleBadge")
+                                  : t("productKindProduct")}
+                            </span>
+                            {offer.editionSize ? (
+                              <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-200">
+                                {t("editionBadge", { size: offer.editionSize })}
+                              </span>
+                            ) : null}
+                          </>
+                        );
+                      })()}
                     </div>
                     <p className="mt-1 text-sm text-gray-400 break-all font-mono">{getPointUrl(qr)}</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {(() => {
-                        const price = parseStandingPriceUsd(qr.destinationRef);
-                        if (price) return t("reusablePrice", { amount: price });
-                        if (qr.destinationType === "pizza_sku") return t("pizzaSkuLinked");
-                        if (qr.destinationType === "custom_url") {
-                          return t("customUrlLinked", { url: qr.destinationRef ?? "" });
-                        }
-                        return qr.destinationRef
-                          ? t("liveCheckoutLinked", { id: qr.destinationRef })
-                          : t("liveCheckoutWaiting");
-                      })()}
-                    </p>
-                    {qr.destinationType === "pizza_sku" && (
-                      <p className="text-xs text-gray-500 dark:text-gray-300 mt-1">
-                        {t("pizzasOnCard", { count: qr.pizzasDeposited })}
-                      </p>
-                    )}
+                    {(() => {
+                      const price = parseStandingPriceUsd(qr.destinationRef);
+                      const status = price
+                        ? t("reusablePrice", { amount: price })
+                        : qr.destinationType === "custom_url"
+                          ? t("customUrlLinked", { url: qr.destinationRef ?? "" })
+                          : qr.destinationType === "checkout"
+                            ? qr.destinationRef
+                              ? t("liveCheckoutLinked", { id: qr.destinationRef })
+                              : t("liveCheckoutWaiting")
+                            : null;
+                      if (!status) return null;
+                      return <p className="text-xs text-gray-400 mt-1">{status}</p>;
+                    })()}
                   </div>
                   {qr.pointType === "qr" && (
                     <img
@@ -300,17 +388,7 @@ export default function QRCodesPage() {
                 </button>
                 {isOpen && (
                   <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4 space-y-2">
-                    {qr.destinationType === "pizza_sku" && (
-                      <>
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">
-                          {t("orgAccountPizzas", { count: orgPizzasDeposited })}
-                        </p>
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                          {t("thisChipPizzas", { count: qr.pizzasDeposited })}
-                        </p>
-                      </>
-                    )}
-                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <div className="flex flex-wrap items-center gap-2">
                       <a
                         href={getPointUrl(qr)}
                         target="_blank"

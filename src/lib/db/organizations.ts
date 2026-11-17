@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase/server";
+import { isOrganizationId, parseStorePathSegment, slugFromTitle } from "@/lib/dashboard/payment-link";
 import type { OrgTaxProfile } from "@/lib/org-tax";
 import {
   hasSecretMaterial,
@@ -23,6 +24,8 @@ export type Organization = {
   sozu_tag_auth_user_id: string | null;
   treasury_smart_account_address: string | null;
   avatar_url?: string | null;
+  /** Public pay URL segment. Stable after the first assignment. */
+  slug?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -42,6 +45,87 @@ export async function getOrganizationById(
     return null;
   }
   return (data as Organization) ?? null;
+}
+
+type SlugLookup =
+  | { status: "found"; org: Organization }
+  | { status: "empty" }
+  | { status: "missing-column" }
+  | { status: "error" };
+
+async function lookupOrganizationBySlug(slug: string): Promise<SlugLookup> {
+  const { data, error } = await getSupabase()
+    .from("organizations")
+    .select("*")
+    .eq("slug", slug)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    if (parseMissingOrganizationsColumn(error.message) === "slug") {
+      return { status: "missing-column" };
+    }
+    console.error("[organizations] lookupOrganizationBySlug error:", error.message);
+    return { status: "error" };
+  }
+  if (!data) return { status: "empty" };
+  return { status: "found", org: data as Organization };
+}
+
+export async function getOrganizationBySlug(slug: string): Promise<Organization | null> {
+  const found = await lookupOrganizationBySlug(slug.trim().toLowerCase());
+  return found.status === "found" ? found.org : null;
+}
+
+async function allocateOrganizationSlug(name: string): Promise<string | null> {
+  const root = slugFromTitle(name);
+  for (let i = 0; i < 40; i++) {
+    const candidate = i === 0 ? root : `${root.slice(0, 36)}-${i + 1}`;
+    const found = await lookupOrganizationBySlug(candidate);
+    if (found.status === "missing-column" || found.status === "error") return null;
+    if (found.status === "empty") return candidate;
+  }
+  return null;
+}
+
+async function saveOrganizationSlug(
+  orgId: string,
+  slug: string,
+): Promise<"saved" | "missing" | "taken"> {
+  const { error } = await getSupabase()
+    .from("organizations")
+    .update({ slug, updated_at: new Date().toISOString() })
+    .eq("id", orgId);
+
+  if (!error) return "saved";
+  if (parseMissingOrganizationsColumn(error.message) === "slug") return "missing";
+  if (/duplicate key|unique constraint|23505/i.test(error.message)) return "taken";
+  console.error("[organizations] saveOrganizationSlug error:", error.message);
+  return "taken";
+}
+
+/**
+ * Stable store segment for /pay/qr/{store}/{item}.
+ * Uses the organization id when the slug column is not available yet.
+ */
+export async function ensureOrganizationSlug(org: Organization): Promise<string> {
+  const current = typeof org.slug === "string" ? org.slug.trim().toLowerCase() : "";
+  if (current && parseStorePathSegment(current) && !isOrganizationId(current)) return current;
+
+  const root = slugFromTitle(org.name);
+  for (let i = 0; i < 40; i++) {
+    const candidate = i === 0 ? root : `${root.slice(0, 36)}-${i + 1}`;
+    const found = await lookupOrganizationBySlug(candidate);
+    if (found.status === "missing-column" || found.status === "error") return org.id;
+    if (found.status === "found") {
+      if (found.org.id === org.id) return candidate;
+      continue;
+    }
+    const saved = await saveOrganizationSlug(org.id, candidate);
+    if (saved === "saved") return candidate;
+    if (saved === "missing") return org.id;
+  }
+  return org.id;
 }
 
 /** Orgs this user owns as treasury manager (creator), even if users.org_id moved. */
@@ -129,9 +213,11 @@ export async function createOrganization(params: {
     throw new Error(MAINNET_SECRET_PERSISTENCE_ERROR);
   }
   const tax = params.tax;
+  const storeSlug = await allocateOrganizationSlug(params.name);
   const payload: Record<string, unknown> = {
     name: params.name,
     type: params.type,
+    ...(storeSlug ? { slug: storeSlug } : {}),
     stellar_disbursement_public_key: params.stellar_disbursement_public_key ?? null,
     stellar_disbursement_secret_encrypted: params.stellar_disbursement_secret_encrypted ?? null,
     recovery_encrypted_secret: params.recovery_encrypted_secret ?? null,

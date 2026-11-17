@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getQRPointBySlug } from "@/lib/db/merchant-qr-points";
-import { getOrganizationById } from "@/lib/db/organizations";
+import { ensureOrganizationSlug, getOrganizationById } from "@/lib/db/organizations";
 import { createPizzaRedeem } from "@/lib/db/pizza-redeems";
 import { resolveCheckoutSettleToAddress } from "@/lib/checkout/settle-to";
 import { getPizzaTokenId } from "@/lib/stellar/pizza-token";
@@ -85,7 +85,8 @@ export async function POST(request: NextRequest) {
     tokenId: transfer.contractId,
   });
 
-  const returnTo = `${merchantQrPayUrl(slug, request)}?intent=${encodeURIComponent(redeem.id)}`;
+  const storeSlug = await ensureOrganizationSlug(org);
+  const returnTo = `${merchantQrPayUrl(storeSlug, slug, request)}?intent=${encodeURIComponent(redeem.id)}`;
   const signUrl = pizzaRedeemWalletSignUrl({
     walletOrigin: getWalletOrigin(),
     intentId: redeem.id,

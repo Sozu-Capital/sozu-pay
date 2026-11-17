@@ -11,7 +11,6 @@ export default async function CheckoutPage({ params }: Props) {
 
   const session = await getCheckoutSession(id).catch(() => null);
 
-  // If session not found or has no provider URL, show a clean error (e.g. expired or invalid link)
   if (!session) {
     return (
       <main className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
@@ -52,7 +51,6 @@ export default async function CheckoutPage({ params }: Props) {
     );
   }
 
-  // The ramp stub is a demo. Testnet payers use the wallet checkout (passkey + USDC).
   if (session.provider_url) {
     if (isStubRampCheckoutUrl(session.provider_url)) {
       const h = await headers();
@@ -67,7 +65,6 @@ export default async function CheckoutPage({ params }: Props) {
     redirect(session.provider_url);
   }
 
-  // Fallback: show payment summary if provider URL is missing (e.g. DB-only session)
   return (
     <main className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
       <div className="w-full max-w-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 text-center">

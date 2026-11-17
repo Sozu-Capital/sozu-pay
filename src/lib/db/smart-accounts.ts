@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase/server";
+import { canonicalWriteDecision, isSmartAccountContractId } from "@/lib/payment/canonical-smart-account";
 
 export type SmartAccountType = "org_treasury" | "member";
 
@@ -17,7 +18,35 @@ export async function upsertSmartAccount(params: {
   type: SmartAccountType;
   contractId: string;
 }): Promise<SmartAccountRow | null> {
-  const { data, error } = await getSupabase()
+  const sb = getSupabase();
+  let existingQuery = sb
+    .from("smart_accounts")
+    .select("*")
+    .eq("org_id", params.orgId)
+    .eq("type", params.type)
+    .limit(1);
+  existingQuery = params.userId
+    ? existingQuery.eq("user_id", params.userId)
+    : existingQuery.is("user_id", null);
+  const { data: existing } = await existingQuery.maybeSingle();
+  if (existing && isSmartAccountContractId((existing as SmartAccountRow).contract_id)) {
+    const decision = canonicalWriteDecision(
+      (existing as SmartAccountRow).contract_id,
+      params.contractId,
+    );
+    if (decision.action !== "write") {
+      if (decision.action === "reject") {
+        console.warn("[smart-accounts] refused to replace canonical contract", {
+          orgId: params.orgId,
+          type: params.type,
+          canonical: decision.contractId,
+        });
+      }
+      return existing as SmartAccountRow;
+    }
+  }
+
+  const { data, error } = await sb
     .from("smart_accounts")
     .upsert(
       {

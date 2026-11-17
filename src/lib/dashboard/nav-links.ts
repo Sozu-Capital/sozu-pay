@@ -75,13 +75,13 @@ export function ngoDashboardNavLinks(options: { showDisbursements?: boolean } = 
   return links;
 }
 
-/** Store home quick actions. Payment link is reusable; new sale is one charge. */
+/** Store home quick actions, left to right: link, POS, pay supplier, send, bank desk. */
 export function storeHomeActions(): StoreHomeAction[] {
   return [
     { href: "/dashboard/qr-codes", kind: "qr-codes" },
     { href: "/dashboard/pos", kind: "pos" },
-    { href: "/dashboard/send", kind: "send" },
     { href: "/dashboard/recipients", kind: "pay-supplier" },
+    { href: "/dashboard/send", kind: "send" },
     { href: "/dashboard/cashout", kind: "cash-out" },
   ];
 }

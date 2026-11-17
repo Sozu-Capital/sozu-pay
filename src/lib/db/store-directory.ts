@@ -1,6 +1,6 @@
 import "server-only";
 
-import { parseStandingPriceUsd } from "@/lib/dashboard/payment-link";
+import { parseStandingLink } from "@/lib/dashboard/payment-link";
 import { listQRPointsForOrg } from "@/lib/db/merchant-qr-points";
 import { getOrganizationById } from "@/lib/db/organizations";
 import { getSupabase } from "@/lib/supabase/server";
@@ -9,6 +9,8 @@ export type StoreDirectoryItem = {
   slug: string;
   name: string;
   amountUsd: string;
+  collectibleReceipt: boolean;
+  editionSize: number | null;
 };
 
 export type StoreDirectoryCard = {
@@ -55,9 +57,15 @@ export async function getStoreProfile(id: string): Promise<StoreDirectoryProfile
   const items: StoreDirectoryItem[] = [];
   for (const point of points) {
     if (!point.isOnline || point.destinationType !== "checkout") continue;
-    const amountUsd = parseStandingPriceUsd(point.destinationRef);
-    if (!amountUsd) continue;
-    items.push({ slug: point.slug, name: point.name, amountUsd });
+    const offer = parseStandingLink(point.destinationRef);
+    if (!offer) continue;
+    items.push({
+      slug: point.slug,
+      name: point.name,
+      amountUsd: offer.amountUsd,
+      collectibleReceipt: offer.collectibleReceipt,
+      editionSize: offer.editionSize,
+    });
   }
   items.sort((a, b) => a.name.localeCompare(b.name));
 

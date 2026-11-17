@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { STANDING_LINK_FX_SOURCE } from "@/lib/dashboard/payment-link";
-import { mintReusableCheckout } from "@/lib/checkout/mint-reusable-checkout";
+import { startStandingSale } from "@/lib/checkout/start-standing-sale";
 import { getQRPointBySlug } from "@/lib/db/merchant-qr-points";
 import { routePayQrPoint } from "@/lib/dashboard/merchant-qr";
 
@@ -8,11 +7,12 @@ type Params = { params: Promise<{ slug: string }> };
 
 /**
  * POST /api/pay/links/[slug]/start
- * Opens a fresh checkout on this host for a standing payment link.
+ * Opens a fresh wallet checkout for a standing payment link.
  * Paying once does not consume the link.
  */
 export async function POST(request: NextRequest, { params }: Params) {
   const { slug } = await params;
+  const hostHeader = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
   const qr = await getQRPointBySlug(slug);
   if (!qr) {
     return NextResponse.json({ error: "Payment link not found" }, { status: 404 });
@@ -26,12 +26,14 @@ export async function POST(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "This link has no price" }, { status: 409 });
   }
 
-  const minted = await mintReusableCheckout({
+  const minted = await startStandingSale({
     orgId: route.orgId,
+    slug: route.slug,
+    name: route.name,
     amountUsd: route.amountUsd,
-    reference: route.name,
-    fxSource: STANDING_LINK_FX_SOURCE,
-    request,
+    collectibleReceipt: route.collectibleReceipt,
+    editionSize: route.editionSize,
+    hostHeader,
   });
   if (!minted.ok) {
     return NextResponse.json({ error: minted.error }, { status: minted.status });
@@ -41,6 +43,11 @@ export async function POST(request: NextRequest, { params }: Params) {
     id: minted.id,
     amountUsd: route.amountUsd,
     itemName: route.name,
+    productKind: route.productKind,
+    collectibleReceipt: route.collectibleReceipt,
+    editionNumber: minted.editionNumber,
+    editionSize: minted.editionSize,
     checkoutUrl: minted.checkoutUrl,
+    walletCheckoutUrl: minted.checkoutUrl,
   });
 }

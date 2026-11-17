@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  OPEN_AMOUNT_FX_SOURCE,
-  STANDING_LINK_FX_SOURCE,
-  normalizeUsdAmount,
-} from "@/lib/dashboard/payment-link";
+import { OPEN_AMOUNT_FX_SOURCE, normalizeUsdAmount } from "@/lib/dashboard/payment-link";
 import { mintReusableCheckout } from "@/lib/checkout/mint-reusable-checkout";
+import { startStandingSale } from "@/lib/checkout/start-standing-sale";
 import { getStoreProfile } from "@/lib/db/store-directory";
 
 type Params = { params: Promise<{ id: string }> };
@@ -29,12 +26,14 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (!item) {
       return NextResponse.json({ error: "Item not for sale" }, { status: 404 });
     }
-    const minted = await mintReusableCheckout({
+    const minted = await startStandingSale({
       orgId: store.id,
+      slug: item.slug,
+      name: item.name,
       amountUsd: item.amountUsd,
-      reference: item.name,
-      fxSource: STANDING_LINK_FX_SOURCE,
-      request,
+      collectibleReceipt: item.collectibleReceipt,
+      editionSize: item.editionSize,
+      hostHeader: request.headers.get("x-forwarded-host") ?? request.headers.get("host"),
     });
     if (!minted.ok) {
       return NextResponse.json({ error: minted.error }, { status: minted.status });
@@ -43,8 +42,12 @@ export async function POST(request: NextRequest, { params }: Params) {
       id: minted.id,
       amountUsd: item.amountUsd,
       itemName: item.name,
+      collectibleReceipt: item.collectibleReceipt,
+      editionNumber: minted.editionNumber,
+      editionSize: minted.editionSize,
       storeName: store.name,
       checkoutUrl: minted.checkoutUrl,
+      walletCheckoutUrl: minted.checkoutUrl,
     });
   }
 
@@ -70,5 +73,6 @@ export async function POST(request: NextRequest, { params }: Params) {
     itemName: null,
     storeName: store.name,
     checkoutUrl: minted.checkoutUrl,
+    walletCheckoutUrl: minted.checkoutUrl,
   });
 }

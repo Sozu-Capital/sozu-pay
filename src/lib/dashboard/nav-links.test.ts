@@ -30,11 +30,14 @@ describe("storeHomeActions", () => {
     const hrefs = actions.map((a) => a.href);
     const kinds = actions.map((a) => a.kind);
 
-    assert.equal(kinds[0], "qr-codes");
-    assert.ok(hrefs.includes("/dashboard/pos"));
-    assert.ok(hrefs.includes("/dashboard/qr-codes"));
-    assert.ok(hrefs.includes("/dashboard/send"));
-    assert.ok(kinds.includes("send"));
+    assert.deepEqual(kinds, ["qr-codes", "pos", "pay-supplier", "send", "cash-out"]);
+    assert.deepEqual(hrefs, [
+      "/dashboard/qr-codes",
+      "/dashboard/pos",
+      "/dashboard/recipients",
+      "/dashboard/send",
+      "/dashboard/cashout",
+    ]);
     assert.ok(!hrefs.includes("/dashboard/checkout"));
   });
 });

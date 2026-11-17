@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
-import { allocateQrSlug, createQRPoint, listQRPointsForOrg } from "@/lib/db/merchant-qr-points";
-import { normalizeUsdAmount, standingPriceRef } from "@/lib/dashboard/payment-link";
-import { listSubmittedPizzaRedeemsForOrg } from "@/lib/db/pizza-redeems";
+import { allocateQrSlug, createQRPoint, getQRPointByOrgAndSlug, listQRPointsForOrg } from "@/lib/db/merchant-qr-points";
+import { ensureOrganizationSlug, getOrganizationById } from "@/lib/db/organizations";
+import {
+  normalizeUsdAmount,
+  parsePaymentLinkProductKind,
+  resolveCollectibleReceipt,
+  standingPriceRef,
+} from "@/lib/dashboard/payment-link";
+import { normalizeEditionSize } from "@/lib/dashboard/collectible-edition";
 import { getLatestPendingCheckoutForOrg } from "@/lib/db/checkout-sessions";
 import {
   destinationRefForQrCreate,
   parseQrPointDestinationType,
 } from "@/lib/dashboard/merchant-qr";
-import { foldSubmittedPizzaDeposits } from "@/lib/pizza/deposits";
 
 /**
  * GET /api/merchant/qr-points
@@ -28,14 +33,9 @@ export async function GET() {
   }
 
   const qrPoints = await listQRPointsForOrg(orgId);
-  const deposits = foldSubmittedPizzaDeposits(await listSubmittedPizzaRedeemsForOrg(orgId));
-  return NextResponse.json({
-    qrPoints: qrPoints.map((point) => ({
-      ...point,
-      pizzasDeposited: deposits.byQrPointId[point.id] ?? 0,
-    })),
-    orgPizzasDeposited: deposits.orgTotal,
-  });
+  const org = await getOrganizationById(orgId);
+  const storeSlug = org ? await ensureOrganizationSlug(org) : orgId;
+  return NextResponse.json({ qrPoints, storeSlug });
 }
 
 /**
@@ -79,14 +79,34 @@ export async function POST(request: NextRequest) {
     const slug =
       requestedSlug && /^[a-z0-9_-]+$/.test(requestedSlug)
         ? requestedSlug
-        : await allocateQrSlug(name);
+        : await allocateQrSlug(orgId, name);
     if (!/^[a-z0-9_-]+$/.test(slug)) {
       return NextResponse.json({ error: "Invalid slug" }, { status: 400 });
+    }
+    if (await getQRPointByOrgAndSlug(orgId, slug)) {
+      return NextResponse.json({ error: "That link name is already used in this store" }, { status: 409 });
     }
 
     let finalDestinationRef: string | undefined;
     if (amountUsd) {
-      finalDestinationRef = standingPriceRef(amountUsd);
+      const productKind = parsePaymentLinkProductKind(body.productKind);
+      const collectibleReceipt = resolveCollectibleReceipt(
+        productKind,
+        body.collectibleReceipt === true,
+      );
+      const editionProvided = body.editionSize != null && body.editionSize !== "";
+      const editionSize = normalizeEditionSize(body.editionSize);
+      if (collectibleReceipt && editionProvided && editionSize == null) {
+        return NextResponse.json(
+          { error: "Edition size must be a whole number from 1 to 10000" },
+          { status: 400 },
+        );
+      }
+      finalDestinationRef = standingPriceRef(amountUsd, {
+        productKind,
+        collectibleReceipt,
+        editionSize: collectibleReceipt ? editionSize : null,
+      });
     } else {
       const latest =
         destinationType === "checkout"

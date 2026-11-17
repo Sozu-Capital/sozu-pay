@@ -8,24 +8,32 @@ import { payerCheckoutUrl } from "@/lib/dashboard/payment-link";
 import { createCheckoutSession } from "@/lib/db/checkout-sessions";
 import { getOrganizationById } from "@/lib/db/organizations";
 
+/**
+ * A fresh Sozu-wallet checkout for a standing payment link or an open amount.
+ * Does not expire other charges and does not retarget other links.
+ * The wallet host follows the pay host so staging does not open the production wallet.
+ */
+function isUniqueViolation(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /duplicate key|unique constraint|23505/i.test(message);
+}
+
 function requestHost(request?: NextRequest, hostHeader?: string | null): string | null {
   return hostHeader ?? request?.headers.get("x-forwarded-host") ?? request?.headers.get("host") ?? null;
 }
 
-/**
- * A fresh checkout for a standing payment link or an open amount.
- * Opens the wallet's testnet checkout. Does not expire other charges.
- */
 export async function mintReusableCheckout(params: {
   orgId: string;
   amountUsd: string;
   reference: string;
   fxSource: string;
+  /** Locks one numbered collectible, for example edition:liquid-society:6/10. */
+  idempotencyKey?: string;
   request?: NextRequest;
   hostHeader?: string | null;
 }): Promise<
-  | { ok: true; id: string; checkoutUrl: string }
-  | { ok: false; status: number; error: string }
+  | { ok: true; id: string; checkoutUrl: string; walletCheckoutUrl: string }
+  | { ok: false; status: number; error: string; conflict?: boolean }
 > {
   const org = await getOrganizationById(params.orgId);
   if (!isCheckoutSettleReady(org)) {
@@ -37,7 +45,7 @@ export async function mintReusableCheckout(params: {
   }
 
   const id = `cs_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-  const checkoutUrl = payerCheckoutUrl(
+  const walletCheckoutUrl = payerCheckoutUrl(
     id,
     requestHost(params.request, params.hostHeader),
     process.env.NEXT_PUBLIC_SOZU_WALLET_URL,
@@ -51,14 +59,19 @@ export async function mintReusableCheckout(params: {
       reference: params.reference.slice(0, 160),
       destinationStellarAddress: destination,
       providerSessionId: `sozu_${id}`,
-      providerUrl: checkoutUrl,
+      providerUrl: walletCheckoutUrl,
       fxSource: params.fxSource,
+      idempotencyKey: params.idempotencyKey,
       expiresAt: computeCheckoutExpiresAt(),
+      paymentMethod: "sozu",
     });
   } catch (err) {
+    if (params.idempotencyKey && isUniqueViolation(err)) {
+      return { ok: false, status: 409, error: "Could not start this payment", conflict: true };
+    }
     console.error("[checkout] mint reusable error:", err);
     return { ok: false, status: 503, error: "Could not start this payment" };
   }
 
-  return { ok: true, id, checkoutUrl };
+  return { ok: true, id, checkoutUrl: walletCheckoutUrl, walletCheckoutUrl };
 }

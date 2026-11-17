@@ -63,6 +63,22 @@ function waitForAccessToken(client: PollarClient, fallbackMessage: string): Prom
   });
 }
 
+async function waitForPendingThenComplete(apiKey: string): Promise<string | null> {
+  const deadline = Date.now() + 15_000;
+  let pending = readPendingPollarOAuth();
+  while (!pending && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 50));
+    pending = readPendingPollarOAuth();
+  }
+  if (!pending) return null;
+  const token = await completeHostedOAuthSession({
+    clientSessionId: pending.clientSessionId,
+    apiKey,
+  });
+  if (token) resetPollarBrowserClient();
+  return token;
+}
+
 /**
  * NGO home Google-only Pollar login. On success, bridges to SozuPay session via
  * POST /api/auth/pollar/verify. No email OTP / GitHub / passkey on this door.
@@ -137,7 +153,6 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
           if (token) resetPollarBrowserClient();
         }
         if (!token) {
-          clearPendingPollarOAuth();
           throw new Error(t("failedToSignIn"));
         }
         await bridgeWithToken(token, readPollarReturnTo() ?? returnTo);
@@ -165,16 +180,32 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
 
   useEffect(() => {
     resumePendingOAuth();
-    const onPageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) resumePendingOAuth();
+    const retryResume = () => {
+      resumeRef.current = false;
+      resumePendingOAuth();
+    };
+    const onPageShow = () => retryResume();
+    const onFocus = () => retryResume();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") retryResume();
     };
     window.addEventListener("pageshow", onPageShow);
-    return () => window.removeEventListener("pageshow", onPageShow);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [resumePendingOAuth]);
 
   function handleContinueHere() {
     resumeRef.current = false;
     setShowContinueHere(false);
+    if (readPendingPollarOAuth()) {
+      resumePendingOAuth();
+      return;
+    }
     setGoogleStuck(true);
     setBusyState(false);
   }
@@ -220,7 +251,11 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
         throw new Error(t("pollarNotConfigured"));
       }
       await fresh.ready();
-      const token = await waitForAccessToken(fresh, t("failedToSignIn"));
+      const apiKey = getPollarPublishableKey();
+      const sdkToken = waitForAccessToken(fresh, t("failedToSignIn")).catch(() => null);
+      const hostedToken = apiKey ? waitForPendingThenComplete(apiKey) : Promise.resolve(null);
+      const token = (await Promise.race([sdkToken, hostedToken])) ?? (await hostedToken);
+      if (!token) throw new Error(t("failedToSignIn"));
       await bridgeWithToken(token);
     } catch (err) {
       discardReservedPollarOAuthPopup();
@@ -245,8 +280,11 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
         className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-full bg-white px-6 text-sm font-semibold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
       >
         <GoogleGlyph />
-        {busy ? t("redirecting") : t("continueWithGoogle")}
+        {busy ? t("waitingForGoogle") : t("continueWithGoogle")}
       </button>
+      {busy ? (
+        <p className="text-center text-sm text-white/70">{t("googleWaitingHint")}</p>
+      ) : null}
       {showContinueHere ? (
         <button
           type="button"

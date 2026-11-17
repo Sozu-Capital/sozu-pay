@@ -50,7 +50,9 @@
     "merchantAuthLead": "Sign in with Google to create your store. We'll open a payment wallet for you — no passkey or seed phrase.",
     "existingAccountLead": "A passkey is a different SozuPay account, not the same Pollar / Google login.",
     "inAppBrowserHint": "This in-app browser often blocks Google login. Open SozuPay in Safari or Chrome.",
-    "googleReturnStuck": "Google may have opened in another tab. If sign-in finished there, you can continue here.",
+    "waitingForGoogle": "Waiting for Google…",
+    "googleWaitingHint": "Confirm Google in the other tab, then come back here. Wallet setup can take a minute.",
+    "googleReturnStuck": "After Google says you are done, return here. Wallet setup can take a minute.",
     "googleReturnContinue": "Continue here"
   },
   "merchants": {

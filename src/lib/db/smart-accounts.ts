@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase/server";
+import { canonicalWriteDecision, isSmartAccountContractId } from "@/lib/payment/canonical-smart-account";
 
 export type SmartAccountType = "org_treasury" | "member";
 
@@ -17,25 +18,72 @@ export async function upsertSmartAccount(params: {
   type: SmartAccountType;
   contractId: string;
 }): Promise<SmartAccountRow | null> {
-  const { data, error } = await getSupabase()
+  const sb = getSupabase();
+  let existingQuery = sb
     .from("smart_accounts")
-    .upsert(
-      {
-        org_id: params.orgId,
-        user_id: params.userId ?? null,
-        type: params.type,
-        contract_id: params.contractId,
-      },
-      { onConflict: params.userId ? "org_id,user_id,type" : "org_id,type" }
-    )
-    .select()
-    .single();
-
-  if (error) {
-    console.error("[smart-accounts] upsert error:", error.message);
-    return null;
+    .select("*")
+    .eq("org_id", params.orgId)
+    .eq("type", params.type)
+    .limit(1);
+  existingQuery = params.userId
+    ? existingQuery.eq("user_id", params.userId)
+    : existingQuery.is("user_id", null);
+  const { data: existing } = await existingQuery.maybeSingle();
+  if (existing && isSmartAccountContractId((existing as SmartAccountRow).contract_id)) {
+    const decision = canonicalWriteDecision(
+      (existing as SmartAccountRow).contract_id,
+      params.contractId,
+    );
+    if (decision.action !== "write") {
+      if (decision.action === "reject") {
+        console.warn("[smart-accounts] refused to replace canonical contract", {
+          orgId: params.orgId,
+          type: params.type,
+          canonical: decision.contractId,
+        });
+      }
+      return existing as SmartAccountRow;
+    }
   }
-  return data as SmartAccountRow;
+
+  const row = {
+    org_id: params.orgId,
+    user_id: params.userId ?? null,
+    type: params.type,
+    contract_id: params.contractId,
+  };
+
+  if (!existing) {
+    const inserted = await sb.from("smart_accounts").insert(row).select().maybeSingle();
+    if (!inserted.error && inserted.data) return inserted.data as SmartAccountRow;
+    if (inserted.error && !/duplicate key|unique constraint|23505/i.test(inserted.error.message)) {
+      console.error("[smart-accounts] insert error:", inserted.error.message);
+      return null;
+    }
+  } else {
+    const updated = await sb
+      .from("smart_accounts")
+      .update({ contract_id: params.contractId })
+      .eq("id", (existing as SmartAccountRow).id)
+      .eq("contract_id", (existing as SmartAccountRow).contract_id)
+      .select()
+      .maybeSingle();
+    if (!updated.error && updated.data) return updated.data as SmartAccountRow;
+    if (updated.error) {
+      console.error("[smart-accounts] update error:", updated.error.message);
+      return null;
+    }
+  }
+
+  let racedQuery = sb
+    .from("smart_accounts")
+    .select("*")
+    .eq("org_id", params.orgId)
+    .eq("type", params.type)
+    .limit(1);
+  racedQuery = params.userId ? racedQuery.eq("user_id", params.userId) : racedQuery.is("user_id", null);
+  const { data: raced } = await racedQuery.maybeSingle();
+  return (raced as SmartAccountRow | null) ?? null;
 }
 
 export async function getMemberSmartAccount(

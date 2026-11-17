@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { SozuLoadingMark } from "@/components/SozuLoadingMark";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 
 type Org = { id: string; name: string };
@@ -88,7 +89,7 @@ export default function OrganizationsPage() {
     return (
       <DarkGradientBg>
         <main className="min-h-screen flex flex-col items-center justify-center p-4 dark text-white">
-          <p className="text-sm text-gray-300">{tCommon("loading")}</p>
+          <SozuLoadingMark />
         </main>
       </DarkGradientBg>
     );

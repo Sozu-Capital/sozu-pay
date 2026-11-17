@@ -11,7 +11,7 @@ import {
   isCheckoutWalletNotReadyHttpStatus,
 } from "@/lib/checkout/ready";
 import { posPaneState } from "@/lib/dashboard/pos-pane";
-import { applyPosKeypadKey, type PosKeypadKey } from "@/lib/dashboard/pos-keypad";
+import { applyPosKeypadKey, isPosSubmitKey, posKeyFromKeyboard, type PosKeypadKey } from "@/lib/dashboard/pos-keypad";
 import {
   POS_CLP_FRACTION_DIGITS,
   formatClpDisplay,
@@ -90,6 +90,7 @@ export default function PosShell() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [paid, setPaid] = useState(false);
   const [paidAt, setPaidAt] = useState<string | null>(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
   const [showReceipt, setShowReceipt] = useState(false);
   const [keypadEpoch, setKeypadEpoch] = useState(0);
 
@@ -139,6 +140,7 @@ export default function PosShell() {
         const data = (await res.json().catch(() => null)) as {
           status?: string;
           expiresAt?: string | null;
+          stellarTxHash?: string | null;
         } | null;
         if (!data || cancelled) return;
         const phase = posListenPhaseFromStatus(
@@ -148,6 +150,9 @@ export default function PosShell() {
         if (phase === "paid") {
           setPaid(true);
           setPaidAt((prev) => prev ?? new Date().toISOString());
+          if (typeof data.stellarTxHash === "string" && data.stellarTxHash.trim()) {
+            setTxHash(data.stellarTxHash.trim());
+          }
           return;
         }
         if (phase === "expired" && data.expiresAt) {
@@ -224,6 +229,7 @@ export default function PosShell() {
       // Keep keypad amount visible while the QR / waiting panel shows.
       setPaid(false);
       setPaidAt(null);
+      setTxHash(null);
       setShowReceipt(false);
       setResult({
         checkoutUrl: data.checkoutUrl,
@@ -239,6 +245,29 @@ export default function PosShell() {
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        const tag = target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const key = posKeyFromKeyboard(event.key);
+      if (key) {
+        event.preventDefault();
+        pressKey(key);
+        return;
+      }
+      if (isPosSubmitKey(event.key) && !result && !busy && !paid) {
+        event.preventDefault();
+        void handleCreate();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [amountClp, busy, paid, reference, result]);
 
   const handleRegenerate = async () => {
     const nextAmount = amountClpForRegeneration({
@@ -265,6 +294,7 @@ export default function PosShell() {
     setResult(next.result);
     setPaid(next.paid);
     setPaidAt(next.paidAt);
+    setTxHash(null);
     setError(next.error);
     setShowReceipt(next.showReceipt);
     setKeypadEpoch((n) => n + 1);
@@ -290,6 +320,7 @@ export default function PosShell() {
       paidAtIso: paidAt,
       paymentId: result.id,
       reference: result.reference,
+      txHash,
     });
 
   return (
@@ -515,6 +546,7 @@ export default function PosShell() {
                       time: t("receiptTime"),
                       paymentId: t("receiptPaymentId"),
                       reference: t("receiptReference"),
+                      txHash: t("receiptTxHash"),
                     }}
                   />
                 ) : (

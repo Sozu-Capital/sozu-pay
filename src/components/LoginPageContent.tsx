@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { SozuLoadingMark } from "@/components/SozuLoadingMark";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import { HomeLandingShell } from "@/components/HomeLandingShell";
 import { HomeStaffAuth } from "@/components/HomeStaffAuth";
@@ -41,7 +42,7 @@ export function LoginPageContent({ clearSessionOnMount, returnTo }: LoginPageCon
       <DarkGradientBg mobileLanding>
         <HomeLandingShell
           passkeyRegister={false}
-          status={<p className="text-sm text-gray-400">{t("redirecting")}</p>}
+          status={<SozuLoadingMark mode="inline" />}
         />
       </DarkGradientBg>
     );

@@ -45,7 +45,7 @@ export default function DashboardTransactions() {
 
   const humanType = (type: string) => {
     if (isStore) {
-      if (type === "payment" || type === "receive") return t("typePaymentIn");
+      if (type === "payment" || type === "receive" || type === "incoming") return t("typePaymentIn");
       if (type === "payout" || type === "send") return t("typePaymentOut");
       if (type === "withdrawal") return t("typeWithdrawal");
     }

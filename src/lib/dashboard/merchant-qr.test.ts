@@ -26,12 +26,13 @@ describe("qrPointScanUrl", () => {
       qrPointScanUrl(
         {
           slug: "margherita-nfc",
+          storeSlug: "pizzeria",
           destinationType: "pizza_sku",
           destinationRef: COMPLETED_CHECKOUT_ID,
         },
         BASE,
       ),
-      "https://pay.sozu.capital/pay/qr/margherita-nfc",
+      "https://pay.sozu.capital/pay/qr/pizzeria/margherita-nfc",
     );
   });
 
@@ -40,12 +41,13 @@ describe("qrPointScanUrl", () => {
       qrPointScanUrl(
         {
           slug: "front-counter",
+          storeSlug: "cafe",
           destinationType: "checkout",
           destinationRef: COMPLETED_CHECKOUT_ID,
         },
         BASE,
       ),
-      "https://pay.sozu.capital/pay/qr/front-counter",
+      "https://pay.sozu.capital/pay/qr/cafe/front-counter",
     );
   });
 });
@@ -88,6 +90,72 @@ describe("routePayQrPoint", () => {
       name: "Thursday NFC",
       slug: "margherita-nfc",
     });
+  });
+
+  it("treats a priced checkout point as a standing payment link", () => {
+    const route = routePayQrPoint({
+      name: "House latte",
+      slug: "house-latte",
+      orgId: "org-cafe",
+      isOnline: true,
+      destinationType: "checkout",
+      destinationRef: "price:4.50",
+    });
+    assert.deepEqual(route, {
+      kind: "standing_price",
+      name: "House latte",
+      slug: "house-latte",
+      orgId: "org-cafe",
+      amountUsd: "4.50",
+      productKind: "product",
+      collectibleReceipt: false,
+      editionSize: null,
+    });
+  });
+
+  it("keeps a collectible product and refuses a collectible drink", () => {
+    const shirt = routePayQrPoint({
+      name: "Shirt",
+      slug: "shirt",
+      orgId: "org-cafe",
+      isOnline: true,
+      destinationType: "checkout",
+      destinationRef: "price:15.00|collectible",
+    });
+    assert.equal(shirt.kind, "standing_price");
+    if (shirt.kind === "standing_price") {
+      assert.equal(shirt.collectibleReceipt, true);
+      assert.equal(shirt.productKind, "product");
+      assert.equal(shirt.editionSize, null);
+    }
+
+    const numbered = routePayQrPoint({
+      name: "Liquid Society Tee",
+      slug: "liquid-society",
+      orgId: "org-cafe",
+      isOnline: true,
+      destinationType: "checkout",
+      destinationRef: "price:15.00|collectible|edition:10",
+    });
+    assert.equal(numbered.kind, "standing_price");
+    if (numbered.kind === "standing_price") {
+      assert.equal(numbered.editionSize, 10);
+      assert.equal(numbered.collectibleReceipt, true);
+    }
+
+    const drink = routePayQrPoint({
+      name: "House latte",
+      slug: "house-latte",
+      orgId: "org-cafe",
+      isOnline: true,
+      destinationType: "checkout",
+      destinationRef: "price:4.50|drink|collectible",
+    });
+    assert.equal(drink.kind, "standing_price");
+    if (drink.kind === "standing_price") {
+      assert.equal(drink.productKind, "drink");
+      assert.equal(drink.collectibleReceipt, false);
+    }
   });
 
   it("does not fall through to live checkout resolution for pizza_sku", () => {

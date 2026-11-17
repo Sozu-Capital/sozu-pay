@@ -10,6 +10,7 @@ type PosReceiptCardProps = {
     time: string;
     paymentId: string;
     reference: string;
+    txHash: string;
   };
 };
 
@@ -36,6 +37,12 @@ export function PosReceiptCard({ fields, labels }: PosReceiptCardProps) {
           <dt className="text-gray-500">{labels.paymentId}</dt>
           <dd className="max-w-[60%] truncate font-mono text-xs text-[#050505]">{fields.paymentId}</dd>
         </div>
+        {fields.txHash ? (
+          <div className="flex justify-between gap-4">
+            <dt className="text-gray-500">{labels.txHash}</dt>
+            <dd className="max-w-[60%] truncate font-mono text-xs text-[#050505]">{fields.txHash}</dd>
+          </div>
+        ) : null}
         {fields.reference ? (
           <div className="flex justify-between gap-4">
             <dt className="text-gray-500">{labels.reference}</dt>

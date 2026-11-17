@@ -12,6 +12,7 @@ import { resolveOrgReceiveAddress } from "@/lib/org-receive-address";
 import { getUserByUsername } from "@/lib/db/users";
 import { suggestOrgTagFromOrgName } from "@/lib/sozu-tag-suggest";
 import { isFakePollarStaffWallet } from "@/lib/pollar/types";
+import { canonicalWriteDecision } from "@/lib/payment/canonical-smart-account";
 
 function stellarWalletUserColumn(): string {
   return process.env.SOZUPAY_STELLAR_WALLET_USER_ID_COLUMN?.trim() || "user_id";
@@ -90,13 +91,63 @@ async function upsertStellarWallet(
   // is NOT NULL but Turnkey is not in use. Use authUserId as a stable unique
   // placeholder. Ideal fix: run ALTER TABLE stellar_wallets ALTER COLUMN
   // turnkey_wallet_id DROP NOT NULL; in Supabase.
+  const { data: existing } = await sb
+    .from("stellar_wallets")
+    .select(pkCol)
+    .eq(userCol, authUserId)
+    .limit(1)
+    .maybeSingle();
+  const existingPk = (existing as Record<string, string> | null)?.[pkCol] ?? null;
+  const decision = canonicalWriteDecision(existingPk, publicKey);
+  if (decision.action === "reject") {
+    console.warn("[org-sozu-tag] refused to replace canonical smart account", {
+      userId: authUserId,
+      canonical: decision.contractId,
+    });
+    return { ok: true };
+  }
+  if (decision.action === "keep") return { ok: true };
+
   const row: Record<string, string> = {
     [userCol]: authUserId,
     [pkCol]: publicKey,
     turnkey_wallet_id: authUserId,
   };
 
-  const { error } = await sb.from("stellar_wallets").upsert(row, { onConflict: userCol });
+  if (!existing) {
+    const inserted = await sb.from("stellar_wallets").insert(row);
+    if (!inserted.error) return { ok: true };
+    if (!/duplicate key|unique constraint|23505/i.test(inserted.error.message)) {
+      return {
+        ok: false,
+        error: `stellar_wallets insert failed (${userCol}, ${pkCol}): ${inserted.error.message}. If your schema differs, set SOZUPAY_STELLAR_WALLET_USER_ID_COLUMN / SOZUPAY_STELLAR_WALLET_PUBLIC_KEY_COLUMN.`,
+      };
+    }
+    const { data: raced } = await sb
+      .from("stellar_wallets")
+      .select(pkCol)
+      .eq(userCol, authUserId)
+      .limit(1)
+      .maybeSingle();
+    const racedPk = (raced as Record<string, string> | null)?.[pkCol] ?? null;
+    if (canonicalWriteDecision(racedPk, publicKey).action !== "write") return { ok: true };
+    const { error: racedWrite } = await sb
+      .from("stellar_wallets")
+      .update({ [pkCol]: publicKey })
+      .eq(userCol, authUserId)
+      .eq(pkCol, racedPk ?? "");
+    if (!racedWrite) return { ok: true };
+    return {
+      ok: false,
+      error: `stellar_wallets update failed (${userCol}, ${pkCol}): ${racedWrite.message}.`,
+    };
+  }
+
+  const { error } = await sb
+    .from("stellar_wallets")
+    .update({ [pkCol]: publicKey })
+    .eq(userCol, authUserId)
+    .eq(pkCol, existingPk ?? "");
   if (!error) return { ok: true };
 
   return {
@@ -256,7 +307,10 @@ export async function getOrganizationSozuTag(org: Organization): Promise<string 
   return typeof username === "string" && username.trim() ? username : null;
 }
 
-/** Re-write profiles + stellar_wallets when directory key diverges from tagReceiveAddress (e.g. was C, now classic G). */
+/**
+ * Refresh the tag directory username. Does not replace a canonical smart account
+ * when tagReceiveAddress is a different C….
+ */
 export async function resyncOrganizationSozuTagDirectory(
   orgId: string
 ): Promise<{ resynced: boolean; error?: string }> {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { applyPosKeypadKey, formatPosKeypadDisplay } from "./pos-keypad.js";
+import { applyPosKeypadKey, formatPosKeypadDisplay, isPosSubmitKey, posKeyFromKeyboard } from "./pos-keypad.js";
 
 describe("applyPosKeypadKey", () => {
   it("appends digits from empty", () => {
@@ -47,6 +47,19 @@ describe("applyPosKeypadKey", () => {
   it("rejects decimals when maxFractionDigits is 0 (CLP whole pesos)", () => {
     assert.equal(applyPosKeypadKey("24", ".", { maxFractionDigits: 0 }), "24");
     assert.equal(applyPosKeypadKey("24", "5", { maxFractionDigits: 0 }), "245");
+  });
+});
+
+describe("posKeyFromKeyboard", () => {
+  it("maps digits, decimal, and delete keys", () => {
+    assert.equal(posKeyFromKeyboard("7"), "7");
+    assert.equal(posKeyFromKeyboard("."), ".");
+    assert.equal(posKeyFromKeyboard(","), ".");
+    assert.equal(posKeyFromKeyboard("Backspace"), "backspace");
+    assert.equal(posKeyFromKeyboard("Delete"), "backspace");
+    assert.equal(posKeyFromKeyboard("a"), null);
+    assert.equal(isPosSubmitKey("Enter"), true);
+    assert.equal(isPosSubmitKey(" "), false);
   });
 });
 

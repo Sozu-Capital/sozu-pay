@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { getDashboardWalletContext } from "@/lib/wallet-resolve-cached";
 import { listCompletedCheckoutSessionsForOrg } from "@/lib/db/checkout-sessions";
+import { listPizzaRedeemsForOrgReconciliation } from "@/lib/db/pizza-redeems";
 import {
   parseClpAmount,
   reconciliationCsv,
   summarizeStoreReconciliation,
   type ReconciliationCharge,
+  type ReconciliationRedeem,
 } from "@/lib/store/reconciliation";
 
 function chargesFromSessions(
@@ -22,6 +24,17 @@ function chargesFromSessions(
   }));
 }
 
+function redeemsFromRows(
+  rows: Awaited<ReturnType<typeof listPizzaRedeemsForOrgReconciliation>>,
+): ReconciliationRedeem[] {
+  return rows.map((r) => ({
+    amount: r.amount,
+    // submitted rows get updated_at when treasury is credited
+    confirmedAt: r.updatedAt || r.createdAt,
+    status: r.status,
+  }));
+}
+
 async function loadStoreSummary() {
   const ctx = await getDashboardWalletContext();
   if (!ctx.orgId || !ctx.org) {
@@ -30,8 +43,16 @@ async function loadStoreSummary() {
   if (ctx.org.type !== "store") {
     return { error: NextResponse.json({ error: "Store only." }, { status: 403 }) };
   }
-  const sessions = await listCompletedCheckoutSessionsForOrg(ctx.orgId);
-  const summary = summarizeStoreReconciliation(chargesFromSessions(sessions));
+  const [sessions, pizzaRedeems] = await Promise.all([
+    listCompletedCheckoutSessionsForOrg(ctx.orgId),
+    listPizzaRedeemsForOrgReconciliation(ctx.orgId),
+  ]);
+  const summary = summarizeStoreReconciliation(
+    chargesFromSessions(sessions),
+    new Date(),
+    undefined,
+    redeemsFromRows(pizzaRedeems),
+  );
   return { summary };
 }
 

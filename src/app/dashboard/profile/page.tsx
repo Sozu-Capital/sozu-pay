@@ -6,11 +6,18 @@ import { useTranslations } from "next-intl";
 import { OrgTreasurySetup } from "@/components/OrgTreasurySetup";
 import { ProfileAddressRow } from "@/components/profile/ProfileAddressRow";
 import { ProfileCollapsibleCard } from "@/components/profile/ProfileCollapsibleCard";
+import { AccountAvatar } from "@/components/AccountAvatar";
+import { SozuLoadingMark } from "@/components/SozuLoadingMark";
+import { orgAvatarStorageKey, userAvatarStorageKey } from "@/lib/avatar";
 import { resolveAccountDisplayName } from "@/lib/display-name";
+import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 
 type ProfileData = {
   email: string;
   username?: string | null;
+  user_id?: number | null;
+  user_avatar_url?: string | null;
+  org_avatar_url?: string | null;
   stellar_public_key: string | null;
   stellar_payout_public_key: string | null;
   org_payout_wallet_public_key: string | null;
@@ -42,6 +49,7 @@ const REGISTRATION_MESSAGE_PREFIX = "SozuPay wallet registration";
 export default function ProfilePage() {
   const t = useTranslations("profilePage");
   const tc = useTranslations("common");
+  const dashboard = useDashboardProfile();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [requestingActivation, setRequestingActivation] = useState(false);
@@ -71,8 +79,6 @@ export default function ProfilePage() {
   const [migrationPasswordInput, setMigrationPasswordInput] = useState("");
   const [migrationSubmitting, setMigrationSubmitting] = useState(false);
   const [migrationError, setMigrationError] = useState<string | null>(null);
-  const [revealedOrgSecret, setRevealedOrgSecret] = useState<string | null>(null);
-  const [loadingOrgSecret, setLoadingOrgSecret] = useState(false);
 
   const [showTrustlineModal, setShowTrustlineModal] = useState(false);
   const [trustlineSecretInput, setTrustlineSecretInput] = useState("");
@@ -176,7 +182,6 @@ export default function ProfilePage() {
     t("userFallback"),
     profile?.username
   );
-  const avatarUrl = null;
   const orgDisplayName = profile?.org_name?.trim() || t("organizationFallback");
 
   const handleRequestActivation = async () => {
@@ -361,20 +366,6 @@ export default function ProfilePage() {
     }
   };
 
-  const handleRevealOrgSecret = async () => {
-    setLoadingOrgSecret(true);
-    setRevealedOrgSecret(null);
-    try {
-      const res = await fetch("/api/profile/org/secret");
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.secretKey) {
-        setRevealedOrgSecret(data.secretKey);
-      }
-    } finally {
-      setLoadingOrgSecret(false);
-    }
-  };
-
   const handleCopy = (value: string, label: string) => {
     navigator.clipboard.writeText(value);
     setCopied(label);
@@ -424,9 +415,7 @@ export default function ProfilePage() {
   };
 
   if (loading) {
-    return (
-      <div className="text-gray-500 dark:text-gray-400">{t("loadingProfile")}</div>
-    );
+    return <SozuLoadingMark />;
   }
 
   if (!profile) {
@@ -465,12 +454,17 @@ export default function ProfilePage() {
           {t("personalSectionLabel")}
         </p>
         <div className="mt-3 flex items-center gap-4">
-          <div
-            className="h-16 w-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xl font-semibold text-gray-600 dark:text-gray-400 overflow-hidden"
-            style={avatarUrl ? { backgroundImage: `url(${avatarUrl})`, backgroundSize: "cover" } : undefined}
-          >
-            {!avatarUrl && displayName.slice(0, 2).toUpperCase()}
-          </div>
+          <AccountAvatar
+            name={displayName}
+            imageUrl={profile.user_avatar_url}
+            storageKey={userAvatarStorageKey(profile.user_id)}
+            uploadUrl="/api/profile/avatar"
+            size={64}
+            onChange={(url) => {
+              setProfile((prev) => (prev ? { ...prev, user_avatar_url: url } : prev));
+              dashboard?.refetch();
+            }}
+          />
           <div className="min-w-0">
             <p className="font-semibold text-gray-900 dark:text-white truncate">{displayName}</p>
             <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{profile.email}</p>
@@ -518,7 +512,20 @@ export default function ProfilePage() {
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
             {t("organizationSectionLabel")}
           </p>
-          <h2 className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{orgDisplayName}</h2>
+          <div className="mt-3 flex items-center gap-4">
+            <AccountAvatar
+              name={orgDisplayName}
+              imageUrl={profile.org_avatar_url}
+              storageKey={orgAvatarStorageKey(profile.org_id)}
+              uploadUrl="/api/profile/org/avatar"
+              size={64}
+              onChange={(url) => {
+                setProfile((prev) => (prev ? { ...prev, org_avatar_url: url } : prev));
+                dashboard?.refetch();
+              }}
+            />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{orgDisplayName}</h2>
+          </div>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("organizationReceiveBody")}</p>
           <div className="mt-4 space-y-4">
             {profile.org_soroban_contract_id ? (
@@ -817,39 +824,6 @@ export default function ProfilePage() {
                 {t("resetWithRecovery")}
               </button>
             </p>
-          )}
-          {profile.org_has_stored_secret && profile.org_encryption_type !== "user_derived" && (
-            <div className="mt-4">
-              <button
-                type="button"
-                onClick={handleRevealOrgSecret}
-                disabled={loadingOrgSecret}
-                className="rounded-md border border-amber-500 dark:border-amber-600 text-amber-700 dark:text-amber-400 px-3 py-2 text-sm font-medium hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50"
-              >
-                {loadingOrgSecret ? t("loadingShort") : t("revealOrgSecret")}
-              </button>
-              {revealedOrgSecret && (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <code className="flex-1 min-w-0 font-mono text-sm break-all bg-red-50 dark:bg-red-950/30 px-2 py-1.5 rounded text-red-800 dark:text-red-200">
-                    {revealedOrgSecret}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(revealedOrgSecret, "revealed-secret")}
-                    className="rounded-md border border-red-300 dark:border-red-700 px-2 py-1.5 text-xs text-red-700 dark:text-red-400 shrink-0"
-                  >
-                    {copied === "revealed-secret" ? tc("copied") : tc("copy")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRevealedOrgSecret(null)}
-                    className="rounded-md border border-gray-300 dark:border-gray-600 px-2 py-1.5 text-xs shrink-0"
-                  >
-                    {t("hide")}
-                  </button>
-                </div>
-              )}
-            </div>
           )}
         </ProfileCollapsibleCard>
       )}

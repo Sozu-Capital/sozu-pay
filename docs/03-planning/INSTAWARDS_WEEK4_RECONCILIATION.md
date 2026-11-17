@@ -15,13 +15,13 @@ SOW expected output: settlement dashboard with Coffee Token count, CLP owed, exp
 | 1 | Transaction history | **Done (CLP for POS)** | Store home + `/dashboard/transactions` recon panel |
 | 2 | Daily sales summary | **Done** | Today’s completed POS CLP |
 | 3 | Current settlement cycle | **v1 week** | Monday–now in `America/Santiago`, labeled “this week” |
-| 4 | Redeemed Coffee Token count | **Analog elsewhere** | PizzaToken in Sozu Wallet — not this dashboard |
+| 4 | Redeemed Coffee Token count | **Done (analog)** | Confirmed PizzaToken redeem count on recon panel + CSV (`pizza_redeem_count`) |
 | 5 | CLP equivalent calculation | **Done** | Uses stored `amount_clp` on completed checkout rows |
 | 6 | Settlement dashboard | **v1 panel** | Totals + table; not owed-vs-paid cycles |
 | 7 | Exportable reconciliation report | **Done** | `GET /api/store/reconciliation?format=csv` |
-| 8 | End-to-end QA | **Partial** | Unit tests on summarize/CSV; prod walk of POS → paid → panel |
+| 8 | End-to-end QA | **Done** | Playwright till walk: `e2e/tx.spec.ts` (CLP create → paid → recon → CSV id) |
 | 9 | Demo preparation | **This changelog + demo script** | Below |
-| 10 | Mainnet readiness assessment | **Note** | Testnet only. Mainnet deploy is SOW out of scope. Remaining: KYC, live pesos, Passport/Coffee Token. |
+| 10 | Mainnet readiness assessment | **Done (note)** | [INSTAWARDS_MAINNET_READINESS.md](./INSTAWARDS_MAINNET_READINESS.md) — deploy out of scope |
 
 ## Demo script
 
@@ -32,8 +32,30 @@ SOW expected output: settlement dashboard with Coffee Token count, CLP owed, exp
 5. Transactions: full table + **Export CSV**.
 6. Confirm CSV lists the payment id and `amount_clp`.
 
+**Recorded evidence:** [W4 till / recon on X](https://x.com/blessed_ux/status/2093552773694370253?s=20)  
+**VO script:** [INSTAWARDS_W4_DEMO_SCRIPT.md](./INSTAWARDS_W4_DEMO_SCRIPT.md)
+
+## Automated till walk (W4.8)
+
+Playwright: `e2e/tx.spec.ts` — **till walk: CLP create → paid → recon panel → CSV contains payment id**.
+
+1. Fake Pollar login + create Store with org treasury.
+2. `POST /api/checkout/create` with `amountClp: "1000"` (POS keypad path; expects `checkoutUrl`).
+3. Fund a testnet payer and send USDC to the treasury; `POST /api/checkout/complete`.
+4. `GET /api/store/reconciliation` includes the payment id + hash + `amountClp`.
+5. `GET /api/store/reconciliation?format=csv` contains that payment id and `1000`.
+
+Requires local env with Supabase + Stellar testnet (see `playwright.config.ts`). Run: `npx playwright test e2e/tx.spec.ts`.
+
 ## Code
 
 - `src/lib/store/reconciliation.ts`
 - `src/app/api/store/reconciliation/route.ts`
 - `src/components/StoreReconciliationPanel.tsx`
+- `e2e/tx.spec.ts`
+
+## Related
+
+- Section 6 evidence pack (all hashes + deliverable links): [INSTAWARDS_SECTION6_EVIDENCE_PACK.md](./INSTAWARDS_SECTION6_EVIDENCE_PACK.md)
+- Mainnet readiness one-pager (deploy out of scope): [INSTAWARDS_MAINNET_READINESS.md](./INSTAWARDS_MAINNET_READINESS.md)
+- Week 3 redeem analog: [INSTAWARDS_WEEK3_REDEMPTION_ANALOG.md](./INSTAWARDS_WEEK3_REDEMPTION_ANALOG.md)

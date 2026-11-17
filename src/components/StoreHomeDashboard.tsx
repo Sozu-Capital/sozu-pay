@@ -46,7 +46,7 @@ function ActionIcon({ kind }: { kind: StoreHomeActionKind }) {
   if (kind === "send") {
     return (
       <span className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40">
-        <svg className="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="h-5 w-5 rotate-45 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
         </svg>
       </span>
@@ -113,7 +113,7 @@ export default function StoreHomeDashboard() {
           </>
         )}
 
-        {/* Quick actions — POS is the only create-charge CTA */}
+        {/* Quick actions — payment link is reusable; new sale is one charge */}
         <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {actions.map((action) => (
             <Link

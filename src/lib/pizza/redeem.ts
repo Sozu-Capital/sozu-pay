@@ -60,10 +60,15 @@ export function pizzaRedeemWalletSignUrl(params: {
 export function pizzaWalletCheckoutUrl(params: {
   walletOrigin: string;
   slug: string;
+  /** Store segment so a shared item name still opens this shop's pizza. */
+  storeSlug?: string | null;
 }): string {
   const origin = params.walletOrigin.replace(/\/$/, "");
   const slug = encodeURIComponent(params.slug.trim().toLowerCase());
-  return `${origin}/checkout/pizza/${slug}`;
+  const url = new URL(`${origin}/checkout/pizza/${slug}`);
+  const store = params.storeSlug?.trim().toLowerCase();
+  if (store) url.searchParams.set("store", store);
+  return url.toString();
 }
 
 export function getWalletOrigin(): string {
@@ -87,11 +92,18 @@ export type PizzaSkuGuestNext =
 /** Pay.sozu.capital never prompts passkey/PIN — hop to wallet store checkout. */
 export function nextPizzaSkuGuestAction(
   search: PizzaSkuSearch,
-  ctx: { slug: string; walletOrigin: string },
+  ctx: { slug: string; walletOrigin: string; storeSlug?: string | null },
 ): PizzaSkuGuestNext {
   const intentId = search.intent?.trim();
   if (intentId) return { kind: "intent", intentId };
-  return { kind: "hop", url: pizzaWalletCheckoutUrl(ctx) };
+  return {
+    kind: "hop",
+    url: pizzaWalletCheckoutUrl({
+      walletOrigin: ctx.walletOrigin,
+      slug: ctx.slug,
+      storeSlug: ctx.storeSlug,
+    }),
+  };
 }
 
 export function parseStellarTxHash(raw: string): string | null {

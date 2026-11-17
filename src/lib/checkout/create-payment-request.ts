@@ -150,6 +150,19 @@ export type PaymentRequestApiResponse = {
   idempotentReplay: boolean;
 };
 
+export const CHECKOUT_PERSIST_FAILED_CODE = "CHECKOUT_PERSIST_FAILED";
+
+/** Persist failure must never include checkoutUrl — that is the fail-open QR bug. */
+export function checkoutPersistFailureBody(): {
+  error: string;
+  code: typeof CHECKOUT_PERSIST_FAILED_CODE;
+} {
+  return {
+    error: "Could not save the payment request. No QR was issued.",
+    code: CHECKOUT_PERSIST_FAILED_CODE,
+  };
+}
+
 export function buildPaymentRequestResponse(input: {
   id: string;
   checkoutUrl: string;

@@ -1,7 +1,13 @@
+import { getCheckoutSession } from "@/lib/db/checkout-sessions";
+import { getOrganizationById } from "@/lib/db/organizations";
+
 type Props = { params: Promise<{ id: string }> };
 
 export default async function CheckoutSuccessPage({ params }: Props) {
-  await params; // consume param to satisfy Next.js typing
+  const { id } = await params;
+  const session = await getCheckoutSession(id).catch(() => null);
+  const org = session ? await getOrganizationById(session.org_id) : null;
+
   return (
     <main className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
       <div className="w-full max-w-sm rounded-xl border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-gray-800 p-6 text-center">
@@ -10,10 +16,17 @@ export default async function CheckoutSuccessPage({ params }: Props) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <p className="text-lg font-semibold text-gray-900 dark:text-white">Payment received!</p>
+        <p className="text-lg font-semibold text-gray-900 dark:text-white">Comprobante</p>
         <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-          Your payment is being processed. Funds will arrive in the merchant&apos;s account shortly.
+          {org?.name ?? "Tienda"}
+          {session?.reference ? ` · ${session.reference}` : ""}
         </p>
+        {session?.amount_usd && (
+          <p className="mt-3 text-2xl font-bold tabular-nums text-gray-900 dark:text-white">
+            ${session.amount_usd} <span className="text-base font-medium text-gray-500">USD</span>
+          </p>
+        )}
+        <p className="mt-2 text-xs text-gray-400 break-all">Pago {id}</p>
       </div>
     </main>
   );

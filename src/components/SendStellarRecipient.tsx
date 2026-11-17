@@ -34,7 +34,6 @@ export default function SendStellarRecipient() {
   const tc = useTranslations("common");
   const { kit, credentialId } = useSmartAccountKitContext();
   const dash = useDashboardProfile();
-  const canSendPizza = !!dash?.profile?.can_send_pizza;
   const userDisplayName =
     dash?.profile?.username?.trim() ||
     dash?.profile?.email?.split("@")[0] ||
@@ -342,7 +341,6 @@ export default function SendStellarRecipient() {
       <div className="mt-6 max-w-lg rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-6">
         <SendUsdcForm
           key={formKey}
-          canSendPizza={canSendPizza}
           onSubmitting={(summary, body) => {
             setPayoutModalSummary(summary);
             setPayoutModalSuccess(null);

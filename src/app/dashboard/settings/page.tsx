@@ -660,16 +660,16 @@ export default function SettingsPage() {
             {orgType === "store" && (
               <div className="mt-4 flex flex-wrap gap-2">
                 <Link
-                  href="/dashboard/pos"
+                  href="/dashboard/qr-codes"
                   className="inline-flex rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-sm font-medium transition-colors"
                 >
-                  {t("storesCtaPos")}
+                  {t("storesCtaQr")}
                 </Link>
                 <Link
-                  href="/dashboard/qr-codes"
+                  href="/dashboard/pos"
                   className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm font-medium text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
-                  {t("storesCtaQr")}
+                  {t("storesCtaPos")}
                 </Link>
               </div>
             )}

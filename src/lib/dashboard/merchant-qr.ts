@@ -1,10 +1,18 @@
-/** Printed/displayed QR & NFC encode the stable pay URL, not a one-shot checkout id. */
+import {
+  parseStandingLink,
+  paymentLinkPath,
+  type PaymentLinkProductKind,
+} from "@/lib/dashboard/payment-link";
+
+/** Printed/displayed payment links encode the stable pay URL, not a one-shot checkout id. */
 
 export const QR_POINT_DESTINATION_TYPES = ["checkout", "custom_url", "pizza_sku"] as const;
 export type QrPointDestinationType = (typeof QR_POINT_DESTINATION_TYPES)[number];
 
 export type QrPointScanTarget = {
   slug: string;
+  /** Store name slug, or the organization id. */
+  storeSlug: string;
   destinationType: QrPointDestinationType;
   destinationRef: string | null;
 };
@@ -18,7 +26,9 @@ export function qrPointScanUrl(point: QrPointScanTarget, baseUrl: string): strin
   if (point.destinationType === "custom_url" && point.destinationRef) {
     return point.destinationRef;
   }
-  return `${baseUrl.replace(/\/$/, "")}/pay/qr/${point.slug}`;
+  const path = paymentLinkPath(point.storeSlug, point.slug);
+  if (!path) return `${baseUrl.replace(/\/$/, "")}/pay/qr/${point.slug}`;
+  return `${baseUrl.replace(/\/$/, "")}${path}`;
 }
 
 /** Pizza SKU never stores a checkout session id. Live checkout may attach the latest pending one. */
@@ -38,6 +48,16 @@ export type PayQrRoute =
   | { kind: "offline"; name: string }
   | { kind: "custom_url"; url: string }
   | { kind: "pizza_sku"; name: string; slug: string }
+  | {
+      kind: "standing_price";
+      name: string;
+      slug: string;
+      orgId: string;
+      amountUsd: string;
+      productKind: PaymentLinkProductKind;
+      collectibleReceipt: boolean;
+      editionSize: number | null;
+    }
   | { kind: "needs_live_checkout"; orgId: string; destinationRef: string | null; name: string };
 
 export function routePayQrPoint(qr: {
@@ -54,6 +74,19 @@ export function routePayQrPoint(qr: {
   }
   if (qr.destinationType === "pizza_sku") {
     return { kind: "pizza_sku", name: qr.name, slug: qr.slug };
+  }
+  const offer = parseStandingLink(qr.destinationRef);
+  if (offer) {
+    return {
+      kind: "standing_price",
+      name: qr.name,
+      slug: qr.slug,
+      orgId: qr.orgId,
+      amountUsd: offer.amountUsd,
+      productKind: offer.productKind,
+      collectibleReceipt: offer.collectibleReceipt,
+      editionSize: offer.editionSize,
+    };
   }
   return {
     kind: "needs_live_checkout",

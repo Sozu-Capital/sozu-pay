@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { SozuLoadingMark } from "@/components/SozuLoadingMark";
 import { orgSwitcherInitials } from "@/lib/org/org-switcher";
 
 type Org = { id: string; name: string };
@@ -128,7 +129,7 @@ export function OrgSwitcherModal({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
           {loading ? (
-            <p className="px-3 py-6 text-center text-sm text-gray-400">{t("switcherLoading")}</p>
+            <SozuLoadingMark mode="inline" />
           ) : null}
           {error ? (
             <p className="px-3 py-2 text-sm text-red-400" role="alert">

@@ -48,7 +48,10 @@
     "pollarNotConfigured": "El inicio de sesión con Google no está configurado.",
     "pollarDevModeHint": "Modo dev: Google se simula hasta configurar las claves de Pollar.",
     "merchantAuthLead": "Entrá con Google para crear tu negocio. Abrimos una billetera de cobro por vos — sin passkey ni frase semilla.",
-    "existingAccountLead": "¿Ya tenés una cuenta con passkey?"
+    "existingAccountLead": "La passkey es otra cuenta de SozuPay, no el mismo inicio de Pollar / Google.",
+    "inAppBrowserHint": "Este navegador interno suele bloquear el inicio con Google. Abrí SozuPay en Safari o Chrome.",
+    "googleReturnStuck": "Google puede haberse abierto en otra pestaña. Si ya iniciaste sesión ahí, podés continuar acá.",
+    "googleReturnContinue": "Continuar acá"
   },
   "merchants": {
     "homeHeadline": "Recibe pagos hoy.",
@@ -234,6 +237,15 @@
     "amountLabel": "Precio",
     "amountPlaceholder": "4.50",
     "amountHint": "USD. Este link sigue activo después de cada pago.",
+    "imageLabel": "Imagen del producto",
+    "imageHint": "Opcional. Una foto del producto queda en el link. El coleccionable 3D viene después.",
+    "imageAdd": "Agregar imagen",
+    "imageChange": "Cambiar imagen",
+    "imageRemove": "Quitar imagen",
+    "imageEmpty": "Sin imagen",
+    "imageInvalid": "Usá una imagen JPEG, PNG o WebP.",
+    "imageTooLarge": "La imagen es muy pesada. Probá con una foto más chica.",
+    "imageSaveFailed": "No se pudo guardar la imagen.",
     "productKindLabel": "¿Qué es?",
     "productKindProduct": "Producto",
     "productKindDrink": "Bebida",
@@ -1680,4 +1692,3 @@
     "hotlinkActiveHint": "Auto liberación activa — cuando el beneficiario termina el registro en Sozu Credit, SDP paga desde la cuenta de distribución."
   }
 }
-

@@ -10,6 +10,7 @@ import {
   standingPriceRef,
 } from "@/lib/dashboard/payment-link";
 import { normalizeEditionSize } from "@/lib/dashboard/collectible-edition";
+import { parseProductImageDataUrl } from "@/lib/dashboard/product-image";
 import { getLatestPendingCheckoutForOrg } from "@/lib/db/checkout-sessions";
 import {
   destinationRefForQrCreate,
@@ -55,6 +56,24 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
+  let imageUrl: string | null = null;
+  if (body.imageUrl != null && body.imageUrl !== "") {
+    try {
+      imageUrl = parseProductImageDataUrl(body.imageUrl);
+    } catch (err) {
+      const code = err instanceof Error ? err.message : "INVALID_PRODUCT_IMAGE";
+      return NextResponse.json(
+        {
+          error:
+            code === "PRODUCT_IMAGE_TOO_LARGE"
+              ? "That image is too large. Try a smaller photo."
+              : "Use a JPEG, PNG, or WebP image.",
+          code,
+        },
+        { status: 400 },
+      );
+    }
+  }
   const name = typeof body.name === "string" ? body.name.trim() : "";
   const requestedSlug = typeof body.slug === "string" ? body.slug.trim().toLowerCase() : "";
   const amountUsd = normalizeUsdAmount(body.amountUsd);
@@ -126,10 +145,21 @@ export async function POST(request: NextRequest) {
       pointType,
       destinationType,
       destinationRef: finalDestinationRef,
+      imageUrl,
       isOnline,
     });
     return NextResponse.json({ qrPoint });
   } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (message === "PRODUCT_IMAGE_COLUMN_MISSING") {
+      return NextResponse.json(
+        {
+          error: "Product images are not set up on this database yet.",
+          code: "PRODUCT_IMAGE_COLUMN_MISSING",
+        },
+        { status: 503 },
+      );
+    }
     console.error("[qr-points] create error:", err);
     return NextResponse.json({ error: "Failed to create QR point" }, { status: 500 });
   }

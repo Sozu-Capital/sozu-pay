@@ -4,6 +4,7 @@ import { getUserBySessionId } from "@/lib/db/users";
 import { updateQRPoint, deleteQRPoint, getQRPoint } from "@/lib/db/merchant-qr-points";
 import { parseQrPointDestinationType } from "@/lib/dashboard/merchant-qr";
 import type { QrPointDestinationType } from "@/lib/dashboard/merchant-qr";
+import { parseProductImageDataUrl } from "@/lib/dashboard/product-image";
 
 type Params = {
   params: Promise<{
@@ -38,8 +39,27 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     name?: string;
     destinationType?: QrPointDestinationType;
     destinationRef?: string;
+    imageUrl?: string | null;
     isOnline?: boolean;
   } = {};
+
+  if ("imageUrl" in body) {
+    try {
+      updates.imageUrl = parseProductImageDataUrl(body.imageUrl);
+    } catch (err) {
+      const code = err instanceof Error ? err.message : "INVALID_PRODUCT_IMAGE";
+      return NextResponse.json(
+        {
+          error:
+            code === "PRODUCT_IMAGE_TOO_LARGE"
+              ? "That image is too large. Try a smaller photo."
+              : "Use a JPEG, PNG, or WebP image.",
+          code,
+        },
+        { status: 400 },
+      );
+    }
+  }
 
   if (typeof body.name === "string") {
     updates.name = body.name.trim();
@@ -59,7 +79,22 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     updates.isOnline = body.isOnline;
   }
 
-  const updated = await updateQRPoint(id, orgId, updates);
+  let updated;
+  try {
+    updated = await updateQRPoint(id, orgId, updates);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (message === "PRODUCT_IMAGE_COLUMN_MISSING") {
+      return NextResponse.json(
+        {
+          error: "Product images are not set up on this database yet.",
+          code: "PRODUCT_IMAGE_COLUMN_MISSING",
+        },
+        { status: 503 },
+      );
+    }
+    throw err;
+  }
   if (!updated) {
     return NextResponse.json({ error: "Update failed" }, { status: 500 });
   }

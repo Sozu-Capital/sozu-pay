@@ -1,5 +1,6 @@
 import type { QrPointDestinationType } from "@/lib/dashboard/merchant-qr";
 import { isOrganizationId, slugFromTitle, STANDING_PRICE_PREFIX } from "@/lib/dashboard/payment-link";
+import { isMissingProductImageColumn, readStoredProductImage } from "@/lib/dashboard/product-image";
 import { getOrganizationById, getOrganizationBySlug } from "@/lib/db/organizations";
 import { getSupabase } from "@/lib/supabase/server";
 
@@ -14,6 +15,8 @@ export interface MerchantQRPoint {
   pointType: QRPointChannel;
   destinationType: QRPointDestinationType;
   destinationRef: string | null;
+  /** Product photo, stored as an image data URL. */
+  imageUrl: string | null;
   isOnline: boolean;
   createdAt: string;
   updatedAt: string;
@@ -30,6 +33,7 @@ function fromDb(row: Record<string, unknown>): MerchantQRPoint {
     pointType,
     destinationType: row.destination_type as QRPointDestinationType,
     destinationRef: (row.destination_ref as string) ?? null,
+    imageUrl: readStoredProductImage(row.image_url),
     isOnline: row.is_online as boolean,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -43,26 +47,34 @@ export async function createQRPoint(params: {
   pointType?: QRPointChannel;
   destinationType: QRPointDestinationType;
   destinationRef?: string;
+  imageUrl?: string | null;
   isOnline?: boolean;
 }): Promise<MerchantQRPoint> {
   const now = new Date().toISOString();
+  const row: Record<string, unknown> = {
+    org_id: params.orgId,
+    name: params.name,
+    slug: params.slug,
+    point_type: params.pointType ?? "qr",
+    destination_type: params.destinationType,
+    destination_ref: params.destinationRef ?? null,
+    is_online: params.isOnline ?? true,
+    created_at: now,
+    updated_at: now,
+  };
+  if (params.imageUrl) row.image_url = params.imageUrl;
   const { data, error } = await getSupabase()
     .from("merchant_qr_points")
-    .insert({
-      org_id: params.orgId,
-      name: params.name,
-      slug: params.slug,
-      point_type: params.pointType ?? "qr",
-      destination_type: params.destinationType,
-      destination_ref: params.destinationRef ?? null,
-      is_online: params.isOnline ?? true,
-      created_at: now,
-      updated_at: now,
-    })
+    .insert(row)
     .select()
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (params.imageUrl && isMissingProductImageColumn(error.message)) {
+      throw new Error("PRODUCT_IMAGE_COLUMN_MISSING");
+    }
+    throw new Error(error.message);
+  }
   return fromDb(data);
 }
 
@@ -188,6 +200,7 @@ export async function updateQRPoint(
     name?: string;
     destinationType?: QRPointDestinationType;
     destinationRef?: string;
+    imageUrl?: string | null;
     isOnline?: boolean;
   }
 ): Promise<MerchantQRPoint | null> {
@@ -198,6 +211,7 @@ export async function updateQRPoint(
   if (updates.name !== undefined) payload.name = updates.name;
   if (updates.destinationType !== undefined) payload.destination_type = updates.destinationType;
   if (updates.destinationRef !== undefined) payload.destination_ref = updates.destinationRef || null;
+  if (updates.imageUrl !== undefined) payload.image_url = updates.imageUrl;
   if (updates.isOnline !== undefined) payload.is_online = updates.isOnline;
 
   const { data, error } = await getSupabase()
@@ -209,6 +223,9 @@ export async function updateQRPoint(
     .maybeSingle();
 
   if (error) {
+    if (updates.imageUrl !== undefined && isMissingProductImageColumn(error.message)) {
+      throw new Error("PRODUCT_IMAGE_COLUMN_MISSING");
+    }
     console.error("[qr-points] update error:", error.message);
     return null;
   }

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { PaymentLinkQrDownload } from "@/components/PaymentLinkQrDownload";
+import { ProductImageField } from "@/components/ProductImageField";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 import { qrPointScanUrl } from "@/lib/dashboard/merchant-qr";
 import type { QrPointDestinationType } from "@/lib/dashboard/merchant-qr";
@@ -20,6 +21,7 @@ type QRPoint = {
   pointType: "qr" | "nfc";
   destinationType: QrPointDestinationType;
   destinationRef: string | null;
+  imageUrl: string | null;
   isOnline: boolean;
   createdAt: string;
 };
@@ -39,6 +41,7 @@ export default function QRCodesPage() {
   const [productKind, setProductKind] = useState<"product" | "drink">("product");
   const [collectibleOn, setCollectibleOn] = useState(true);
   const [editionSize, setEditionSize] = useState("");
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -99,6 +102,7 @@ export default function QRCodesPage() {
           productKind,
           collectibleReceipt,
           editionSize: edition,
+          imageUrl,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -112,6 +116,7 @@ export default function QRCodesPage() {
       setProductKind("product");
       setCollectibleOn(true);
       setEditionSize("");
+      setImageUrl(null);
       setShowForm(false);
       if (createdId) {
         setOpenPointId(createdId);
@@ -122,6 +127,20 @@ export default function QRCodesPage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const savePointImage = async (id: string, next: string | null) => {
+    const res = await fetch(`/api/merchant/qr-points/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageUrl: next }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return (data.error as string) ?? t("imageSaveFailed");
+    setQRPoints((points) =>
+      points.map((point) => (point.id === id ? { ...point, imageUrl: next } : point)),
+    );
+    return null;
   };
 
   const handleToggleOnline = async (id: string, currentOnline: boolean) => {
@@ -228,6 +247,8 @@ export default function QRCodesPage() {
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("amountHint")}</p>
           </div>
 
+          <ProductImageField imageUrl={imageUrl} disabled={busy} onChange={(next) => setImageUrl(next)} />
+
           <fieldset>
             <legend className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               {t("productKindLabel")}
@@ -311,6 +332,7 @@ export default function QRCodesPage() {
                 setProductKind("product");
                 setCollectibleOn(true);
                 setEditionSize("");
+                setImageUrl(null);
               }}
               className="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium"
             >
@@ -351,6 +373,14 @@ export default function QRCodesPage() {
                   aria-expanded={isOpen}
                   className="flex min-w-0 flex-1 items-start text-left rounded-md -m-1 p-1 hover:bg-gray-50 dark:hover:bg-gray-800/80"
                 >
+                  {qr.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={qr.imageUrl}
+                      alt=""
+                      className="mr-3 h-12 w-12 shrink-0 rounded-lg object-cover"
+                    />
+                  ) : null}
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-medium text-gray-900 dark:text-white">{qr.name}</h3>
@@ -423,6 +453,10 @@ export default function QRCodesPage() {
                 </div>
                 {isOpen && (
                   <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4 space-y-4">
+                    <ProductImageField
+                      imageUrl={qr.imageUrl}
+                      onChange={(next) => savePointImage(qr.id, next)}
+                    />
                     {freshId === qr.id && (
                       <p className="text-sm text-emerald-700 dark:text-emerald-300">{t("createdReady")}</p>
                     )}

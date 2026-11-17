@@ -21,6 +21,7 @@ import { isUserDerivedEncrypted } from "@/lib/org-wallet-encryption";
 import { buildUnsignedUsdcEnvelope } from "@/lib/stellar/sendUsdc";
 import type { Organization } from "@/lib/db/organizations";
 import { resolvePaymentRecipient } from "@/lib/payment/resolve-recipient";
+import { normalizeSozuTag } from "@/lib/org-sozu-tag";
 import { isValidStellarReceiveAddress } from "@/lib/payment/stellar-address";
 import { payoutRailForDestination } from "@/lib/payment/payout-rail";
 import { getCircleUsdcSacContractId } from "@/lib/stellar/org-treasury";
@@ -412,25 +413,43 @@ export async function POST(request: NextRequest) {
     let recipientLabel =
       typeof body.recipientLabel === "string" ? body.recipientLabel.trim() : undefined;
 
-    if (!isValidStellarReceiveAddress(destination)) {
-      console.log("[payouts] Resolving recipient:", { raw: destination });
-      const resolved = await resolvePaymentRecipient(destination);
+    const labelTag = recipientLabel ? normalizeSozuTag(recipientLabel) : null;
+    const destinationWasAddress = isValidStellarReceiveAddress(destination);
+    if (!destinationWasAddress || labelTag) {
+      const lookup = destinationWasAddress ? recipientLabel! : destination;
+      console.log("[payouts] Resolving recipient:", { raw: lookup });
+      const resolved = await resolvePaymentRecipient(lookup);
       if (!resolved.ok) {
-        console.error("[payouts] Resolution failed:", {
-          raw: destination,
+        if (!destinationWasAddress) {
+          console.error("[payouts] Resolution failed:", {
+            raw: lookup,
+            error: resolved.error,
+            status: resolved.status,
+          });
+          return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+        }
+        console.warn("[payouts] Tag label did not resolve; paying the submitted address", {
+          label: recipientLabel,
           error: resolved.error,
-          status: resolved.status,
         });
-        return NextResponse.json({ error: resolved.error }, { status: resolved.status });
-      }
-      console.log("[payouts] Resolved to:", {
-        walletAddress: resolved.recipient.walletAddress,
-        tag: resolved.recipient.tag,
-        rail: resolved.recipient.paymentRail,
-      });
-      destination = resolved.recipient.walletAddress;
-      if (!recipientLabel && resolved.recipient.tag) {
-        recipientLabel = `$${resolved.recipient.tag.replace(/^\$+/, "")}`;
+      } else {
+        const canonical = resolved.recipient.walletAddress.trim().toUpperCase();
+        if (destinationWasAddress && destination.trim().toUpperCase() !== canonical) {
+          console.warn("[payouts] Canonical smart account replaced submitted destination", {
+            submitted: destination,
+            canonical,
+            tag: resolved.recipient.tag,
+          });
+        }
+        console.log("[payouts] Resolved to:", {
+          walletAddress: canonical,
+          tag: resolved.recipient.tag,
+          rail: resolved.recipient.paymentRail,
+        });
+        destination = canonical;
+        if (!recipientLabel && resolved.recipient.tag) {
+          recipientLabel = `$${resolved.recipient.tag.replace(/^\$+/, "")}`;
+        }
       }
     }
 

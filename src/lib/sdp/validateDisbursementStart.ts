@@ -1,13 +1,16 @@
 import "server-only";
 
 import type { Organization } from "@/lib/db/organizations";
+import { usableClassicTreasuryPublicKey } from "@/lib/pollar/types";
 import {
   resolveOrgDisbursementContractId,
   resolveOrgTreasuryContractId,
 } from "@/lib/stellar/org-treasury";
+import { getUsdcBalance } from "@/lib/stellar/balance";
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
 import type { SdpDisbursement, SdpReceiver } from "@/lib/sdp/adminClient";
 import { receiverInviteWasSent } from "@/lib/sdp/receiverDisplay";
+import { evaluateDisbursementFunds } from "@/lib/sdp/disbursement-paying-balance";
 
 export type DisbursementPreflightFailure = {
   ok: false;
@@ -62,7 +65,7 @@ export function validateInvitesSentForStart(params: {
   };
 }
 
-/** Check org Soroban treasury balance before passkey Soroban payouts. */
+/** Check the paying wallet before Distribuir. Invites do not call this. */
 export async function validateDisbursementFunds(params: {
   org: Organization;
   disbursement: SdpDisbursement;
@@ -72,46 +75,34 @@ export async function validateDisbursementFunds(params: {
 
   const treasuryId = resolveOrgTreasuryContractId(params.org);
   const disbursementContractId = resolveOrgDisbursementContractId(params.org);
-
-  if (!treasuryId && !disbursementContractId) {
-    return {
-      ok: false,
-      code: "NO_ORG_TREASURY",
-      error:
-        "This organization has no Soroban treasury configured. Set up your org smart wallet before sending batch payments.",
-    };
-  }
+  const classicG = usableClassicTreasuryPublicKey(params.org.stellar_disbursement_public_key);
 
   let treasuryBal = 0;
-  let disbursementContractBal = 0;
-
+  let disbursementBal = 0;
   if (treasuryId) {
     treasuryBal = parseFloat(await getSorobanUsdcBalance(treasuryId)) || 0;
   }
   if (disbursementContractId) {
-    disbursementContractBal =
+    disbursementBal =
       disbursementContractId === treasuryId
         ? treasuryBal
         : parseFloat(await getSorobanUsdcBalance(disbursementContractId)) || 0;
   }
 
-  const orgCombined =
-    treasuryId && disbursementContractId && treasuryId !== disbursementContractId
-      ? treasuryBal + disbursementContractBal
-      : Math.max(treasuryBal, disbursementContractBal);
+  // Read classic G even when a C id is set. Pollar spend pays from that G.
+  const classicGBal =
+    classicG && (treasuryId || disbursementContractId)
+      ? parseFloat(await getUsdcBalance(classicG)) || 0
+      : null;
 
-  if (orgCombined + 1e-9 < required) {
-    return {
-      ok: false,
-      code: "INSUFFICIENT_ORG_BALANCE",
-      error:
-        `Org smart account has ${orgCombined.toFixed(2)} USDC but this batch requires ${required.toFixed(2)} USDC. ` +
-        `Deposit USDC to your org smart account, then use Distribuir to pay registered beneficiaries.`,
-      details: { required, orgBalance: orgCombined },
-    };
-  }
-
-  return { ok: true };
+  return evaluateDisbursementFunds({
+    required,
+    treasuryId,
+    disbursementContractId,
+    treasuryBal,
+    disbursementBal,
+    classicGBal,
+  });
 }
 
 export async function preflightDisbursementStart(params: {

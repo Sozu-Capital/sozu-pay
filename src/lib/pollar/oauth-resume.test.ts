@@ -3,8 +3,10 @@ import { describe, it } from "node:test";
 import { createHash } from "node:crypto";
 import {
   accessTokenFromLoginResponse,
+  clientSessionIdFromCallbackSearch,
   clientSessionIdFromOAuthUrl,
   hashApiKeyPrefix,
+  isPollarOAuthPopupWindow,
   pollarOAuthCallbackUrl,
   pollarSessionStorageKey,
   sanitizeReturnTo,
@@ -38,6 +40,18 @@ describe("clientSessionIdFromOAuthUrl", () => {
   it("returns null when missing", () => {
     assert.equal(clientSessionIdFromOAuthUrl("https://sdk.api.pollar.xyz/v2/auth/google"), null);
     assert.equal(clientSessionIdFromOAuthUrl("not a url"), null);
+  });
+
+  it("reads the session id Pollar appends on the way back", () => {
+    assert.equal(clientSessionIdFromCallbackSearch("?client_session_id=sess-9"), "sess-9");
+    assert.equal(clientSessionIdFromCallbackSearch(""), null);
+  });
+});
+
+describe("oauth popup window", () => {
+  it("recognizes only the tab opened for Google", () => {
+    assert.equal(isPollarOAuthPopupWindow("pollar-oauth"), true);
+    assert.equal(isPollarOAuthPopupWindow(""), false);
   });
 });
 

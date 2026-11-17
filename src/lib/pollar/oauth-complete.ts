@@ -12,12 +12,15 @@ const POLLAR_SDK_BASE =
   "https://sdk.api.pollar.xyz";
 
 const POLL_INTERVAL_MS = 500;
-const POLL_TIMEOUT_MS = 5 * 60 * 1000;
+const POLL_TIMEOUT_MS = 20 * 1000;
 
-export async function waitForPollarSessionReady(clientSessionId: string): Promise<boolean> {
+export async function waitForPollarSessionReady(
+  clientSessionId: string,
+  timeoutMs: number = POLL_TIMEOUT_MS,
+): Promise<boolean> {
   const url = `${POLLAR_SDK_BASE}/v2/auth/session/status/${encodeURIComponent(clientSessionId)}/poll`;
   const started = Date.now();
-  while (Date.now() - started < POLL_TIMEOUT_MS) {
+  while (Date.now() - started < timeoutMs) {
     try {
       const res = await fetch(url, { headers: { accept: "application/json" } });
       if (res.status === 404 || res.status === 410) return false;

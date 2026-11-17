@@ -47,6 +47,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     collectibleReceipt: route.collectibleReceipt,
     editionNumber: minted.editionNumber,
     editionSize: minted.editionSize,
-    walletCheckoutUrl: minted.walletCheckoutUrl,
+    checkoutUrl: minted.checkoutUrl,
+    walletCheckoutUrl: minted.checkoutUrl,
   });
 }

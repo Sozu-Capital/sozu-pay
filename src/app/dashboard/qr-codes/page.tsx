@@ -21,6 +21,7 @@ type QRPoint = {
 export default function QRCodesPage() {
   const t = useTranslations("qrNfcPage");
   const [qrPoints, setQRPoints] = useState<QRPoint[]>([]);
+  const [storeSlug, setStoreSlug] = useState("");
   const [openPointId, setOpenPointId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -43,6 +44,7 @@ export default function QRCodesPage() {
       .then((r) => (r.ok ? r.json() : { qrPoints: [] }))
       .then((d) => {
         setQRPoints(d.qrPoints ?? []);
+        setStoreSlug(typeof d.storeSlug === "string" ? d.storeSlug : "");
       })
       .finally(() => setLoading(false));
   }, []);
@@ -126,7 +128,10 @@ export default function QRCodesPage() {
     }
   };
 
-  const getPointUrl = (qr: QRPoint) => qrPointScanUrl(qr, baseUrl);
+  const getPointUrl = (qr: QRPoint) =>
+    storeSlug
+      ? qrPointScanUrl({ ...qr, storeSlug }, baseUrl)
+      : `${baseUrl.replace(/\/$/, "")}/pay/qr/${qr.slug}`;
 
   const getQRImageUrl = (qr: QRPoint) => {
     const payUrl = getPointUrl(qr);
@@ -252,7 +257,9 @@ export default function QRCodesPage() {
           )}
 
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {t("slugPreview", { slug: slugFromTitle(name || t("namePlaceholder")) })}
+            {t("slugPreview", {
+              slug: `${storeSlug ? `${storeSlug}/` : ""}${slugFromTitle(name || t("namePlaceholder"))}`,
+            })}
           </p>
 
           {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}

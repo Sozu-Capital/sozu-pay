@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
-import { allocateQrSlug, createQRPoint, listQRPointsForOrg } from "@/lib/db/merchant-qr-points";
+import { allocateQrSlug, createQRPoint, getQRPointByOrgAndSlug, listQRPointsForOrg } from "@/lib/db/merchant-qr-points";
+import { ensureOrganizationSlug, getOrganizationById } from "@/lib/db/organizations";
 import {
   normalizeUsdAmount,
   parsePaymentLinkProductKind,
@@ -32,7 +33,9 @@ export async function GET() {
   }
 
   const qrPoints = await listQRPointsForOrg(orgId);
-  return NextResponse.json({ qrPoints });
+  const org = await getOrganizationById(orgId);
+  const storeSlug = org ? await ensureOrganizationSlug(org) : orgId;
+  return NextResponse.json({ qrPoints, storeSlug });
 }
 
 /**
@@ -76,9 +79,12 @@ export async function POST(request: NextRequest) {
     const slug =
       requestedSlug && /^[a-z0-9_-]+$/.test(requestedSlug)
         ? requestedSlug
-        : await allocateQrSlug(name);
+        : await allocateQrSlug(orgId, name);
     if (!/^[a-z0-9_-]+$/.test(slug)) {
       return NextResponse.json({ error: "Invalid slug" }, { status: 400 });
+    }
+    if (await getQRPointByOrgAndSlug(orgId, slug)) {
+      return NextResponse.json({ error: "That link name is already used in this store" }, { status: 409 });
     }
 
     let finalDestinationRef: string | undefined;

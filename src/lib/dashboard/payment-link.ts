@@ -192,3 +192,27 @@ export function originOfRedirect(redirectUrl: string, fallback: string): string 
 export function isReusableCharge(fxSource: string | null | undefined): boolean {
   return fxSource != null && reusableChargeSources().includes(fxSource);
 }
+
+const ORGANIZATION_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const STORE_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const ITEM_SLUG = /^[a-z0-9_-]+$/;
+
+export function isOrganizationId(value: string): boolean {
+  return ORGANIZATION_ID.test(value.trim().toLowerCase());
+}
+
+/** Store name slug, or the organization id when the name is not stored yet. */
+export function parseStorePathSegment(raw: string): string | null {
+  const value = raw.trim().toLowerCase();
+  if (ORGANIZATION_ID.test(value) || STORE_SLUG.test(value)) return value;
+  return null;
+}
+
+/** Public pay path. The store comes first so the item name is not global. */
+export function paymentLinkPath(storeSlug: string, itemSlug: string): string | null {
+  const store = parseStorePathSegment(storeSlug);
+  const item = itemSlug.trim().toLowerCase();
+  if (!store || !ITEM_SLUG.test(item)) return null;
+  return `/pay/qr/${store}/${item}`;
+}

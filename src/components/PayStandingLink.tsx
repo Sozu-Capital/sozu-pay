@@ -4,6 +4,7 @@ import { useState } from "react";
 
 export function PayStandingLink({
   slug,
+  storeSlug,
   storeName,
   itemName,
   amountUsd,
@@ -13,6 +14,8 @@ export function PayStandingLink({
   directWalletCheckoutUrl,
 }: {
   slug: string;
+  /** Store segment of /pay/qr/{store}/{slug}. Omitted for a one-shot checkout screen. */
+  storeSlug?: string;
   storeName: string;
   itemName: string;
   amountUsd: string;
@@ -35,16 +38,25 @@ export function PayStandingLink({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/pay/links/${encodeURIComponent(slug)}/start`, {
+      const startPath = storeSlug
+        ? `/api/pay/links/${encodeURIComponent(storeSlug)}/${encodeURIComponent(slug)}/start`
+        : `/api/pay/links/${encodeURIComponent(slug)}/start`;
+      const res = await fetch(startPath, {
         method: "POST",
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || typeof data.walletCheckoutUrl !== "string") {
+      const checkoutUrl =
+        typeof data.checkoutUrl === "string"
+          ? data.checkoutUrl
+          : typeof data.walletCheckoutUrl === "string"
+            ? data.walletCheckoutUrl
+            : null;
+      if (!res.ok || !checkoutUrl) {
         setError(typeof data.error === "string" ? data.error : "No se pudo abrir el pago");
         setBusy(false);
         return;
       }
-      window.location.assign(data.walletCheckoutUrl);
+      window.location.assign(checkoutUrl);
     } catch {
       setError("No se pudo abrir el pago");
       setBusy(false);

@@ -46,7 +46,8 @@ export async function POST(request: NextRequest, { params }: Params) {
       editionNumber: minted.editionNumber,
       editionSize: minted.editionSize,
       storeName: store.name,
-      walletCheckoutUrl: minted.walletCheckoutUrl,
+      checkoutUrl: minted.checkoutUrl,
+      walletCheckoutUrl: minted.checkoutUrl,
     });
   }
 
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     amountUsd,
     itemName: null,
     storeName: store.name,
-    walletCheckoutUrl: minted.walletCheckoutUrl,
+    checkoutUrl: minted.checkoutUrl,
+    walletCheckoutUrl: minted.checkoutUrl,
   });
 }

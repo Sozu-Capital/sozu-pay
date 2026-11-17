@@ -224,7 +224,7 @@
   },
   "qrNfcPage": {
     "title": "Link de pago",
-    "subtitle": "Un link reutilizable con su propio precio. La dirección sale del título. Se puede pagar más de una vez.",
+    "subtitle": "Un link reutilizable con su propio precio. La dirección incluye la tienda y el título. Se puede pagar más de una vez.",
     "newPoint": "Nuevo link de pago",
     "dynamicHint": "Cada link conserva su precio. Una nueva venta es aparte: un monto, un solo pago.",
     "formTitle": "Nuevo link de pago",
@@ -253,7 +253,7 @@
     "channelLabel": "Canal",
     "channelQr": "Código QR (imprimir o mostrar)",
     "channelNfc": "Tag NFC (programar con la misma URL)",
-    "channelHint": "Ambos usan la misma URL /pay/qr/{slug} — solo cambia cómo el cliente la abre.",
+    "channelHint": "Ambos usan la misma URL /pay/qr/{store}/{slug} — solo cambia cómo el cliente la abre.",
     "destinationLabel": "Destino",
     "destinationLiveCheckout": "Checkout activo (se actualiza al crear un enlace de pago)",
     "destinationCustomUrl": "URL personalizada",

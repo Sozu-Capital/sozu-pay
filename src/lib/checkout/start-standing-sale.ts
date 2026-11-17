@@ -20,6 +20,7 @@ export type StandingSaleResult =
   | {
       ok: true;
       id: string;
+      checkoutUrl: string;
       walletCheckoutUrl: string;
       reference: string;
       editionNumber: number | null;
@@ -54,7 +55,8 @@ export async function startStandingSale(params: {
     return {
       ok: true,
       id: minted.id,
-      walletCheckoutUrl: minted.walletCheckoutUrl,
+      checkoutUrl: minted.checkoutUrl,
+      walletCheckoutUrl: minted.checkoutUrl,
       reference: params.name,
       editionNumber: null,
       editionSize: null,
@@ -113,7 +115,8 @@ export async function startStandingSale(params: {
       return {
         ok: true,
         id: minted.id,
-        walletCheckoutUrl: minted.walletCheckoutUrl,
+        checkoutUrl: minted.checkoutUrl,
+        walletCheckoutUrl: minted.checkoutUrl,
         reference,
         editionNumber: number,
         editionSize: size,

@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { getAppBaseUrl } from "@/lib/app-url";
+import { paymentLinkPath } from "@/lib/dashboard/payment-link";
 import { getWalletOrigin } from "@/lib/pizza/redeem";
 
 /**
@@ -37,7 +38,12 @@ export function checkoutSuccessUrl(sessionId: string, request?: NextRequest): st
   return `${getCheckoutBaseUrl(request)}/checkout/${sessionId}/success`;
 }
 
-/** Stable pay.sozu.capital URL for dynamic QR/NFC (redirects to live checkout). */
-export function merchantQrPayUrl(slug: string, request?: NextRequest): string {
-  return `${getAppBaseUrl(request)}/pay/qr/${slug}`;
+/** Stable pay.sozu.capital URL for dynamic QR/NFC. The store scopes the item slug. */
+export function merchantQrPayUrl(
+  storeSlug: string,
+  slug: string,
+  request?: NextRequest,
+): string {
+  const path = paymentLinkPath(storeSlug, slug) ?? `/pay/qr/${slug}`;
+  return `${getAppBaseUrl(request)}${path}`;
 }

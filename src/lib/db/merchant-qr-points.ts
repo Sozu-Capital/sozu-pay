@@ -79,29 +79,49 @@ export async function listQRPointsForOrg(orgId: string): Promise<MerchantQRPoint
   return (data ?? []).map(fromDb);
 }
 
-/** First free slug derived from a title. Global uniqueness matches the pay URL. */
-export async function allocateQrSlug(title: string): Promise<string> {
+/** First free item slug for this store. Another store may use the same item name. */
+export async function allocateQrSlug(orgId: string, title: string): Promise<string> {
   const root = slugFromTitle(title);
   for (let i = 0; i < 40; i++) {
     const candidate = i === 0 ? root : `${root.slice(0, 36)}-${i + 1}`;
-    const existing = await getQRPointBySlug(candidate);
+    const existing = await getQRPointByOrgAndSlug(orgId, candidate);
     if (!existing) return candidate;
   }
   throw new Error("Could not allocate a unique slug");
 }
 
+export async function getQRPointByOrgAndSlug(
+  orgId: string,
+  slug: string,
+): Promise<MerchantQRPoint | null> {
+  const { data, error } = await getSupabase()
+    .from("merchant_qr_points")
+    .select("*")
+    .eq("org_id", orgId)
+    .eq("slug", slug.toLowerCase())
+    .maybeSingle();
+
+  if (error) {
+    console.error("[qr-points] getByOrgAndSlug error:", error.message);
+    return null;
+  }
+  return data ? fromDb(data) : null;
+}
+
+/** Legacy /pay/qr/{slug}. Returns null when two stores share the item slug. */
 export async function getQRPointBySlug(slug: string): Promise<MerchantQRPoint | null> {
   const { data, error } = await getSupabase()
     .from("merchant_qr_points")
     .select("*")
     .eq("slug", slug.toLowerCase())
-    .maybeSingle();
+    .limit(2);
 
   if (error) {
     console.error("[qr-points] getBySlug error:", error.message);
     return null;
   }
-  return data ? fromDb(data) : null;
+  if (!data || data.length !== 1) return null;
+  return fromDb(data[0]);
 }
 
 /** Point all dynamic checkout QR/NFC tags at the latest live payment link. */

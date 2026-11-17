@@ -1,4 +1,8 @@
-import { parseStandingLink, type PaymentLinkProductKind } from "@/lib/dashboard/payment-link";
+import {
+  parseStandingLink,
+  paymentLinkPath,
+  type PaymentLinkProductKind,
+} from "@/lib/dashboard/payment-link";
 
 /** Printed/displayed payment links encode the stable pay URL, not a one-shot checkout id. */
 
@@ -7,6 +11,8 @@ export type QrPointDestinationType = (typeof QR_POINT_DESTINATION_TYPES)[number]
 
 export type QrPointScanTarget = {
   slug: string;
+  /** Store name slug, or the organization id. */
+  storeSlug: string;
   destinationType: QrPointDestinationType;
   destinationRef: string | null;
 };
@@ -20,7 +26,9 @@ export function qrPointScanUrl(point: QrPointScanTarget, baseUrl: string): strin
   if (point.destinationType === "custom_url" && point.destinationRef) {
     return point.destinationRef;
   }
-  return `${baseUrl.replace(/\/$/, "")}/pay/qr/${point.slug}`;
+  const path = paymentLinkPath(point.storeSlug, point.slug);
+  if (!path) return `${baseUrl.replace(/\/$/, "")}/pay/qr/${point.slug}`;
+  return `${baseUrl.replace(/\/$/, "")}${path}`;
 }
 
 /** Pizza SKU never stores a checkout session id. Live checkout may attach the latest pending one. */

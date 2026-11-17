@@ -224,7 +224,7 @@
   },
   "qrNfcPage": {
     "title": "Payment link",
-    "subtitle": "A reusable link with its own price. The address is created from the title. Customers can pay it more than once.",
+    "subtitle": "A reusable link with its own price. The address includes your store and the title. Customers can pay it more than once.",
     "newPoint": "New payment link",
     "dynamicHint": "Each link keeps its price. A new sale is separate: one amount, one payment.",
     "formTitle": "New payment link",
@@ -253,7 +253,7 @@
     "channelLabel": "Channel",
     "channelQr": "QR code (print or display)",
     "channelNfc": "NFC tag (program with the same URL)",
-    "channelHint": "Both use the same /pay/qr/{slug} link — only how customers open it differs.",
+    "channelHint": "Both use the same /pay/qr/{store}/{slug} link — only how customers open it differs.",
     "destinationLabel": "Destination",
     "destinationLiveCheckout": "Live checkout (updates when you create a payment link)",
     "destinationCustomUrl": "Custom URL",

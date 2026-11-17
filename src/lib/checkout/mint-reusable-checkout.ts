@@ -32,7 +32,7 @@ export async function mintReusableCheckout(params: {
   request?: NextRequest;
   hostHeader?: string | null;
 }): Promise<
-  | { ok: true; id: string; walletCheckoutUrl: string }
+  | { ok: true; id: string; checkoutUrl: string; walletCheckoutUrl: string }
   | { ok: false; status: number; error: string; conflict?: boolean }
 > {
   const org = await getOrganizationById(params.orgId);
@@ -58,7 +58,7 @@ export async function mintReusableCheckout(params: {
       amountUsd: params.amountUsd,
       reference: params.reference.slice(0, 160),
       destinationStellarAddress: destination,
-      providerSessionId: id,
+      providerSessionId: `sozu_${id}`,
       providerUrl: walletCheckoutUrl,
       fxSource: params.fxSource,
       idempotencyKey: params.idempotencyKey,
@@ -73,5 +73,5 @@ export async function mintReusableCheckout(params: {
     return { ok: false, status: 503, error: "Could not start this payment" };
   }
 
-  return { ok: true, id, walletCheckoutUrl };
+  return { ok: true, id, checkoutUrl: walletCheckoutUrl, walletCheckoutUrl };
 }

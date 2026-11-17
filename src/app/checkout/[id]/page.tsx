@@ -1,9 +1,7 @@
-import { headers } from "next/headers";
 import { getCheckoutSession } from "@/lib/db/checkout-sessions";
-import { getOrganizationById } from "@/lib/db/organizations";
-import { effectiveCheckoutStatus } from "@/lib/checkout/expiration";
-import { isCollectibleCheckout, isReusableCharge, payerCheckoutUrl } from "@/lib/dashboard/payment-link";
-import { PayStandingLink } from "@/components/PayStandingLink";
+import { isStubRampCheckoutUrl, payerCheckoutUrl } from "@/lib/dashboard/payment-link";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string>> };
@@ -13,7 +11,6 @@ export default async function CheckoutPage({ params }: Props) {
 
   const session = await getCheckoutSession(id).catch(() => null);
 
-  // If session not found or has no provider URL, show a clean error (e.g. expired or invalid link)
   if (!session) {
     return (
       <main className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
@@ -28,24 +25,6 @@ export default async function CheckoutPage({ params }: Props) {
           >
             Go home
           </Link>
-        </div>
-      </main>
-    );
-  }
-
-  const liveStatus = effectiveCheckoutStatus({
-    status: session.status,
-    expiresAt: session.expires_at,
-  });
-
-  if (liveStatus === "expired") {
-    return (
-      <main className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
-        <div className="w-full max-w-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 text-center">
-          <p className="text-lg font-semibold text-gray-900 dark:text-white">Este cobro ya no está abierto</p>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-            El link de esta venta venció. Pedile al local un cobro nuevo.
-          </p>
         </div>
       </main>
     );
@@ -72,22 +51,33 @@ export default async function CheckoutPage({ params }: Props) {
     );
   }
 
-  const org = await getOrganizationById(session.org_id);
-  const reusable = isReusableCharge(session.fx_source);
-  const h = await headers();
+  if (session.provider_url) {
+    if (isStubRampCheckoutUrl(session.provider_url)) {
+      const h = await headers();
+      redirect(
+        payerCheckoutUrl(
+          id,
+          h.get("x-forwarded-host") ?? h.get("host"),
+          process.env.NEXT_PUBLIC_SOZU_WALLET_URL,
+        ),
+      );
+    }
+    redirect(session.provider_url);
+  }
+
   return (
-    <PayStandingLink
-      slug={session.id}
-      storeName={org?.name ?? "Tienda"}
-      itemName={session.reference?.trim() || (reusable ? "Pago" : "Venta")}
-      amountUsd={session.amount_usd}
-      collectibleReceipt={isCollectibleCheckout(session.fx_source)}
-      oneShot={!reusable}
-      directWalletCheckoutUrl={payerCheckoutUrl(
-        session.id,
-        h.get("x-forwarded-host") ?? h.get("host"),
-        process.env.NEXT_PUBLIC_SOZU_WALLET_URL,
-      )}
-    />
+    <main className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
+      <div className="w-full max-w-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 text-center">
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white">SozuPay Checkout</h1>
+        <p className="mt-4 text-3xl font-bold">${session.amount_usd}</p>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">USD</p>
+        {session.reference && (
+          <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">Ref: {session.reference}</p>
+        )}
+        <p className="mt-6 text-sm text-gray-600 dark:text-gray-400">
+          Complete your payment to send funds directly to the merchant&apos;s account.
+        </p>
+      </div>
+    </main>
   );
 }

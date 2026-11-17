@@ -10,6 +10,7 @@ import {
   parseStandingPriceUsd,
   payerCheckoutUrl,
   resolveCollectibleReceipt,
+  paymentLinkPath,
   slugFromTitle,
   standingPriceRef,
   STANDING_LINK_COLLECTIBLE_FX_SOURCE,
@@ -24,6 +25,17 @@ describe("slugFromTitle", () => {
 
   it("falls back when the title has no letters", () => {
     assert.equal(slugFromTitle("!!!"), "link");
+  });
+});
+
+describe("paymentLinkPath", () => {
+  it("puts the store ahead of the item so the link is not global", () => {
+    assert.equal(
+      paymentLinkPath("liquid-society", "liquid-society-tee"),
+      "/pay/qr/liquid-society/liquid-society-tee",
+    );
+    assert.equal(paymentLinkPath("not a store", "tee"), null);
+    assert.equal(paymentLinkPath("liquid-society", "../tee"), null);
   });
 });
 

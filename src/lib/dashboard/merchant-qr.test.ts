@@ -26,12 +26,13 @@ describe("qrPointScanUrl", () => {
       qrPointScanUrl(
         {
           slug: "margherita-nfc",
+          storeSlug: "pizzeria",
           destinationType: "pizza_sku",
           destinationRef: COMPLETED_CHECKOUT_ID,
         },
         BASE,
       ),
-      "https://pay.sozu.capital/pay/qr/margherita-nfc",
+      "https://pay.sozu.capital/pay/qr/pizzeria/margherita-nfc",
     );
   });
 
@@ -40,12 +41,13 @@ describe("qrPointScanUrl", () => {
       qrPointScanUrl(
         {
           slug: "front-counter",
+          storeSlug: "cafe",
           destinationType: "checkout",
           destinationRef: COMPLETED_CHECKOUT_ID,
         },
         BASE,
       ),
-      "https://pay.sozu.capital/pay/qr/front-counter",
+      "https://pay.sozu.capital/pay/qr/cafe/front-counter",
     );
   });
 });

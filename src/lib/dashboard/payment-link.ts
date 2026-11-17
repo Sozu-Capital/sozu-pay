@@ -1,3 +1,5 @@
+import { normalizeEditionSize } from "@/lib/dashboard/collectible-edition";
+
 /** Standing payment link: title → slug, fixed USD price, payable many times. */
 
 export const STANDING_PRICE_PREFIX = "price:";
@@ -66,21 +68,41 @@ export type StandingLinkOffer = {
   amountUsd: string;
   productKind: PaymentLinkProductKind;
   collectibleReceipt: boolean;
+  /** Set for a numbered run that shares this URL. Null for an open collectible such as the 5-panel. */
+  editionSize: number | null;
 };
 
-/** `price:12.50`, `price:4.50|drink`, or `price:15.00|collectible`. */
+function editionSizeFromMarks(marks: readonly string[], collectibleReceipt: boolean): number | null {
+  if (!collectibleReceipt) return null;
+  for (const mark of marks) {
+    if (!mark.startsWith("edition:")) continue;
+    const size = normalizeEditionSize(mark.slice("edition:".length));
+    if (size) return size;
+  }
+  return null;
+}
+
+/** `price:12.50`, `price:4.50|drink`, `price:8.00|collectible`, or `price:15.00|collectible|edition:10`. */
 export function standingPriceRef(
   amountUsd: string,
-  options?: { productKind?: PaymentLinkProductKind; collectibleReceipt?: boolean },
+  options?: {
+    productKind?: PaymentLinkProductKind;
+    collectibleReceipt?: boolean;
+    editionSize?: number | null;
+  },
 ): string {
   const productKind = options?.productKind ?? "product";
   const collectibleReceipt = resolveCollectibleReceipt(
     productKind,
     options?.collectibleReceipt ?? false,
   );
+  const editionSize = collectibleReceipt ? normalizeEditionSize(options?.editionSize) : null;
   let ref = `${STANDING_PRICE_PREFIX}${amountUsd}`;
   if (productKind === "drink") ref += "|drink";
-  else if (collectibleReceipt) ref += "|collectible";
+  else if (collectibleReceipt) {
+    ref += "|collectible";
+    if (editionSize) ref += `|edition:${editionSize}`;
+  }
   return ref;
 }
 
@@ -90,10 +112,12 @@ export function parseStandingLink(ref: string | null | undefined): StandingLinkO
   const amountUsd = normalizeUsdAmount(amountRaw);
   if (!amountUsd) return null;
   const productKind: PaymentLinkProductKind = marks.includes("drink") ? "drink" : "product";
+  const collectibleReceipt = resolveCollectibleReceipt(productKind, marks.includes("collectible"));
   return {
     amountUsd,
     productKind,
-    collectibleReceipt: resolveCollectibleReceipt(productKind, marks.includes("collectible")),
+    collectibleReceipt,
+    editionSize: editionSizeFromMarks(marks, collectibleReceipt),
   };
 }
 

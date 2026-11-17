@@ -8,6 +8,7 @@ import {
   resolveCollectibleReceipt,
   standingPriceRef,
 } from "@/lib/dashboard/payment-link";
+import { normalizeEditionSize } from "@/lib/dashboard/collectible-edition";
 import { getLatestPendingCheckoutForOrg } from "@/lib/db/checkout-sessions";
 import {
   destinationRefForQrCreate,
@@ -87,7 +88,19 @@ export async function POST(request: NextRequest) {
         productKind,
         body.collectibleReceipt === true,
       );
-      finalDestinationRef = standingPriceRef(amountUsd, { productKind, collectibleReceipt });
+      const editionProvided = body.editionSize != null && body.editionSize !== "";
+      const editionSize = normalizeEditionSize(body.editionSize);
+      if (collectibleReceipt && editionProvided && editionSize == null) {
+        return NextResponse.json(
+          { error: "Edition size must be a whole number from 1 to 10000" },
+          { status: 400 },
+        );
+      }
+      finalDestinationRef = standingPriceRef(amountUsd, {
+        productKind,
+        collectibleReceipt,
+        editionSize: collectibleReceipt ? editionSize : null,
+      });
     } else {
       const latest =
         destinationType === "checkout"

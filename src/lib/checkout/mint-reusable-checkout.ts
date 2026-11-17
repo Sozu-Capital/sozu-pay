@@ -11,14 +11,21 @@ import { sozuWalletCheckoutUrl } from "@/lib/checkout-url";
  * A fresh Sozu-wallet checkout for a standing payment link or an open amount.
  * Does not expire other charges and does not retarget other links.
  */
+function isUniqueViolation(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /duplicate key|unique constraint|23505/i.test(message);
+}
+
 export async function mintReusableCheckout(params: {
   orgId: string;
   amountUsd: string;
   reference: string;
   fxSource: string;
+  /** Locks one numbered collectible, for example edition:liquid-society:6/10. */
+  idempotencyKey?: string;
 }): Promise<
   | { ok: true; id: string; walletCheckoutUrl: string }
-  | { ok: false; status: number; error: string }
+  | { ok: false; status: number; error: string; conflict?: boolean }
 > {
   const org = await getOrganizationById(params.orgId);
   if (!isCheckoutSettleReady(org)) {
@@ -42,10 +49,14 @@ export async function mintReusableCheckout(params: {
       providerSessionId: id,
       providerUrl: walletCheckoutUrl,
       fxSource: params.fxSource,
+      idempotencyKey: params.idempotencyKey,
       expiresAt: computeCheckoutExpiresAt(),
       paymentMethod: "sozu",
     });
   } catch (err) {
+    if (params.idempotencyKey && isUniqueViolation(err)) {
+      return { ok: false, status: 409, error: "Could not start this payment", conflict: true };
+    }
     console.error("[checkout] mint reusable error:", err);
     return { ok: false, status: 503, error: "Could not start this payment" };
   }

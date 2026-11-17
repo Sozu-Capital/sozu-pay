@@ -48,6 +48,7 @@ export type PayQrRoute =
       amountUsd: string;
       productKind: PaymentLinkProductKind;
       collectibleReceipt: boolean;
+      editionSize: number | null;
     }
   | { kind: "needs_live_checkout"; orgId: string; destinationRef: string | null; name: string };
 
@@ -76,6 +77,7 @@ export function routePayQrPoint(qr: {
       amountUsd: offer.amountUsd,
       productKind: offer.productKind,
       collectibleReceipt: offer.collectibleReceipt,
+      editionSize: offer.editionSize,
     };
   }
   return {

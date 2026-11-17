@@ -42,14 +42,35 @@ describe("standing price", () => {
       amountUsd: "15.00",
       productKind: "product",
       collectibleReceipt: true,
+      editionSize: null,
     });
+    assert.deepEqual(
+      parseStandingLink(
+        standingPriceRef("15.00", { collectibleReceipt: true, editionSize: 10 }),
+      ),
+      {
+        amountUsd: "15.00",
+        productKind: "product",
+        collectibleReceipt: true,
+        editionSize: 10,
+      },
+    );
+    assert.equal(
+      standingPriceRef("15.00", { collectibleReceipt: true, editionSize: 10 }),
+      "price:15.00|collectible|edition:10",
+    );
     assert.deepEqual(
       parseStandingLink(standingPriceRef("4.50", { productKind: "drink", collectibleReceipt: true })),
       {
         amountUsd: "4.50",
         productKind: "drink",
         collectibleReceipt: false,
+        editionSize: null,
       },
+    );
+    assert.equal(
+      parseStandingLink("price:4.50|drink|collectible|edition:10")?.editionSize,
+      null,
     );
   });
 });

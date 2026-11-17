@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { standingLinkFxSource } from "@/lib/dashboard/payment-link";
-import { mintReusableCheckout } from "@/lib/checkout/mint-reusable-checkout";
+import { startStandingSale } from "@/lib/checkout/start-standing-sale";
 import { getQRPointBySlug } from "@/lib/db/merchant-qr-points";
 import { routePayQrPoint } from "@/lib/dashboard/merchant-qr";
 
@@ -26,11 +25,13 @@ export async function POST(_request: Request, { params }: Params) {
     return NextResponse.json({ error: "This link has no price" }, { status: 409 });
   }
 
-  const minted = await mintReusableCheckout({
+  const minted = await startStandingSale({
     orgId: route.orgId,
+    slug: route.slug,
+    name: route.name,
     amountUsd: route.amountUsd,
-    reference: route.name,
-    fxSource: standingLinkFxSource(route.collectibleReceipt),
+    collectibleReceipt: route.collectibleReceipt,
+    editionSize: route.editionSize,
   });
   if (!minted.ok) {
     return NextResponse.json({ error: minted.error }, { status: minted.status });
@@ -42,6 +43,8 @@ export async function POST(_request: Request, { params }: Params) {
     itemName: route.name,
     productKind: route.productKind,
     collectibleReceipt: route.collectibleReceipt,
+    editionNumber: minted.editionNumber,
+    editionSize: minted.editionSize,
     walletCheckoutUrl: minted.walletCheckoutUrl,
   });
 }

@@ -1,3 +1,4 @@
+import { isCheckoutExpired } from "@/lib/checkout/expiration";
 import { reusableChargeSources } from "@/lib/dashboard/payment-link";
 import { getSupabase } from "@/lib/supabase/server";
 
@@ -342,4 +343,55 @@ export async function completeCheckoutSession(
     return null;
   }
   return (data as CheckoutSession) ?? null;
+}
+
+/** Open and finished checkouts that claimed a number on this payment link. */
+export async function listCollectibleEditionSessions(
+  orgId: string,
+  slug: string,
+): Promise<CheckoutSession[]> {
+  const { data, error } = await getSupabase()
+    .from("checkout_sessions")
+    .select("*")
+    .eq("org_id", orgId)
+    .is("deleted_at", null)
+    .like("idempotency_key", "edition:%");
+
+  if (error) throw new Error(error.message);
+  const prefix = `edition:${slug}:`;
+  return ((data ?? []) as CheckoutSession[]).filter((row) =>
+    row.idempotency_key?.startsWith(prefix),
+  );
+}
+
+/** Gives a shirt number back when the checkout failed or expired before payment. */
+export async function releaseStaleCollectibleEdition(
+  session: CheckoutSession,
+  now = new Date(),
+): Promise<void> {
+  const key = session.idempotency_key;
+  if (!key) return;
+  const nowIso = now.toISOString();
+
+  if (session.status === "failed") {
+    const { error } = await getSupabase()
+      .from("checkout_sessions")
+      .update({ idempotency_key: null, updated_at: nowIso })
+      .eq("id", session.id)
+      .eq("status", "failed")
+      .eq("idempotency_key", key);
+    if (error) console.error("[edition] release failed hold:", error.message);
+    return;
+  }
+
+  if (session.status === "pending" && isCheckoutExpired(session.expires_at, now)) {
+    const { error } = await getSupabase()
+      .from("checkout_sessions")
+      .update({ idempotency_key: null, status: "expired", updated_at: nowIso })
+      .eq("id", session.id)
+      .eq("status", "pending")
+      .eq("idempotency_key", key)
+      .lte("expires_at", nowIso);
+    if (error) console.error("[edition] release expired hold:", error.message);
+  }
 }

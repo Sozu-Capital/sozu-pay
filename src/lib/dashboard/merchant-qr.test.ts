@@ -107,6 +107,7 @@ describe("routePayQrPoint", () => {
       amountUsd: "4.50",
       productKind: "product",
       collectibleReceipt: false,
+      editionSize: null,
     });
   });
 
@@ -123,6 +124,21 @@ describe("routePayQrPoint", () => {
     if (shirt.kind === "standing_price") {
       assert.equal(shirt.collectibleReceipt, true);
       assert.equal(shirt.productKind, "product");
+      assert.equal(shirt.editionSize, null);
+    }
+
+    const numbered = routePayQrPoint({
+      name: "Liquid Society Tee",
+      slug: "liquid-society",
+      orgId: "org-cafe",
+      isOnline: true,
+      destinationType: "checkout",
+      destinationRef: "price:15.00|collectible|edition:10",
+    });
+    assert.equal(numbered.kind, "standing_price");
+    if (numbered.kind === "standing_price") {
+      assert.equal(numbered.editionSize, 10);
+      assert.equal(numbered.collectibleReceipt, true);
     }
 
     const drink = routePayQrPoint({

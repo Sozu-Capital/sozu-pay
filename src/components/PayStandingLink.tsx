@@ -8,6 +8,7 @@ export function PayStandingLink({
   itemName,
   amountUsd,
   collectibleReceipt = false,
+  editionSize = null,
   oneShot = false,
   directWalletCheckoutUrl,
 }: {
@@ -16,6 +17,8 @@ export function PayStandingLink({
   itemName: string;
   amountUsd: string;
   collectibleReceipt?: boolean;
+  /** Shared URL for a numbered run. Each sale takes one number, 1/N through N/N. */
+  editionSize?: number | null;
   /** POS sale: payable once. Collectibles stay off. */
   oneShot?: boolean;
   /** Existing checkout. Skips minting another session. */
@@ -50,9 +53,11 @@ export function PayStandingLink({
 
   const note = oneShot
     ? "Este cobro se paga una sola vez. Vas a recibir un comprobante en Sozu."
-    : collectibleReceipt
-      ? "Este link se puede pagar más de una vez. Vas a recibir un comprobante coleccionable en Sozu."
-      : "Este link se puede pagar más de una vez. Vas a recibir un comprobante en Sozu.";
+    : collectibleReceipt && editionSize
+      ? `Este link es el mismo para las ${editionSize} prendas. Cada venta crea un coleccionable único con el número de esa prenda, del 1/${editionSize} al ${editionSize}/${editionSize}.`
+      : collectibleReceipt
+        ? "Este link se puede pagar más de una vez. Vas a recibir un comprobante coleccionable en Sozu."
+        : "Este link se puede pagar más de una vez. Vas a recibir un comprobante en Sozu.";
 
   return (
     <main className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">

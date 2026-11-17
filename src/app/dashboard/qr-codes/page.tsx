@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { qrPointScanUrl } from "@/lib/dashboard/merchant-qr";
 import type { QrPointDestinationType } from "@/lib/dashboard/merchant-qr";
+import { normalizeEditionSize } from "@/lib/dashboard/collectible-edition";
 import { parseStandingLink, parseStandingPriceUsd, slugFromTitle } from "@/lib/dashboard/payment-link";
 
 type QRPoint = {
@@ -27,6 +28,7 @@ export default function QRCodesPage() {
   const [amount, setAmount] = useState("");
   const [productKind, setProductKind] = useState<"product" | "drink">("product");
   const [collectibleOn, setCollectibleOn] = useState(true);
+  const [editionSize, setEditionSize] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,6 +63,12 @@ export default function QRCodesPage() {
       setError(t("errorAmount"));
       return;
     }
+    const collectibleReceipt = productKind === "product" && collectibleOn;
+    const edition = collectibleReceipt ? normalizeEditionSize(editionSize) : null;
+    if (collectibleReceipt && editionSize.trim() && edition == null) {
+      setError(t("errorEdition"));
+      return;
+    }
 
     setBusy(true);
     try {
@@ -71,7 +79,8 @@ export default function QRCodesPage() {
           name: name.trim(),
           amountUsd: amount.trim().replace(",", "."),
           productKind,
-          collectibleReceipt: productKind === "product" && collectibleOn,
+          collectibleReceipt,
+          editionSize: edition,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -83,6 +92,7 @@ export default function QRCodesPage() {
       setAmount("");
       setProductKind("product");
       setCollectibleOn(true);
+      setEditionSize("");
       setShowForm(false);
       load();
     } finally {
@@ -224,6 +234,23 @@ export default function QRCodesPage() {
             </span>
           </label>
 
+          {productKind === "product" && collectibleOn && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {t("editionLabel")}
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={editionSize}
+                onChange={(e) => setEditionSize(e.target.value.replace(/[^\d]/g, ""))}
+                placeholder={t("editionPlaceholder")}
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("editionHint")}</p>
+            </div>
+          )}
+
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {t("slugPreview", { slug: slugFromTitle(name || t("namePlaceholder")) })}
           </p>
@@ -247,6 +274,7 @@ export default function QRCodesPage() {
                 setAmount("");
                 setProductKind("product");
                 setCollectibleOn(true);
+                setEditionSize("");
               }}
               className="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium"
             >
@@ -310,13 +338,20 @@ export default function QRCodesPage() {
                         const offer = parseStandingLink(qr.destinationRef);
                         if (!offer) return null;
                         return (
-                          <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-200">
-                            {offer.productKind === "drink"
-                              ? t("drinkBadge")
-                              : offer.collectibleReceipt
-                                ? t("collectibleBadge")
-                                : t("productKindProduct")}
-                          </span>
+                          <>
+                            <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-200">
+                              {offer.productKind === "drink"
+                                ? t("drinkBadge")
+                                : offer.collectibleReceipt
+                                  ? t("collectibleBadge")
+                                  : t("productKindProduct")}
+                            </span>
+                            {offer.editionSize ? (
+                              <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-200">
+                                {t("editionBadge", { size: offer.editionSize })}
+                              </span>
+                            ) : null}
+                          </>
                         );
                       })()}
                     </div>

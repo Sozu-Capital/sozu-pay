@@ -126,6 +126,7 @@ export default async function PayQRPage({ params, searchParams }: Props) {
         itemName={route.name}
         amountUsd={route.amountUsd}
         collectibleReceipt={route.collectibleReceipt}
+        editionSize={route.editionSize}
       />
     );
   }

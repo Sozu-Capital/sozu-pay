@@ -5,6 +5,10 @@ export const PIZZA_SYMBOL = "PIZZA";
 export const PIZZA_DECIMALS = 0;
 export const PIZZA_PREMINT = 20;
 
+export function isPizzaTokenConfigured(): boolean {
+  return Boolean(process.env.SOROBAN_PIZZA_TOKEN_ID?.trim());
+}
+
 export function getPizzaTokenId(): string {
   const fromEnv = process.env.SOROBAN_PIZZA_TOKEN_ID?.trim();
   if (!fromEnv) {

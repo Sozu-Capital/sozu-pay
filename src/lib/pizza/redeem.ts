@@ -56,6 +56,21 @@ export function pizzaRedeemWalletSignUrl(params: {
   return url.toString();
 }
 
+/** Store-checkout UI on the wallet — never /auth auto-sign. */
+export function pizzaWalletCheckoutUrl(params: {
+  walletOrigin: string;
+  slug: string;
+  /** Store segment so a shared item name still opens this shop's pizza. */
+  storeSlug?: string | null;
+}): string {
+  const origin = params.walletOrigin.replace(/\/$/, "");
+  const slug = encodeURIComponent(params.slug.trim().toLowerCase());
+  const url = new URL(`${origin}/checkout/pizza/${slug}`);
+  const store = params.storeSlug?.trim().toLowerCase();
+  if (store) url.searchParams.set("store", store);
+  return url.toString();
+}
+
 export function getWalletOrigin(): string {
   return (
     process.env.NEXT_PUBLIC_SOZU_WALLET_URL?.replace(/\/$/, "") ||
@@ -72,41 +87,23 @@ export type PizzaSkuSearch = {
 
 export type PizzaSkuGuestNext =
   | { kind: "intent"; intentId: string }
-  | { kind: "hop"; url: string }
-  | { kind: "auto_redeem"; guestAddress: string }
-  | { kind: "chrome" };
+  | { kind: "hop"; url: string };
 
-export function pizzaWalletHopUrl(params: {
-  walletOrigin: string;
-  payUrl: string;
-}): string {
-  const returnTo = new URL(params.payUrl);
-  returnTo.searchParams.set("hopped", "1");
-  const url = new URL("/auth", params.walletOrigin.replace(/\/$/, ""));
-  url.searchParams.set("return_to", returnTo.toString());
-  return url.toString();
-}
-
-/** Pay.sozu.capital never prompts passkey/PIN — hop or chrome only. */
+/** Pay.sozu.capital never prompts passkey/PIN — hop to wallet store checkout. */
 export function nextPizzaSkuGuestAction(
   search: PizzaSkuSearch,
-  ctx: { payUrl: string; walletOrigin: string },
+  ctx: { slug: string; walletOrigin: string; storeSlug?: string | null },
 ): PizzaSkuGuestNext {
   const intentId = search.intent?.trim();
   if (intentId) return { kind: "intent", intentId };
-
-  if (search.pizza?.trim() === "0") return { kind: "chrome" };
-
-  const guest = search.guest?.trim().toUpperCase();
-  const pizzaRaw = search.pizza?.trim();
-  const pizzaCount = pizzaRaw === undefined || pizzaRaw === "" ? null : Number(pizzaRaw);
-  if (guest && (pizzaCount === null || pizzaCount >= 1)) {
-    return { kind: "auto_redeem", guestAddress: guest };
-  }
-
-  if (search.hopped === "1") return { kind: "chrome" };
-
-  return { kind: "hop", url: pizzaWalletHopUrl(ctx) };
+  return {
+    kind: "hop",
+    url: pizzaWalletCheckoutUrl({
+      walletOrigin: ctx.walletOrigin,
+      slug: ctx.slug,
+      storeSlug: ctx.storeSlug,
+    }),
+  };
 }
 
 export function parseStellarTxHash(raw: string): string | null {

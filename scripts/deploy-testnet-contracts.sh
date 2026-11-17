@@ -12,7 +12,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-WASM="$ROOT/contracts/disbursement_wallet/target/wasm32-unknown-unknown/release/disbursement_wallet.wasm"
+WASM="$ROOT/contracts/disbursement_wallet/target/wasm32v1-none/release/disbursement_wallet.wasm"
 DOCS="$ROOT/docs/02-contracts/testnet-contracts.md"
 USDC_ISSUER="GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
 RPC_URL="${SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}"
@@ -42,10 +42,9 @@ if [[ -z "${STELLAR_FUNDER_SECRET:-}" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$WASM" ]]; then
-  echo "Building disbursement_wallet WASM…"
-  (cd "$ROOT/contracts/disbursement_wallet" && cargo build --target wasm32-unknown-unknown --release)
-fi
+# Always rebuild: a stale WASM left in target/ would upload an unpatched contract.
+echo "Building disbursement_wallet WASM…"
+(cd "$ROOT/contracts/disbursement_wallet" && stellar contract build)
 
 echo "Uploading disbursement_wallet WASM to testnet…"
 UPLOAD_OUT="$(stellar contract upload \

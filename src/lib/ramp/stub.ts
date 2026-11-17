@@ -3,6 +3,7 @@
  * Replace with a real implementation (bridge.ts, circle.ts, etc.) by swapping the
  * export in provider.ts once a vendor is chosen.
  */
+import { originOfRedirect } from "@/lib/dashboard/payment-link";
 import type {
   RampProvider,
   DepositSessionParams,
@@ -19,7 +20,8 @@ function stubId() {
 export const stubProvider: RampProvider = {
   async createDepositSession(params: DepositSessionParams): Promise<DepositSession> {
     const sessionId = stubId();
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const fallback = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const appUrl = originOfRedirect(params.redirectUrl, fallback);
     return {
       sessionId,
       url: `${appUrl}/ramp/stub-checkout?ref=${params.externalRef}&session=${sessionId}&amount=${params.amountUsd}&redirect=${encodeURIComponent(params.redirectUrl)}${params.paymentMethod ? `&method=${params.paymentMethod}` : ""}`,

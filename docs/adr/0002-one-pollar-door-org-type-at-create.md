@@ -1,0 +1,3 @@
+# One Pollar door; organization type at create
+
+Two landings (`/` vs `/merchants`) were inferring **Store** vs **NGO** from the URL, and ADR 0001 left merchants on passkey. That made auth look like two products and hid the type choice. We use a single **Pollar login** (Google) at `/`; `/merchants` redirects there. Passkey/PIN remain existing-account recovery only. Type is a required, one-shot picker at org create: **Store with POS** (`store`) vs **Distribution platform** (`ngo`). One Staff Pollar G funds one org. New stores use the Pollar **Org treasury wallet** (no passkey gate for POS). Rejected: keeping `/merchants` as a store-intent cookie, a third `distribution` type, and forcing a passkey treasury on new Google merchants.

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
-import SendUsdcForm, { type PayoutSuccess, type StellarPayoutBody } from "@/components/SendUsdcForm";
+import { type PayoutSuccess, type StellarPayoutBody } from "@/components/SendUsdcForm";
 import PayoutStatusModal, { type PayoutModalSuccess } from "@/components/PayoutStatusModal";
 import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
 import { executePasskeySorobanPayout } from "@/lib/stellar/smartAccounts/signSorobanPayout";
@@ -15,6 +15,7 @@ import {
 interface Payout {
   id: string;
   amount: string;
+  asset?: string;
   type: string;
   recipientLabel?: string;
   stellarTxHash?: string;
@@ -57,7 +58,7 @@ export default function PayoutsPage() {
   const [lastSuccess, setLastSuccess] = useState<PayoutSuccess | null>(null);
   const [payoutModalOpen, setPayoutModalOpen] = useState(false);
   const [payoutModalStatus, setPayoutModalStatus] = useState<"confirm" | "submitting" | "success" | "failed">("confirm");
-  const [payoutModalSummary, setPayoutModalSummary] = useState<{ amount: string; destination?: string; recipientLabel?: string } | null>(null);
+  const [payoutModalSummary, setPayoutModalSummary] = useState<{ amount: string; destination?: string; recipientLabel?: string; asset?: string } | null>(null);
   const [payoutModalSuccess, setPayoutModalSuccess] = useState<PayoutModalSuccess | null>(null);
   const [payoutModalError, setPayoutModalError] = useState<string | null>(null);
   const [userDisplayName, setUserDisplayName] = useState<string>("");
@@ -222,12 +223,14 @@ export default function PayoutsPage() {
                 destination: result.payout.stellarAddress ?? body.destination,
                 recipientLabel: result.payout.recipientLabel ?? body.recipientLabel,
                 stellarTxHash: result.stellarTxHash,
+                asset: body.asset ?? "USDC",
               });
               setLastSuccess({
                 amount: body.amount,
                 destination: body.destination,
                 recipientLabel: body.recipientLabel,
                 stellarTxHash: result.stellarTxHash,
+                asset: body.asset,
               });
               loadPayouts();
             } catch (err) {
@@ -257,12 +260,14 @@ export default function PayoutsPage() {
                 destination: result.payout.stellarAddress ?? body.destination,
                 recipientLabel: result.payout.recipientLabel ?? body.recipientLabel,
                 stellarTxHash: result.stellarTxHash,
+                asset: body.asset ?? "USDC",
               });
               setLastSuccess({
                 amount: body.amount,
                 destination: body.destination,
                 recipientLabel: body.recipientLabel,
                 stellarTxHash: result.stellarTxHash,
+                asset: body.asset,
               });
               loadPayouts();
             } catch (err) {
@@ -301,8 +306,9 @@ export default function PayoutsPage() {
               destination: p.stellarAddress ?? body.destination,
               recipientLabel: p.recipientLabel,
               stellarTxHash: p.stellarTxHash,
+              asset: body.asset ?? "USDC",
             });
-            setLastSuccess({ amount: body.amount, destination: body.destination, recipientLabel: body.recipientLabel, stellarTxHash: p.stellarTxHash });
+            setLastSuccess({ amount: body.amount, destination: body.destination, recipientLabel: body.recipientLabel, stellarTxHash: p.stellarTxHash, asset: body.asset });
             loadPayouts();
           } else {
             setPayoutModalStatus("failed");
@@ -445,7 +451,7 @@ export default function PayoutsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">{t("title")}</h1>
+      <h1 className="text-2xl font-bold text-white">{t("title")}</h1>
       <p className="mt-1 text-gray-600 dark:text-gray-400">
         {t("subtitle")}
       </p>
@@ -586,6 +592,7 @@ export default function PayoutsPage() {
             <p className="mt-1 text-sm text-green-700 dark:text-green-300">
               {t("sentTo", {
                 amount: lastSuccess.amount,
+                asset: lastSuccess.asset ?? "USDC",
                 dest: lastSuccess.destination.slice(0, 8),
                 tail: lastSuccess.destination.slice(-4),
                 label: lastSuccess.recipientLabel ? ` (${lastSuccess.recipientLabel})` : "",
@@ -615,38 +622,17 @@ export default function PayoutsPage() {
         </div>
       )}
 
-      <section className="mt-8">
+      <section className="mt-8 max-w-lg rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-5">
         <h2 className="text-lg font-semibold">{t("sendUsdcTitle")}</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           {t("sendUsdcSubtitle")}
         </p>
-        <SendUsdcForm
-          onSubmitting={(summary, body) => {
-            setPayoutModalSummary(summary);
-            setPayoutModalSuccess(null);
-            setPayoutModalError(null);
-            setPayoutModalBatchCount(null);
-            setPendingConfirmBody(body);
-            setPendingBatchBody(null);
-            setPayoutModalStatus("confirm");
-            setPayoutModalOpen(true);
-          }}
-          onSent={(payout) => {
-            setPayoutModalStatus("success");
-            setPayoutModalSuccess(payout);
-            setLastSuccess(payout);
-            loadPayouts();
-          }}
-          onFailed={(error) => {
-            setPayoutModalStatus("failed");
-            setPayoutModalError(error);
-          }}
-          onRequireUnlock={(body) => {
-            setPayoutModalOpen(false);
-            setPendingPayoutBody(body);
-            setShowUnlockModal(true);
-          }}
-        />
+        <Link
+          href="/dashboard/send"
+          className="mt-4 inline-flex rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 text-sm font-medium hover:opacity-90"
+        >
+          {t("sendNewRecipientCta")}
+        </Link>
       </section>
 
       <PayoutStatusModal
@@ -804,7 +790,7 @@ export default function PayoutsPage() {
               {payouts.map((p) => (
                 <tr key={p.id} className="border-t border-gray-200 dark:border-gray-700">
                   <td className="p-3">{new Date(p.createdAt).toLocaleString()}</td>
-                  <td className="p-3">{p.amount} USDC</td>
+                  <td className="p-3">{p.amount} {p.asset ?? "USDC"}</td>
                   <td className="p-3">{t("payoutType")}{p.recipientLabel ? ` – ${p.recipientLabel}` : ""}</td>
                   <td className="p-3 capitalize">{p.status}</td>
                   <td className="p-3">

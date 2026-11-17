@@ -3,6 +3,8 @@ import type { PollarVerifiedIdentity } from "./types";
 /** Minimal user shape needed for redirect planning (avoids DB import in unit tests). */
 export type PollarBridgeUser = {
   org_id: string | null;
+  /** Distinct orgs the user can open. >1 means do not auto-select an org. */
+  membershipCount?: number;
 };
 
 /** Stable SozuPay mapping stored in users.privy_user_id for Pollar subjects. */
@@ -20,14 +22,16 @@ export function isPollarMappedUser(user: { privy_user_id: string }): boolean {
 /**
  * After Pollar login, where should we send the user?
  * - returnTo wins
- * - existing primary org → dashboard (resume; no forced re-onboarding)
- * - otherwise org picker / create flow
+ * - multiple orgs → picker (never silently switch org)
+ * - single primary org → dashboard
+ * - otherwise create-org
  */
 export function resolvePollarPostAuthRedirect(
   user: PollarBridgeUser,
   returnTo?: string,
 ): string {
   if (returnTo && returnTo.startsWith("/")) return returnTo;
+  if ((user.membershipCount ?? 0) > 1) return "/onboarding/organizations";
   if (user.org_id) return "/dashboard";
   return "/onboarding/create-organization";
 }

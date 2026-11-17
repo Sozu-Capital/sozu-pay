@@ -8,6 +8,7 @@ export interface PayoutRecord {
   userId: string;
   orgId?: string | null;
   amount: string;
+  asset?: "USDC" | "PIZZA";
   type: "to_bank" | "to_stellar";
   bankAccountId?: string;
   stellarAddress?: string;
@@ -43,6 +44,7 @@ export function createPayout(
     stellarAddress?: string;
     recipientLabel?: string;
     orgId?: string | null;
+    asset?: "USDC" | "PIZZA";
   }
 ): PayoutRecord {
   const id = `payout-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -60,6 +62,7 @@ export function ensurePendingPayout(
     stellarAddress?: string;
     recipientLabel?: string;
     orgId?: string | null;
+    asset?: "USDC" | "PIZZA";
   }
 ): PayoutRecord {
   const store = getStore();
@@ -71,6 +74,7 @@ export function ensurePendingPayout(
       existing.stellarAddress = opts.stellarAddress ?? existing.stellarAddress;
       existing.recipientLabel = opts.recipientLabel ?? existing.recipientLabel;
       existing.orgId = opts.orgId ?? existing.orgId;
+      existing.asset = opts.asset ?? existing.asset;
     }
     return existing;
   }
@@ -80,6 +84,7 @@ export function ensurePendingPayout(
     userId,
     orgId: opts.orgId ?? null,
     amount,
+    asset: opts.asset,
     type: opts.type,
     bankAccountId: opts.bankAccountId,
     stellarAddress: opts.stellarAddress,

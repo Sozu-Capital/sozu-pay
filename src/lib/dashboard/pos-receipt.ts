@@ -18,6 +18,7 @@ export type PosReceiptFields = {
   paidAtLabel: string;
   paymentId: string;
   reference: string | null;
+  txHash: string | null;
 };
 
 export function buildPosReceiptFields(input: {
@@ -27,13 +28,16 @@ export function buildPosReceiptFields(input: {
   paidAtIso: string | null;
   paymentId: string;
   reference: string | null;
+  txHash?: string | null;
   locale?: string;
 }): PosReceiptFields {
+  const hash = input.txHash?.trim() ?? "";
   return {
     amountClpDisplay: input.formatAmount(input.amountClp),
     currencyLabel: input.currencyLabel,
     paidAtLabel: formatPosReceiptTime(input.paidAtIso, input.locale),
     paymentId: input.paymentId,
     reference: input.reference?.trim() ? input.reference.trim() : null,
+    txHash: /^[a-fA-F0-9]{64}$/.test(hash) ? hash : null,
   };
 }

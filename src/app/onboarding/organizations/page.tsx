@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { SozuLoadingMark } from "@/components/SozuLoadingMark";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 
 type Org = { id: string; name: string };
@@ -13,6 +14,8 @@ export default function OrganizationsPage() {
   const t = useTranslations("onboardingPages.organizations");
   const tCommon = useTranslations("onboardingPages");
   const [organizations, setOrganizations] = useState<Org[]>([]);
+  const [canCreate, setCanCreate] = useState(true);
+  const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectingId, setSelectingId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -30,7 +33,8 @@ export default function OrganizationsPage() {
       .then(async (d) => {
         const orgs: Org[] = d.organizations ?? [];
         setOrganizations(orgs);
-        // Single-org: skip picker and enter dashboard
+        setCanCreate(d.canCreate !== false);
+        setActiveOrgId(typeof d.activeOrgId === "string" ? d.activeOrgId : null);
         if (orgs.length === 1) {
           setSelectingId(orgs[0].id);
           try {
@@ -85,7 +89,7 @@ export default function OrganizationsPage() {
     return (
       <DarkGradientBg>
         <main className="min-h-screen flex flex-col items-center justify-center p-4 dark text-white">
-          <p className="text-sm text-gray-300">{tCommon("loading")}</p>
+          <SozuLoadingMark />
         </main>
       </DarkGradientBg>
     );
@@ -98,7 +102,9 @@ export default function OrganizationsPage() {
       <main className="min-h-screen flex flex-col items-center justify-center p-4 dark text-white">
         <div className="w-full max-w-md rounded-xl border border-white/10 bg-black/40 backdrop-blur-sm p-6 shadow-xl">
           <h1 className="text-xl font-semibold text-white">{t("title")}</h1>
-          <p className="mt-2 text-sm text-gray-300">{t("subtitle")}</p>
+          <p className="mt-2 text-sm text-gray-300">
+            {canCreate ? t("subtitle") : t("subtitleOwned")}
+          </p>
 
           {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
 
@@ -112,7 +118,10 @@ export default function OrganizationsPage() {
                     disabled={!!selectingId}
                     className="w-full rounded-md border border-white/10 bg-white/5 py-3 px-4 text-left font-medium text-white hover:bg-white/10 disabled:opacity-50 transition-colors"
                   >
-                    <span className="block truncate">{org.name}</span>
+                    <span className="block truncate">
+                      {org.name}
+                      {activeOrgId === org.id ? ` · ${t("current")}` : ""}
+                    </span>
                     <span className="block text-xs text-gray-400 mt-0.5">
                       {selectingId === org.id ? t("opening") : t("continue")}
                     </span>
@@ -122,14 +131,16 @@ export default function OrganizationsPage() {
             </ul>
           )}
 
-          <div className="mt-6 flex flex-col gap-3">
-            <Link
-              href="/onboarding/create-organization"
-              className="w-full text-center rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium hover:opacity-90 transition-opacity"
-            >
-              {t("createNew")}
-            </Link>
-          </div>
+          {canCreate ? (
+            <div className="mt-6 flex flex-col gap-3">
+              <Link
+                href="/onboarding/create-organization?new=1"
+                className="w-full text-center rounded-md bg-white text-gray-900 py-2.5 px-4 font-medium hover:opacity-90 transition-opacity"
+              >
+                {t("createNew")}
+              </Link>
+            </div>
+          ) : null}
 
           {!hasOrgs && (
             <p className="mt-4 text-sm text-gray-400">{t("noOrgHint")}</p>

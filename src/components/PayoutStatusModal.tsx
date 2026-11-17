@@ -13,6 +13,7 @@ export type PayoutModalSuccess = {
   destination?: string;
   recipientLabel?: string;
   stellarTxHash?: string;
+  asset?: string;
   /** When set, modal shows batch success (N payouts sent). */
   batchCount?: number;
 };
@@ -35,7 +36,7 @@ export default function PayoutStatusModal({
   onClose: () => void;
   status: Status;
   userName?: string;
-  payoutSummary?: { amount: string; destination?: string; recipientLabel?: string };
+  payoutSummary?: { amount: string; destination?: string; recipientLabel?: string; asset?: string };
   successData?: PayoutModalSuccess | null;
   errorMessage?: string | null;
   /** When set, submitting/success copy is for batch payout (e.g. "Confirm batch", "N payouts sent"). */
@@ -63,6 +64,7 @@ export default function PayoutStatusModal({
     const labelSuffix = payoutSummary.recipientLabel ? ` ${payoutSummary.recipientLabel}` : "";
     return t("singleSummary", {
       amount: payoutSummary.amount,
+      asset: payoutSummary.asset ?? "USDC",
       recipient: labelSuffix,
       destination: destSuffix,
     });
@@ -157,6 +159,7 @@ export default function PayoutStatusModal({
                 ? t("successBatchLine", { count: successData.batchCount })
                 : t("successSingleLine", {
                     amount: successData.amount,
+                    asset: successData.asset ?? "USDC",
                     recipient: successData.recipientLabel ? ` ${successData.recipientLabel}` : "",
                   })}
             </p>

@@ -10,12 +10,18 @@ import {
   executeAndCompletePollarClientPayout,
   isPollarClientTxChallenge,
 } from "@/lib/pollar/complete-client-payout";
+import { parseWholeClpAmount } from "@/lib/pos/clp-pricing";
+import { cn } from "@/lib/utils";
+import type { PayoutAsset } from "@/lib/payouts/asset";
+
+type PayCurrency = "USDC" | "CLP";
 
 export type StellarPayoutBody = {
   amount: string;
   toStellar: true;
   destination: string;
   recipientLabel?: string;
+  asset?: PayoutAsset;
 };
 
 export type PayoutSuccess = {
@@ -23,10 +29,16 @@ export type PayoutSuccess = {
   destination: string;
   recipientLabel?: string;
   stellarTxHash?: string;
+  asset?: PayoutAsset;
 };
 
 function formatTagLabel(tag: string): string {
   return `$${tag.replace(/^\$+/, "")}`;
+}
+
+function shortStellarAddress(address: string): string {
+  if (address.length <= 8) return address;
+  return `${address.slice(0, 4)}…${address.slice(-4)}`;
 }
 
 export default function SendUsdcForm({
@@ -40,18 +52,49 @@ export default function SendUsdcForm({
   onRequireUnlock?: (body: StellarPayoutBody) => void;
   /** When provided, form opens confirm flow (parent shows modal and submits on confirm). Receives summary and body so parent can submit later. */
   onSubmitting?: (
-    summary: { amount: string; destination: string; recipientLabel?: string },
+    summary: { amount: string; destination: string; recipientLabel?: string; asset: PayoutAsset },
     body: StellarPayoutBody
   ) => void;
 }) {
   const t = useTranslations("sendUsdcForm");
   const [recipientInput, setRecipientInput] = useState("");
   const [amount, setAmount] = useState("");
+  const [currency, setCurrency] = useState<PayCurrency>("USDC");
+  const [settledUsdc, setSettledUsdc] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [resolvedAddress, setResolvedAddress] = useState<string | null>(null);
   const [resolvedTag, setResolvedTag] = useState<string | null>(null);
+
+  function selectCurrency(next: PayCurrency) {
+    setCurrency(next);
+    setAmount("");
+    setSettledUsdc(null);
+  }
+
+  useEffect(() => {
+    if (currency !== "CLP" || parseWholeClpAmount(amount) == null) {
+      setSettledUsdc(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      fetch(`/api/fx/clp?amount=${encodeURIComponent(amount.trim())}`, { credentials: "include" })
+        .then(async (r) => {
+          const data = await r.json().catch(() => ({}));
+          if (cancelled) return;
+          setSettledUsdc(r.ok && typeof data.amountUsd === "string" ? data.amountUsd : null);
+        })
+        .catch(() => {
+          if (!cancelled) setSettledUsdc(null);
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [amount, currency]);
 
   const directAddress = useMemo(() => {
     const n = normalizeStellarAddressInput(recipientInput);
@@ -115,24 +158,44 @@ export default function SendUsdcForm({
     };
   }, [recipientInput, directAddress, t]);
 
-  async function resolveDestination(): Promise<StellarPayoutBody | null> {
+  async function settlementUsdcAmount(): Promise<string | null> {
+    if (currency === "USDC") return amount.trim();
+    try {
+      const res = await fetch(`/api/fx/clp?amount=${encodeURIComponent(amount.trim())}`, {
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || typeof data.amountUsd !== "string") {
+        onFailed?.(t("quoteFailed"));
+        return null;
+      }
+      return data.amountUsd;
+    } catch {
+      onFailed?.(t("quoteFailed"));
+      return null;
+    }
+  }
+
+  async function resolveDestination(usdcAmount: string): Promise<StellarPayoutBody | null> {
     const trimmed = recipientInput.trim();
-    if (!trimmed || !amount.trim()) return null;
+    if (!trimmed || !usdcAmount) return null;
 
     if (directAddress) {
       return {
-        amount,
+        amount: usdcAmount,
         toStellar: true,
         destination: directAddress,
+        asset: "USDC",
       };
     }
 
     if (resolvedAddress) {
       return {
-        amount,
+        amount: usdcAmount,
         toStellar: true,
         destination: resolvedAddress,
         recipientLabel: resolvedTag ? formatTagLabel(resolvedTag) : undefined,
+        asset: "USDC",
       };
     }
 
@@ -150,11 +213,12 @@ export default function SendUsdcForm({
         return null;
       }
       return {
-        amount,
+        amount: usdcAmount,
         toStellar: true,
         destination: data.walletAddress,
         recipientLabel:
           typeof data.tag === "string" ? formatTagLabel(data.tag) : undefined,
+        asset: "USDC",
       };
     } catch {
       onFailed?.(t("resolveFailed"));
@@ -166,13 +230,16 @@ export default function SendUsdcForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const body = await resolveDestination();
+    const usdcAmount = await settlementUsdcAmount();
+    if (!usdcAmount) return;
+    const body = await resolveDestination(usdcAmount);
     if (!body) return;
 
     const summary = {
-      amount,
+      amount: usdcAmount,
       destination: body.destination,
       recipientLabel: body.recipientLabel ?? (resolvedTag ? formatTagLabel(resolvedTag) : undefined),
+      asset: "USDC" as const,
     };
 
     if (onSubmitting) {
@@ -224,10 +291,11 @@ export default function SendUsdcForm({
             setResolvedAddress(null);
             setResolvedTag(null);
             onSent?.({
-              amount: typeof result.payout.amount === "string" ? result.payout.amount : amount,
+              amount: typeof result.payout.amount === "string" ? result.payout.amount : body.amount,
               destination: result.payout.stellarAddress ?? body.destination,
               recipientLabel: result.payout.recipientLabel ?? body.recipientLabel,
               stellarTxHash: result.stellarTxHash,
+              asset: "USDC",
             });
           } catch (err) {
             const msg = err instanceof Error ? err.message : "Pollar payout failed.";
@@ -243,10 +311,11 @@ export default function SendUsdcForm({
           setResolvedAddress(null);
           setResolvedTag(null);
           onSent?.({
-            amount: typeof p.amount === "string" ? p.amount : amount,
+            amount: typeof p.amount === "string" ? p.amount : body.amount,
             destination: p.stellarAddress ?? body.destination,
             recipientLabel: p.recipientLabel ?? body.recipientLabel,
             stellarTxHash: p.stellarTxHash,
+            asset: "USDC",
           });
         } else if (d.error) {
           if (onFailed) onFailed(d.error);
@@ -262,22 +331,57 @@ export default function SendUsdcForm({
   }
 
   const canSubmit =
-    !!amount.trim() &&
+    (currency === "USDC" ? !!amount.trim() : parseWholeClpAmount(amount) != null) &&
     (!!directAddress || !!resolvedAddress) &&
     !resolving &&
     !resolveError;
 
+  const fieldClass =
+    "mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-violet-500";
+
   return (
-    <form onSubmit={handleSubmit} className="mt-3 flex flex-wrap gap-2 items-end max-w-md">
-      <div className="min-w-[16rem] flex-1">
-        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
+    <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+      <div>
+        <p className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t("assetLabel")}</p>
+        <div
+          role="radiogroup"
+          aria-label={t("assetLabel")}
+          className="mt-2 inline-flex rounded-full border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 p-0.5"
+        >
+          {(["USDC", "CLP"] as const).map((option) => {
+            const selected = currency === option;
+            return (
+              <button
+                key={option}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => selectCurrency(option)}
+                className={cn(
+                  "rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
+                  selected
+                    ? "bg-gray-900 text-white shadow-sm dark:bg-white dark:text-gray-900"
+                    : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+                )}
+              >
+                {option === "USDC" ? t("assetUsdc") : t("assetPesos")}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <label htmlFor="send-recipient" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           {t("recipientLabel")}
         </label>
         <input
+          id="send-recipient"
           value={recipientInput}
           onChange={(e) => setRecipientInput(e.target.value)}
           placeholder={t("recipientPlaceholder")}
-          className="mt-1 w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm"
+          autoComplete="off"
+          className={fieldClass}
         />
         {resolving ? (
           <p className="mt-1 text-xs text-gray-500">{t("resolving")}</p>
@@ -285,31 +389,39 @@ export default function SendUsdcForm({
           <p className="mt-1 text-xs text-red-600 dark:text-red-400">{resolveError}</p>
         ) : resolvedTag && resolvedAddress ? (
           <p className="mt-1 text-xs text-green-700 dark:text-green-400">
-            {t("resolvedTo", { tag: formatTagLabel(resolvedTag), address: resolvedAddress.slice(0, 8) })}
+            {t("resolvedTo", { tag: formatTagLabel(resolvedTag), address: shortStellarAddress(resolvedAddress) })}
           </p>
         ) : directAddress ? (
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("directAddress")}</p>
         ) : null}
       </div>
+
       <div>
-        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
-          {t("amountLabel")}
+        <label htmlFor="send-amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          {currency === "CLP" ? t("amountLabelPesos") : t("amountLabel")}
         </label>
         <input
+          id="send-amount"
           type="text"
-          inputMode="decimal"
+          inputMode={currency === "CLP" ? "numeric" : "decimal"}
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          placeholder="0"
-          className="mt-1 w-24 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm"
+          placeholder={currency === "CLP" ? "0" : "0.00"}
+          className={fieldClass}
         />
+        {currency === "CLP" && settledUsdc ? (
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {t("settlesAs", { amount: settledUsdc })}
+          </p>
+        ) : null}
       </div>
+
       <button
         type="submit"
         disabled={loading || !canSubmit}
-        className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm disabled:opacity-50"
+        className="w-full rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 py-2.5 px-4 font-medium hover:opacity-90 disabled:opacity-50"
       >
-        {loading ? t("sending") : t("send")}
+        {loading ? t("sending") : currency === "CLP" ? t("sendPesos") : t("send")}
       </button>
     </form>
   );

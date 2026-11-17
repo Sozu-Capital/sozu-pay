@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  CHECKOUT_PERSIST_FAILED_CODE,
   buildPaymentRequestResponse,
+  checkoutPersistFailureBody,
   decideIdempotentReplay,
   parsePaymentRequestBody,
 } from "./create-payment-request.js";
@@ -95,5 +97,13 @@ describe("buildPaymentRequestResponse", () => {
     assert.match(res.checkoutUrl, /\/checkout\/cs_abc$/);
     assert.equal(res.amountClp, "9500");
     assert.equal(res.idempotentReplay, false);
+  });
+});
+
+describe("checkoutPersistFailureBody", () => {
+  it("does not include a checkoutUrl when the session row was not saved", () => {
+    const body = checkoutPersistFailureBody();
+    assert.equal(body.code, CHECKOUT_PERSIST_FAILED_CODE);
+    assert.equal("checkoutUrl" in body, false);
   });
 });

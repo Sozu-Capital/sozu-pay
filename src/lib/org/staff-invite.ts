@@ -49,12 +49,29 @@ export function isValidOrgInviteRole(role: unknown): role is OrgInviteRole {
   );
 }
 
+export type UserAdminLevel = "user" | "admin" | "super_admin";
+
+const ADMIN_LEVEL_RANK: Record<UserAdminLevel, number> = {
+  user: 0,
+  admin: 1,
+  super_admin: 2,
+};
+
 /** Map invite role → users.admin_level used by existing auth gates. */
 export function mapInviteRoleToAdminLevel(
   role: OrgInviteRole,
 ): "user" | "admin" {
   if (role === "admin" || role === "treasury_manager") return "admin";
   return "user";
+}
+
+/** Never demote a creator/admin of another org when they accept a lesser invite. */
+export function nextAdminLevelAfterInvite(
+  current: UserAdminLevel,
+  inviteRole: OrgInviteRole,
+): UserAdminLevel {
+  const invited = mapInviteRoleToAdminLevel(inviteRole);
+  return ADMIN_LEVEL_RANK[invited] > ADMIN_LEVEL_RANK[current] ? invited : current;
 }
 
 export function mapInviteRoleToMemberRole(role: OrgInviteRole): OrgMemberRole {
@@ -64,4 +81,38 @@ export function mapInviteRoleToMemberRole(role: OrgInviteRole): OrgMemberRole {
 export function buildStaffInviteUrl(origin: string, token: string): string {
   const base = origin.replace(/\/$/, "");
   return `${base}/join/${encodeURIComponent(token)}`;
+}
+
+export function staffInviteShareText(orgName: string, url: string): string {
+  const name = orgName.trim() || "this organization";
+  return `Join ${name} on SozuPay: ${url}`;
+}
+
+/**
+ * Accepting an invite always makes that org the user's primary workspace.
+ * A previous org is kept as a membership, never as the hidden primary.
+ */
+export function planStaffInviteAccept(params: {
+  userOrgId: string | null;
+  inviteOrgId: string;
+}): { primaryOrgId: string; preservePreviousOrgId: string | null } {
+  const previous =
+    params.userOrgId && params.userOrgId !== params.inviteOrgId ? params.userOrgId : null;
+  return { primaryOrgId: params.inviteOrgId, preservePreviousOrgId: previous };
+}
+
+/**
+ * Host used in the shareable invite URL. Prefer the live request origin so
+ * preview/mobile testing isn't stuck on a stale NEXT_PUBLIC_APP_URL (e.g. localhost).
+ */
+export function staffInviteLinkOrigin(params: {
+  requestOrigin: string;
+  envAppUrl?: string | null;
+}): string {
+  const live = params.requestOrigin.replace(/\/$/, "");
+  if (live && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(live)) {
+    return live;
+  }
+  const env = (params.envAppUrl ?? "").trim().replace(/\/$/, "");
+  return env || live || "http://localhost:3000";
 }

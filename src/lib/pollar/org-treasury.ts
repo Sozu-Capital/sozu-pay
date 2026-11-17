@@ -37,8 +37,9 @@ export class CreatorBoundPollarTreasuryProvisioner implements OrgTreasuryProvisi
 }
 
 /**
- * Test / POLLAR_FAKE_AUTH only. May return the sentinel G for offline flows —
- * production code must never treat that address as receivable (see usableClassicTreasuryPublicKey).
+ * Test / POLLAR_FAKE_AUTH only. May return the sentinel G for offline identity stubs.
+ * Callers must run that G through usableClassicTreasuryPublicKey before persisting
+ * it as a receivable treasury — local org-create then provisions a real testnet G.
  */
 export class FakeOrgTreasuryProvisioner implements OrgTreasuryProvisioner {
   constructor(private readonly publicKey: string = FAKE_POLLAR_STAFF_WALLET) {}

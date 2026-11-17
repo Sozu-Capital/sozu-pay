@@ -2,17 +2,16 @@
 
 import { useCallback, useState } from "react";
 import { logoutPollarBrowserClient } from "@/lib/pollar/browser-client";
-import { getClientSignupIntent } from "@/lib/auth/signup-intent";
 
 type SignOutOptions = {
   getLandingUrl?: () => string;
 };
 
 function defaultLandingUrl(): string {
-  return getClientSignupIntent() === "merchant" ? "/merchants?fresh=1" : "/?fresh=1";
+  return "/?fresh=1";
 }
 
-/** Clears Pollar + app session, then navigates via `getLandingUrl` or the matching home. */
+/** Clears Pollar + app session, then navigates via `getLandingUrl` or `/`. */
 export function useSignOut(options?: SignOutOptions) {
   const [signingOut, setSigningOut] = useState(false);
   const getLandingUrl = options?.getLandingUrl;

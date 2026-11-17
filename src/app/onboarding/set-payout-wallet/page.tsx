@@ -57,7 +57,7 @@ export default function SetPayoutWalletPage() {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
         <div className="w-full max-w-md rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">{t("successTitle")}</h1>
+          <h1 className="text-xl font-semibold text-white">{t("successTitle")}</h1>
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{t("successBody")}</p>
           <div className="mt-4 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -108,7 +108,7 @@ export default function SetPayoutWalletPage() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
       <div className="w-full max-w-md rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">{t("title")}</h1>
+        <h1 className="text-xl font-semibold text-white">{t("title")}</h1>
         <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{t("subtitle")}</p>
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>

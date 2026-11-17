@@ -77,7 +77,11 @@ function SecondaryButton({
   );
 }
 
-export function MerchantPollarOnboarding() {
+type MerchantPollarOnboardingProps = {
+  onBackToPicker?: () => void;
+};
+
+export function MerchantPollarOnboarding({ onBackToPicker }: MerchantPollarOnboardingProps = {}) {
   const router = useRouter();
   const t = useTranslations("onboardingPages.createOrg");
   const tCommon = useTranslations("onboardingPages");
@@ -202,7 +206,7 @@ export function MerchantPollarOnboarding() {
           : orgTagNormalized;
       setSavedTag(tagFromServer);
       setSavedName(name.trim());
-      setPhase("secure");
+      setPhase("done");
     } catch (e) {
       setError(e instanceof Error ? e.message : tCommon("somethingWentWrong"));
       setPhase("error");
@@ -234,7 +238,11 @@ export function MerchantPollarOnboarding() {
       return;
     }
     if (phase === "intro") {
-      router.replace("/merchants");
+      if (onBackToPicker) {
+        onBackToPicker();
+        return;
+      }
+      router.replace("/");
       return;
     }
     if (phase === "done") {
@@ -461,7 +469,7 @@ export function MerchantPollarOnboarding() {
               <p className="text-xs leading-relaxed text-gray-400">{t("secureHowHint")}</p>
             </div>
             <div className="mt-6 flex flex-col gap-2">
-              <PrimaryButton onClick={() => router.replace("/onboarding/setup-smart-wallet")}>
+              <PrimaryButton onClick={() => finish("/dashboard")}>
                 {t("secureNowCta")}
               </PrimaryButton>
               <SecondaryButton onClick={() => setPhase("done")}>

@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
+import { resolveCanonicalActiveOrgId } from "@/lib/db/org-members";
 import { resolveOrgDisbursementContractId } from "@/lib/stellar/org-treasury";
 
 /**
@@ -26,7 +27,14 @@ export async function getDashboardBalancePublicKey(): Promise<string | null> {
   if (!session) return null;
 
   const user = await getUserBySessionId(session.id);
-  const orgId = user?.org_id ?? session.orgId ?? null;
+  const orgId = user
+    ? await resolveCanonicalActiveOrgId({
+        userId: user.id,
+        primaryOrgId: user.org_id,
+        sessionOrgId: session.orgId,
+        staffPublicKey: user.stellar_public_key,
+      })
+    : session.orgId ?? null;
   if (!orgId) return null;
 
   const org = await getOrganizationForUser(orgId);

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import ReceiptModal, { ReceiptSession } from "@/components/ReceiptModal";
+import { StoreReconciliationPanel } from "@/components/StoreReconciliationPanel";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 
 interface Tx {
@@ -27,6 +28,7 @@ export default function TransactionsPage() {
 
   const profileCtx = useDashboardProfile();
   const orgName = profileCtx?.profile?.org_name ?? null;
+  const isStore = profileCtx?.profile?.org_type === "store";
 
   const handleRowClick = async (tx: Tx) => {
     setSelectedTx(tx);
@@ -55,10 +57,15 @@ export default function TransactionsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">{t("title")}</h1>
+      <h1 className="text-2xl font-bold text-white">{t("title")}</h1>
       <p className="mt-1 text-gray-600 dark:text-gray-400">
         {t("subtitle")}
       </p>
+      {isStore ? (
+        <div className="mt-6">
+          <StoreReconciliationPanel />
+        </div>
+      ) : null}
       {loading ? (
         <div className="mt-6 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
           <div className="animate-pulse h-12 bg-gray-100 dark:bg-gray-800" />

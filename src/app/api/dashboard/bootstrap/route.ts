@@ -2,12 +2,16 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
+import { resolveCanonicalActiveOrgId } from "@/lib/db/org-members";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
 import { resolveOrgDisbursementContractId, resolveOrgTreasuryContractId } from "@/lib/stellar/org-treasury";
 import { isUserDerivedEncrypted } from "@/lib/org-wallet-encryption";
-import { canManageDisbursements, isOrgTreasuryOwner } from "@/lib/auth/disbursement-auth";
+import { canManageDisbursements, isOrgTreasuryOwner, repairOrgCreatorAccess } from "@/lib/auth/disbursement-auth";
+import { orgOnboardingFlags } from "@/lib/org/onboarding-flags";
 import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
+import { isPizzaTokenConfigured } from "@/lib/stellar/pizza-token";
+import { readStoredAvatar } from "@/lib/avatar";
 import { getUsdcBalance } from "@/lib/stellar/balance";
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
 import { getUsdToLocalRate, convertUsdToLocal } from "@/lib/fx";
@@ -16,6 +20,7 @@ import {
   isOrgDistributionConfigured,
   resolveOrgDistributionPublicKey,
 } from "@/lib/sdp/org-distribution";
+import { getOrgMember } from "@/lib/db/org-members";
 
 /**
  * GET /api/dashboard/bootstrap
@@ -35,39 +40,50 @@ export async function GET() {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const orgId = session.orgId ?? null;
+  const orgId = await resolveCanonicalActiveOrgId({
+    userId: user.id,
+    primaryOrgId: user.org_id,
+    sessionOrgId: session.orgId,
+    staffPublicKey: user.stellar_public_key,
+  });
+  const activeUser = await repairOrgCreatorAccess(user, orgId).catch(() => user);
   const org_payout_wallet_public_key = getOrgDisbursementPublicKey();
 
   // Load org and smart account in parallel — only 2 DB calls total.
-  const [org, memberSa] = await Promise.all([
+  const [org, memberSa, membership] = await Promise.all([
     orgId ? getOrganizationForUser(orgId) : Promise.resolve(null),
-    orgId ? getMemberSmartAccount(orgId, user.id) : Promise.resolve(null),
+    orgId ? getMemberSmartAccount(orgId, activeUser.id) : Promise.resolve(null),
+    orgId ? getOrgMember(activeUser.id, orgId) : Promise.resolve(null),
   ]);
 
   // --- Profile fields ---
-  const can_manage_disbursements = canManageDisbursements(user, org);
+  const can_manage_disbursements = canManageDisbursements(activeUser, org, membership?.role);
   const orgDisbursementContractId = org ? resolveOrgDisbursementContractId(org) : null;
   const orgTreasuryContractId = org ? resolveOrgTreasuryContractId(org) : null;
   const orgHasTreasury = !!orgDisbursementContractId || !!(org?.stellar_disbursement_secret_encrypted);
-  const hasPayoutKey = !!(user.stellar_payout_public_key || user.stellar_public_key);
+  const hasPayoutKey = !!(activeUser.stellar_payout_public_key || activeUser.stellar_public_key);
 
   const needsPayoutWalletSetup =
-    user.admin_level === "super_admin" && !hasPayoutKey && !orgHasTreasury && !orgDisbursementContractId;
-  const needsOrgCreation = user.admin_level === "super_admin" && !user.org_id;
-  const needsOrganization = !user.org_id;
-  const needsSmartWalletSetup =
-    !!user.org_id &&
-    memberSa == null &&
-    !(isPollarMappedUser(user) && org?.stellar_disbursement_public_key);
+    activeUser.admin_level === "super_admin" && !hasPayoutKey && !orgHasTreasury && !orgDisbursementContractId;
+  const pollarUser = isPollarMappedUser(activeUser);
+  const { needsOrgCreation, needsOrganization, needsSmartWalletSetup } = orgOnboardingFlags({
+    canonicalOrgId: orgId,
+    primaryOrgId: activeUser.org_id,
+    isPollarUser: pollarUser,
+    hasMemberSmartAccount: !!memberSa,
+  });
 
   const profile = {
-    email: user.email,
-    username: user.username ?? null,
+    email: activeUser.email,
+    username: activeUser.username ?? null,
+    user_id: activeUser.id,
+    user_avatar_url: readStoredAvatar(activeUser.avatar_url),
+    org_avatar_url: readStoredAvatar(org?.avatar_url),
     org_name: org?.name ?? null,
-    stellar_public_key: user.stellar_public_key,
-    stellar_payout_public_key: user.stellar_payout_public_key ?? null,
+    stellar_public_key: activeUser.stellar_public_key,
+    stellar_payout_public_key: activeUser.stellar_payout_public_key ?? null,
     org_payout_wallet_public_key: org_payout_wallet_public_key ?? null,
-    org_id: user.org_id ?? null,
+    org_id: orgId,
     org_type: org?.type ?? null,
     org_stellar_disbursement_public_key: org?.stellar_disbursement_public_key ?? null,
     org_soroban_contract_id: orgDisbursementContractId,
@@ -80,19 +96,20 @@ export async function GET() {
           ? "legacy"
           : null,
     org_has_recovery: !!(org?.recovery_encrypted_secret),
-    allowed: user.allowed,
-    admin_level: user.admin_level,
+    allowed: activeUser.allowed,
+    admin_level: activeUser.admin_level,
     can_manage_disbursements,
     member_smart_account_id: memberSa?.contract_id ?? null,
     smart_wallet_ready: !!memberSa,
-    activation_requested_at: user.activation_requested_at,
+    activation_requested_at: activeUser.activation_requested_at,
     needsPayoutWalletSetup,
     needsOrgCreation,
     needsOrganization,
     needsSmartWalletSetup,
     treasury_ready: !!orgDisbursementContractId,
-    is_pollar_user: isPollarMappedUser(user),
-    is_treasury_owner: isOrgTreasuryOwner(user, org),
+    is_pollar_user: pollarUser,
+    is_treasury_owner: isOrgTreasuryOwner(activeUser, org, membership?.role),
+    can_send_pizza: isPizzaTokenConfigured(),
   };
 
   // --- Stellar + FX data (parallel, org wallet only) ---

@@ -10,7 +10,7 @@ export default function OffRampRedirectPage() {
 
   return (
     <div className="max-w-lg space-y-4">
-      <h1 className="text-xl font-bold text-gray-900 dark:text-white">Off-ramp queue moved</h1>
+      <h1 className="text-xl font-bold text-white">Off-ramp queue moved</h1>
       <p className="text-sm text-gray-600 dark:text-gray-400">
         Merchant bank withdrawals are fulfilled in the SozuAdmin dashboard (Settlement Center →
         off-ramp queue), not in SozuPay.

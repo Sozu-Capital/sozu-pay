@@ -19,6 +19,7 @@ import { recipientsToCSV, parseDisbursementCsvText, findDuplicateEmailsInRecipie
 import { normalizeVerificationForSdp } from "@/lib/disbursements/normalizeVerification";
 import { executePasskeyDistributionTransfer } from "@/lib/stellar/smartAccounts/executePasskeyDistributionTransfer";
 import { executePasskeySorobanPayout } from "@/lib/stellar/smartAccounts/signSorobanPayout";
+import { sendUsdcViaPollarClient } from "@/lib/pollar/client-usdc-send";
 import type { BeneficiaryLifecycleState } from "@/lib/sdp/receiverDisplay";
 import { batchRemainingUsdc } from "@/lib/disbursements/mergeDisbursementStats";
 import type { DisbursementMeta } from "@/lib/disbursements/store";
@@ -653,8 +654,69 @@ export default function DisbursementsPage() {
         }
 
         if (confirmData.outcome === "awaiting_owner_client_tx") {
-          setPayoutModalStatus("failed");
-          setPayoutModalError(t("spendNeedsPollarSession"));
+          const fromAddress =
+            typeof confirmData.fromAddress === "string" ? confirmData.fromAddress.trim() : "";
+          if (!fromAddress.startsWith("G")) {
+            throw new Error(t("spendNeedsPollarSession"));
+          }
+          const txHashes: string[] = [];
+          for (const item of items) {
+            try {
+              await fetch("/api/payouts/ensure-fee-xlm", {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ address: fromAddress }),
+              });
+            } catch {
+              // non-fatal — Pollar may still sponsor fees
+            }
+            const sent = await sendUsdcViaPollarClient({
+              destination: item.recipientAddress,
+              amount: item.amount,
+              fromAddress,
+            });
+            const recordRes = await fetch(
+              `/api/sdp/disbursements/${disbursementId}/record-payment`,
+              {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  paymentId: item.paymentId,
+                  txHash: sent.stellarTxHash,
+                  amount: item.amount,
+                  recipientAddress: item.recipientAddress,
+                  recipientLabel: item.recipientLabel,
+                }),
+              }
+            );
+            if (!recordRes.ok) {
+              const rec = await recordRes.json().catch(() => ({}));
+              throw new Error(
+                typeof rec.error === "string" ? rec.error : "Payment sent but failed to record"
+              );
+            }
+            txHashes.push(sent.stellarTxHash);
+          }
+          const successPayload: PayoutModalSuccess =
+            items.length === 1
+              ? {
+                  amount: items[0]!.amount,
+                  recipientLabel: items[0]!.recipientLabel,
+                  destination: items[0]!.recipientAddress,
+                  stellarTxHash: txHashes[0],
+                }
+              : {
+                  amount: distribuirContext.totalAmount,
+                  batchCount: items.length,
+                  stellarTxHash: txHashes[txHashes.length - 1],
+                };
+          setPayoutModalStatus("success");
+          setPayoutModalSuccess(successPayload);
+          setDistribuirContext(null);
+          await fetchList();
+          if (selectedId === disbursementId) await refreshDetail(disbursementId);
           return;
         }
 
@@ -990,10 +1052,10 @@ export default function DisbursementsPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-semibold text-white">
             {t("title")}
           </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t("subtitle")}</p>
+          <p className="mt-1 text-sm text-gray-200">{t("subtitle")}</p>
         </div>
         {isDisbursementAdmin && (
           <button
@@ -1042,7 +1104,7 @@ export default function DisbursementsPage() {
       {/* ── Create form ───────────────────────────────────────────────────── */}
       {showCreate && (
         <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-6 space-y-6">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+          <h2 className="text-base font-semibold text-white">
             {t("createTitle")}
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 -mt-4">

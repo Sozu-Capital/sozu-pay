@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import { MerchantsLandingFlow } from "@/components/MerchantsLandingFlow";
-import { persistMerchantSignupIntent } from "@/lib/auth/signup-intent";
 import { logoutPollarBrowserClient } from "@/lib/pollar/browser-client";
 
 type MerchantsPageContentProps = {
@@ -16,10 +15,6 @@ export function MerchantsPageContent({ clearSessionOnMount, returnTo }: Merchant
   const t = useTranslations("login");
   const [cleared, setCleared] = useState(!clearSessionOnMount);
   const clearedRef = useRef(false);
-
-  useEffect(() => {
-    persistMerchantSignupIntent();
-  }, []);
 
   useEffect(() => {
     if (!clearSessionOnMount) {

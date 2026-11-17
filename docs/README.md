@@ -31,7 +31,7 @@ For architecture, contracts, or integrations, use the folders below.
 | Folder | Contents |
 |--------|----------|
 | **00-overview** | Strategy and product: onepager, technical spec, roadmap. Start here. |
-| **01-architecture** | System design: microcredit disbursement E2E, self-custodial auth, org wallet, smart accounts (G vs C), login flow. |
+| **01-architecture** | System design: microcredit disbursement E2E, self-custodial auth, org wallet, smart accounts (G vs C), login flow. One canonical smart account: [adr/0004-one-canonical-smart-account.md](adr/0004-one-canonical-smart-account.md). |
 | **02-contracts** | Soroban: disbursement wallet contract, yield router spec, testnet contract addresses (USDC, Blend, factory). |
 | **03-planning** | Execution: 30-day sprint plan, Instawards Week 1 / Week 2 changelogs, NGO disbursement dev plan (MUJERES 2000), production-disbursements tasks, todo. |
 | **04-integrations** | SDP wallet registration (readiness, operator checklist, local E2E, **testnet + prod domain E2E**, passkey spec); e-commerce widget/API; E2E payout test (recipients persistence, multi-recipient, Classic vs Soroban). |
@@ -46,6 +46,10 @@ For architecture, contracts, or integrations, use the folders below.
 - **First NGO partner:** [05-requirements/Requerimientos_funcionales_MUJERES_2000.pdf](05-requirements/Requerimientos_funcionales_MUJERES_2000.pdf)
 - **Instawards Week 1 (merchant foundation):** [03-planning/INSTAWARDS_WEEK1_ROUND1_CHANGELOG.md](03-planning/INSTAWARDS_WEEK1_ROUND1_CHANGELOG.md)
 - **Instawards Week 2 (POS & dynamic payments, prod):** [03-planning/INSTAWARDS_WEEK2_POS_CHANGELOG.md](03-planning/INSTAWARDS_WEEK2_POS_CHANGELOG.md)
+- **Instawards Week 3 (redemption analog):** [03-planning/INSTAWARDS_WEEK3_REDEMPTION_ANALOG.md](03-planning/INSTAWARDS_WEEK3_REDEMPTION_ANALOG.md)
+- **Instawards Week 4 (store reconciliation v1):** [03-planning/INSTAWARDS_WEEK4_RECONCILIATION.md](03-planning/INSTAWARDS_WEEK4_RECONCILIATION.md)
+- **Instawards mainnet readiness (one-pager; deploy out of scope):** [03-planning/INSTAWARDS_MAINNET_READINESS.md](03-planning/INSTAWARDS_MAINNET_READINESS.md)
+- **Instawards Section 6 evidence pack (hashes + deliverable links):** [03-planning/INSTAWARDS_SECTION6_EVIDENCE_PACK.md](03-planning/INSTAWARDS_SECTION6_EVIDENCE_PACK.md)
 - **NGO dev plan and milestones:** [03-planning/ngo-disbursement-wallet-dev-plan.md](03-planning/ngo-disbursement-wallet-dev-plan.md)
 - **Batch disbursement and persistence:** [03-planning/production-disbursements-tasks.md](03-planning/production-disbursements-tasks.md)
 - **E2E architecture:** [01-architecture/architecture-microcredit-disbursement.md](01-architecture/architecture-microcredit-disbursement.md)
@@ -55,4 +59,4 @@ For architecture, contracts, or integrations, use the folders below.
 - **SDP NGO platform deployment (Vercel + hosted SDP):** [04-integrations/sdp-ngo-platform-deployment.md](04-integrations/sdp-ngo-platform-deployment.md)
 - **SDP Railway deploy runbook (step-by-step):** [04-integrations/sdp-railway-deploy.md](04-integrations/sdp-railway-deploy.md)
 - **SDP testnet E2E (local SDP + credit.sozu.capital):** [04-integrations/sdp-testnet-production-e2e.md](04-integrations/sdp-testnet-production-e2e.md)
-- **Repository naming (sozupay_mvp vs local folder):** [06-operations/repository-and-naming.md](06-operations/repository-and-naming.md)
+- **Repository naming (`sozu-pay` vs local folder):** [06-operations/repository-and-naming.md](06-operations/repository-and-naming.md)

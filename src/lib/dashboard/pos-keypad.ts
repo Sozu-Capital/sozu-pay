@@ -64,6 +64,19 @@ export function applyPosKeypadKey(
   return `${raw}${key}`;
 }
 
+/** Map a physical keyboard event to a keypad key. Null when the key is not amount input. */
+export function posKeyFromKeyboard(key: string): PosKeypadKey | null {
+  if (key === "Backspace" || key === "Delete") return "backspace";
+  if (key === "." || key === ",") return ".";
+  if (/^[0-9]$/.test(key)) return key as PosKeypadKey;
+  return null;
+}
+
+/** Enter confirms the charge from a desktop keyboard. */
+export function isPosSubmitKey(key: string): boolean {
+  return key === "Enter";
+}
+
 /** Hero display for the keypad amount (empty → 0). */
 export function formatPosKeypadDisplay(amount: string): string {
   const trimmed = amount.trim();

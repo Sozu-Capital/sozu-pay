@@ -6,6 +6,7 @@ import {
   PIZZA_PREMINT,
   PIZZA_SYMBOL,
   getPizzaTokenId,
+  isPizzaTokenConfigured,
   pizzaAmountToI128,
 } from "./pizza-token.js";
 
@@ -22,6 +23,20 @@ describe("PizzaToken config", () => {
   it("encodes a redeem of 1 PIZZA as i128 1, not 10^7 stroops", () => {
     assert.equal(pizzaAmountToI128(1), 1n);
     assert.equal(pizzaAmountToI128("1"), 1n);
+  });
+
+  it("isPizzaTokenConfigured is true only when the pizza contract id is set", () => {
+    const prev = process.env.SOROBAN_PIZZA_TOKEN_ID;
+    delete process.env.SOROBAN_PIZZA_TOKEN_ID;
+    try {
+      assert.equal(isPizzaTokenConfigured(), false);
+      process.env.SOROBAN_PIZZA_TOKEN_ID =
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";
+      assert.equal(isPizzaTokenConfigured(), true);
+    } finally {
+      if (prev === undefined) delete process.env.SOROBAN_PIZZA_TOKEN_ID;
+      else process.env.SOROBAN_PIZZA_TOKEN_ID = prev;
+    }
   });
 
   it("reads SOROBAN_PIZZA_TOKEN_ID and never falls back to Circle USDC", () => {

@@ -8,7 +8,6 @@ import {
   registerSmartAccount,
   resolvePublicKeyFromServer,
 } from "@/lib/stellar/smartAccounts/registerWalletClient";
-import { getClientSignupIntent } from "@/lib/auth/signup-intent";
 
 export default function SetupSmartWalletPage() {
   const router = useRouter();
@@ -43,16 +42,16 @@ export default function SetupSmartWalletPage() {
   }, [isMerchant, router]);
 
   useEffect(() => {
-    setIsMerchant(getClientSignupIntent() === "merchant");
-  }, []);
-
-  useEffect(() => {
     fetch("/api/profile", { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         const email = typeof d?.email === "string" ? d.email : "";
         if (email) setProfileEmail(email);
-        if (d?.is_pollar_user || d?.org_type === "store") setIsMerchant(true);
+        if (d?.is_pollar_user) {
+          router.replace("/dashboard");
+          return;
+        }
+        if (d?.org_type === "store") setIsMerchant(true);
       })
       .catch(() => {});
 
@@ -62,7 +61,7 @@ export default function SetupSmartWalletPage() {
         if (typeof d?.credentialId === "string") setLoginCredentialId(d.credentialId);
       })
       .catch(() => {});
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -172,7 +171,7 @@ export default function SetupSmartWalletPage() {
         </span>
       </button>
       <div className="w-full max-w-md rounded-xl border border-white/10 bg-white/5 p-6">
-        <h1 className="text-lg font-semibold">{isMerchant ? t("titleMerchant") : t("title")}</h1>
+        <h1 className="text-lg font-semibold text-white">{isMerchant ? t("titleMerchant") : t("title")}</h1>
         <p className="mt-2 text-sm text-gray-300">{isMerchant ? t("subtitleMerchant") : t("subtitle")}</p>
 
         <div className="mt-5">

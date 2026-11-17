@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { getUserBySessionId } from "@/lib/db/users";
+import { requireStellarPayoutAccess } from "@/lib/auth/disbursement-auth";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { completePayout, getPayoutByIdAsync } from "@/lib/payouts";
 import { appendAuditEvent } from "@/lib/audit";
@@ -16,10 +16,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const user = await getUserBySessionId(session.id);
-    if (!user || (user.admin_level !== "super_admin" && user.admin_level !== "admin")) {
-      return NextResponse.json({ error: "Only admins can complete Stellar payouts." }, { status: 403 });
-    }
+    const gate = await requireStellarPayoutAccess(session.id);
+    if (!gate.ok) return gate.response;
+    const user = gate.user;
 
     const body = await request.json().catch(() => ({}));
     const payoutId = typeof body.payoutId === "string" ? body.payoutId.trim() : "";
@@ -39,13 +38,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Payout already failed" }, { status: 400 });
     }
 
-    const org = user.org_id ? await getOrganizationForUser(user.org_id) : null;
-    const fromAddress = org?.stellar_disbursement_public_key ?? undefined;
+    const org = (session.orgId ?? user.org_id)
+      ? await getOrganizationForUser(session.orgId ?? user.org_id)
+      : null;
+    const fromAddress = (user.stellar_public_key ?? org?.stellar_disbursement_public_key) ?? undefined;
+    const asset = body.asset === "PIZZA" ? "PIZZA" : "USDC";
 
     completePayout(record.id, stellarTxHash);
     appendAuditEvent(
       "payout_approved",
-      `Payout ${record.amount} USDC to ${record.stellarAddress ?? "?"} (Pollar client tx)`,
+      `Payout ${record.amount} ${asset} to ${record.stellarAddress ?? "?"} (Pollar client tx)`,
       session.id,
       {
         signerWallet: fromAddress,

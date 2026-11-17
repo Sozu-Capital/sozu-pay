@@ -1,11 +1,13 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const E2E_PORT = process.env.E2E_PORT ?? "3010";
+const E2E_AUTH_SECRET = "e2e-auth-secret";
 
 /**
- * E2E tests run against the local dev server with mock auth (no Privy).
- * Auth tests verify login → dashboard → logout without 405.
- * Uses port 3010 by default so it doesn't conflict with a dev server on 3000.
+ * Local feature suite. Preview deploys cannot complete Pollar Google OAuth
+ * because the callback URL is not on the Pollar allowlist. This server forces
+ * fake Pollar (`NEXT_PUBLIC_POLLAR_FAKE_AUTH`) so Google login is deterministic
+ * on localhost.
  */
 export default defineConfig({
   testDir: "./e2e",
@@ -14,6 +16,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: 1,
   reporter: "list",
+  timeout: 45_000,
   use: {
     baseURL: `http://localhost:${E2E_PORT}`,
     trace: "on-first-retry",
@@ -22,10 +25,16 @@ export default defineConfig({
   webServer: {
     command: `npx next dev -p ${E2E_PORT}`,
     url: `http://localhost:${E2E_PORT}`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
+    reuseExistingServer: false,
+    timeout: 120_000,
     env: {
-      AUTH_MOCK: "true",
+      AUTH_MOCK: "false",
+      AUTH_SECRET: E2E_AUTH_SECRET,
+      SESSION_COOKIE_NAME: "sozupay_session",
+      STELLAR_NETWORK: "testnet",
+      POLLAR_FAKE_AUTH: "true",
+      NEXT_PUBLIC_POLLAR_FAKE_AUTH: "true",
+      NEXT_PUBLIC_POLLAR_FAKE_SUBJECT: "e2e-local",
       NEXT_PUBLIC_PRIVY_APP_ID: "",
       PRIVY_APP_ID: "",
     },

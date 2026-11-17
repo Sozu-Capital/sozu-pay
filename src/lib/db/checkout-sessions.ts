@@ -1,3 +1,5 @@
+import { isCheckoutExpired } from "@/lib/checkout/expiration";
+import { reusableChargeSources } from "@/lib/dashboard/payment-link";
 import { getSupabase } from "@/lib/supabase/server";
 
 export type CheckoutSessionStatus = "pending" | "completed" | "failed" | "expired";
@@ -248,7 +250,10 @@ export async function softDeleteCheckoutSession(
   return true;
 }
 
-/** One live checkout per org — supersede older pending links when a new one is created. */
+/**
+ * One live one-shot sale per org. Standing payment links and open-amount
+ * sends stay pending — a new sale must not kill them.
+ */
 export async function expirePendingCheckoutSessionsForOrg(
   orgId: string,
   exceptId: string,
@@ -260,11 +265,35 @@ export async function expirePendingCheckoutSessionsForOrg(
     .eq("org_id", orgId)
     .eq("status", "pending")
     .is("deleted_at", null)
-    .neq("id", exceptId);
+    .neq("id", exceptId)
+    .or(
+      `fx_source.is.null,fx_source.not.in.(${reusableChargeSources().join(",")})`,
+    );
 
   if (error) {
     console.error("[checkout-sessions] expire pending error:", error.message);
   }
+}
+
+/** Completed POS/checkout charges for store reconciliation (newest first). */
+export async function listCompletedCheckoutSessionsForOrg(
+  orgId: string,
+  limit = 200,
+): Promise<CheckoutSession[]> {
+  const { data, error } = await getSupabase()
+    .from("checkout_sessions")
+    .select("*")
+    .eq("org_id", orgId)
+    .eq("status", "completed")
+    .is("deleted_at", null)
+    .order("updated_at", { ascending: false })
+    .limit(Math.min(Math.max(limit, 1), 500));
+
+  if (error) {
+    console.error("[checkout-sessions] listCompleted error:", error.message);
+    return [];
+  }
+  return (data ?? []) as CheckoutSession[];
 }
 
 export function mapCheckoutSessionForApi(session: CheckoutSession) {
@@ -314,4 +343,68 @@ export async function completeCheckoutSession(
     return null;
   }
   return (data as CheckoutSession) ?? null;
+}
+
+/** Open and finished checkouts that claimed a number on this payment link. */
+export async function listCollectibleEditionSessions(
+  orgId: string,
+  slug: string,
+): Promise<CheckoutSession[]> {
+  const { data, error } = await getSupabase()
+    .from("checkout_sessions")
+    .select("*")
+    .eq("org_id", orgId)
+    .is("deleted_at", null)
+    .like("idempotency_key", "edition:%");
+
+  if (error) throw new Error(error.message);
+  const prefix = `edition:${slug}:`;
+  return ((data ?? []) as CheckoutSession[]).filter((row) =>
+    row.idempotency_key?.startsWith(prefix),
+  );
+}
+
+/** Gives a shirt number back when the checkout failed or expired before payment. */
+export async function releaseStaleCollectibleEdition(
+  session: CheckoutSession,
+  now = new Date(),
+): Promise<void> {
+  const key = session.idempotency_key;
+  if (!key) return;
+  const nowIso = now.toISOString();
+
+  if (session.status === "failed") {
+    const { error } = await getSupabase()
+      .from("checkout_sessions")
+      .update({ idempotency_key: null, updated_at: nowIso })
+      .eq("id", session.id)
+      .eq("status", "failed")
+      .eq("idempotency_key", key);
+    if (error) console.error("[edition] release failed hold:", error.message);
+    return;
+  }
+
+  // A status poll can mark the row expired before this sale looks at it.
+  // The number stays taken until the claim key is cleared.
+  if (session.status === "expired") {
+    const { error } = await getSupabase()
+      .from("checkout_sessions")
+      .update({ idempotency_key: null, updated_at: nowIso })
+      .eq("id", session.id)
+      .eq("status", "expired")
+      .eq("idempotency_key", key);
+    if (error) console.error("[edition] release expired hold:", error.message);
+    return;
+  }
+
+  if (session.status === "pending" && isCheckoutExpired(session.expires_at, now)) {
+    const { error } = await getSupabase()
+      .from("checkout_sessions")
+      .update({ idempotency_key: null, status: "expired", updated_at: nowIso })
+      .eq("id", session.id)
+      .eq("status", "pending")
+      .eq("idempotency_key", key)
+      .lte("expires_at", nowIso);
+    if (error) console.error("[edition] release expired hold:", error.message);
+  }
 }

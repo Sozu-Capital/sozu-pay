@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth/session-constants";
-import { SIGNUP_INTENT_COOKIE } from "@/lib/auth/signup-intent";
 
 const usePasskeyAuth = true;
 
@@ -17,7 +16,6 @@ function peekOrgIdFromSessionCookie(raw: string): string | null {
   try {
     const lastDot = raw.lastIndexOf(".");
     const payload = lastDot > 0 ? raw.slice(0, lastDot) : raw;
-    // base64url → base64 → JSON (works in both Node and edge runtimes)
     const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
     const json = atob(base64);
     const parsed = JSON.parse(json) as { orgId?: unknown };
@@ -35,22 +33,13 @@ function homeUrl(request: NextRequest, extra?: Record<string, string>): URL {
   return url;
 }
 
-function withMerchantSignupIntent(response: NextResponse): NextResponse {
-  response.cookies.set(SIGNUP_INTENT_COOKIE, "merchant", {
-    path: "/",
-    sameSite: "lax",
-    maxAge: 60 * 30,
-  });
-  return response;
-}
-
 export function middleware(request: NextRequest) {
   const session = request.cookies.get(SESSION_COOKIE)?.value;
   const pathname = request.nextUrl.pathname;
 
-  if (pathname === "/merchant") {
+  if (pathname === "/merchant" || pathname === "/merchants") {
     const url = request.nextUrl.clone();
-    url.pathname = "/merchants";
+    url.pathname = "/";
     return NextResponse.redirect(url);
   }
 
@@ -61,9 +50,7 @@ export function middleware(request: NextRequest) {
   }
 
   const isHome = pathname === "/";
-  const isMerchants = pathname === "/merchants";
   const isFreshHome = isHome && request.nextUrl.searchParams.get("fresh") === "1";
-  const isFreshMerchants = isMerchants && request.nextUrl.searchParams.get("fresh") === "1";
   const returnTo = request.nextUrl.searchParams.get("returnTo");
 
   const isAuthApi =
@@ -91,13 +78,6 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/onboarding/organizations", request.url));
   }
 
-  if (isMerchants && session && !isFreshMerchants) {
-    if (returnTo && returnTo.startsWith("/")) {
-      return NextResponse.redirect(new URL(returnTo, request.url));
-    }
-    return NextResponse.redirect(new URL("/onboarding/organizations", request.url));
-  }
-
   const isDashboard = pathname.startsWith("/dashboard");
   const isOnboarding = pathname.startsWith("/onboarding");
   const isAuthSuccess = pathname === "/auth/success";
@@ -118,10 +98,6 @@ export function middleware(request: NextRequest) {
 
   if (isSdpRegister && !session) {
     return NextResponse.redirect(homeUrl(request, { sdpInvite: "1" }));
-  }
-
-  if (isMerchants) {
-    return withMerchantSignupIntent(NextResponse.next());
   }
 
   return NextResponse.next();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
@@ -26,12 +26,13 @@ import { cn } from "@/lib/utils";
 type HomePasskeyAuthProps = {
   returnTo?: string;
   onBusyChange?: (busy: boolean) => void;
+  forcePin?: boolean;
 };
 
 const secondaryLinkClass =
   "text-xs text-white/55 underline-offset-2 hover:text-white/80 hover:underline";
 
-export function HomePasskeyAuth({ returnTo, onBusyChange }: HomePasskeyAuthProps) {
+export function HomePasskeyAuth({ returnTo, onBusyChange, forcePin }: HomePasskeyAuthProps) {
   const router = useRouter();
   const t = useTranslations("login");
   const {
@@ -56,6 +57,10 @@ export function HomePasskeyAuth({ returnTo, onBusyChange }: HomePasskeyAuthProps
     onBusyChange?.(v);
   };
 
+  useEffect(() => {
+    if (forcePin) showPinFallback();
+  }, [forcePin, showPinFallback]);
+
   const cleanTag = username.replace(/^\$/, "").trim().toLowerCase();
 
   function goAfterAuth(redirect: string) {
@@ -68,9 +73,13 @@ export function HomePasskeyAuth({ returnTo, onBusyChange }: HomePasskeyAuthProps
 
   async function handlePasskeyLogin() {
     setError("");
+    if (cleanTag.length < 3) {
+      setError(t("passkeyTagTooShort"));
+      return;
+    }
     setLoading(true);
     try {
-      const ch = await fetchLoginChallenge(undefined);
+      const ch = await fetchLoginChallenge(cleanTag);
       const cred = await getPasskey(ch);
       const { redirect } = await verifyLogin({
         credential: cred,
@@ -377,21 +386,23 @@ export function HomePasskeyAuth({ returnTo, onBusyChange }: HomePasskeyAuthProps
   }
 
   return (
-    <div className="pointer-events-auto relative z-30 w-fit max-w-md space-y-3">
+    <div className="pointer-events-auto relative z-30 w-full max-w-md space-y-3">
+      <label className="block space-y-1.5">
+        <span className="text-[11px] uppercase tracking-[0.2em] text-white/50">
+          {t("passkeyTagLabel")}
+        </span>
+        <input
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder={t("passkeyTagPlaceholder")}
+          autoComplete="username"
+          className={fieldClass}
+        />
+      </label>
       <HomeLandingCta disabled={busy} onClick={() => void handlePasskeyLogin()}>
-        {busy ? t("redirecting") : t("homeCta")}
+        {busy ? t("redirecting") : t("passkeySignInCta")}
       </HomeLandingCta>
-      <button
-        type="button"
-        onClick={() => {
-          showPinFallback();
-          setError("");
-          setPin("");
-        }}
-        className={cn(secondaryLinkClass, "block")}
-      >
-        {t("passkeyUsePin")}
-      </button>
       {error ? <p className="text-sm text-red-400/90">{error}</p> : null}
     </div>
   );

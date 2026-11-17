@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
-import { getOrganizationById } from "@/lib/db/organizations";
+import { listCollapsedAccessibleOrgs, resolveCanonicalActiveOrgId } from "@/lib/db/org-members";
+import { canCreateOwnedOrg } from "@/lib/org/can-create-owned-org";
 
 /**
  * GET /api/profile/organizations – list organizations the current user can access.
- * For now: single org (user.org_id). Later: expand with organization_members for multi-org.
  */
 export async function GET() {
   const session = await getSession();
@@ -16,25 +16,29 @@ export async function GET() {
   try {
     const user = await getUserBySessionId(session.id);
     if (!user) {
-      // Session exists but user row missing (should be rare). Still allow creating an org.
       return NextResponse.json({ organizations: [], canCreate: true });
     }
 
-    const organizations: { id: string; name: string }[] = [];
-    if (user.org_id) {
-      const org = await getOrganizationById(user.org_id);
-      if (org) {
-        organizations.push({ id: org.id, name: org.name });
-      }
-    }
-
-    // We allow creating a new organization even if the user already has access to one.
-    // (Creating will switch the user's active org to the newly created one.)
-    const canCreate = true;
+    const [orgs, canonicalId] = await Promise.all([
+      listCollapsedAccessibleOrgs({
+        userId: user.id,
+        primaryOrgId: user.org_id,
+        sessionOrgId: session.orgId,
+        staffPublicKey: user.stellar_public_key,
+      }),
+      resolveCanonicalActiveOrgId({
+        userId: user.id,
+        primaryOrgId: user.org_id,
+        sessionOrgId: session.orgId,
+        staffPublicKey: user.stellar_public_key,
+      }),
+    ]);
+    const organizations = orgs.map((org) => ({ id: org.id, name: org.name }));
 
     return NextResponse.json({
       organizations,
-      canCreate,
+      canCreate: canCreateOwnedOrg(organizations.length),
+      activeOrgId: canonicalId ?? session.orgId ?? user.org_id ?? null,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

@@ -22,7 +22,7 @@ export type DashboardNavLink = {
   indent?: boolean;
 };
 
-export type StoreHomeActionKind = "pos" | "qr-codes" | "pay-supplier" | "cash-out";
+export type StoreHomeActionKind = "pos" | "qr-codes" | "send" | "pay-supplier" | "cash-out";
 
 export type StoreHomeAction = {
   href: string;
@@ -34,8 +34,9 @@ export function storeDashboardNavLinks(options: { isAdmin?: boolean } = {}): Das
   const links: DashboardNavLink[] = [
     { href: "/dashboard", kind: "overview" },
     { href: "/dashboard/transactions", kind: "transactions" },
-    { href: "/dashboard/pos", kind: "pos" },
     { href: "/dashboard/qr-codes", kind: "qr-codes" },
+    { href: "/dashboard/pos", kind: "pos" },
+    { href: "/dashboard/send", kind: "send" },
     { href: "/dashboard/recipients", kind: "pay-supplier" },
     { href: "/dashboard/cashout", kind: "cash-out" },
     { href: "/dashboard/settings", kind: "settings" },
@@ -58,7 +59,7 @@ export function ngoDashboardNavLinks(options: { showDisbursements?: boolean } = 
   const links: DashboardNavLink[] = [
     { href: "/dashboard", kind: "overview" },
     { href: "/dashboard/checkout", kind: "funding-links" },
-    { href: "/dashboard/payouts", kind: "send" },
+    { href: "/dashboard/send", kind: "send" },
     { href: "/dashboard/recipients", kind: "people", indent: true },
   ];
   if (options.showDisbursements) {
@@ -74,12 +75,13 @@ export function ngoDashboardNavLinks(options: { showDisbursements?: boolean } = 
   return links;
 }
 
-/** Store home quick actions. POS is the only create-charge tile. */
+/** Store home quick actions, left to right: link, POS, pay supplier, send, bank desk. */
 export function storeHomeActions(): StoreHomeAction[] {
   return [
-    { href: "/dashboard/pos", kind: "pos" },
     { href: "/dashboard/qr-codes", kind: "qr-codes" },
+    { href: "/dashboard/pos", kind: "pos" },
     { href: "/dashboard/recipients", kind: "pay-supplier" },
+    { href: "/dashboard/send", kind: "send" },
     { href: "/dashboard/cashout", kind: "cash-out" },
   ];
 }

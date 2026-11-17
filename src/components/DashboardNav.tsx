@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 import { useTranslations } from "next-intl";
+import { FeedbackButton } from "@/components/FeedbackButton";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useSignOut } from "@/lib/auth/useSignOut";
 import {
@@ -66,13 +67,13 @@ function NavLink({
 export function DashboardNav({ onNavigate }: { onNavigate?: () => void } = {}) {
   const { profile } = useDashboardProfile() ?? { profile: null };
   const isAdmin =
-    profile?.admin_level === "admin" || profile?.admin_level === "super_admin";
+    profile?.admin_level === "admin" ||
+    profile?.admin_level === "super_admin" ||
+    profile?.can_manage_disbursements === true;
   const isStore = profile?.org_type === "store";
   const showDisbursementsNav = !isStore && !!profile?.org_id;
   const t = useTranslations("nav");
-  const { signOut, signingOut } = useSignOut({
-    getLandingUrl: () => (isStore ? "/merchants?fresh=1" : "/?fresh=1"),
-  });
+  const { signOut, signingOut } = useSignOut();
 
   const links = isStore
     ? storeDashboardNavLinks({ isAdmin })
@@ -94,6 +95,7 @@ export function DashboardNav({ onNavigate }: { onNavigate?: () => void } = {}) {
         ))}
       </nav>
       <div className="mt-auto pt-4 border-t border-white/10 shrink-0">
+        <FeedbackButton className="mb-3" />
         <LanguageSwitcher className="mb-3" />
         <div className="flex items-center justify-between min-h-[36px]">
           {isStore ? (

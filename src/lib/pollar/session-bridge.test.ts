@@ -39,8 +39,11 @@ describe("resolvePollarPostAuthRedirect", () => {
     );
   });
 
-  it("resumes to dashboard when already a member", () => {
-    assert.equal(resolvePollarPostAuthRedirect({ org_id: "o1" }), "/dashboard");
+  it("sends multi-org users to the picker instead of switching org", () => {
+    assert.equal(
+      resolvePollarPostAuthRedirect({ org_id: "o1", membershipCount: 2 }),
+      "/onboarding/organizations",
+    );
   });
 
   it("sends new users to org onboarding", () => {
@@ -60,6 +63,15 @@ describe("planPollarSessionBridge", () => {
     assert.equal(plan.privyUserId, "pollar:sub-1");
     assert.equal(plan.email, "maria@example.com");
     assert.equal(plan.redirect, "/onboarding/create-organization");
+  });
+
+  it("honors an invite returnTo for a new user", () => {
+    const plan = planPollarSessionBridge(
+      { subject: "sub-2", email: "staff@example.com" },
+      null,
+      "/join/invite-token",
+    );
+    assert.equal(plan.redirect, "/join/invite-token");
   });
 
   it("resumes existing member without re-onboarding", () => {

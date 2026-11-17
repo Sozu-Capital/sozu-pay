@@ -9,7 +9,7 @@ export default function MargheritaSkuPage({ pointName }: { pointName: string }) 
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{pointName}</p>
         <p className="mt-4 text-3xl font-bold text-gray-900 dark:text-white">1 PIZZA</p>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Redeem one pizza credit. This chip stays live for the next guest.
+          Redeem one pizza credit.
         </p>
         <div className="mt-6 space-y-2">
           <button

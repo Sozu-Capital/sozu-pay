@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { Keypair } from "@stellar/stellar-sdk";
 import { getSession } from "@/lib/auth/session";
+import { requireStellarPayoutAccess } from "@/lib/auth/disbursement-auth";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
@@ -9,6 +10,10 @@ import { createPayout, listPayouts, completePayout, failPayout } from "@/lib/pay
 import { getRecipient } from "@/lib/recipients";
 import { appendAuditEvent } from "@/lib/audit";
 import { sendUsdc, getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
+import { sendPizzaToken } from "@/lib/stellar/send-pizza";
+import { getPizzaTokenId, isPizzaTokenConfigured } from "@/lib/stellar/pizza-token";
+import { enforcePayoutCaps } from "@/lib/payouts/caps";
+import { parsePayoutAsset, parsePizzaSendAmount, pizzaSendAmountI128, type PayoutAsset } from "@/lib/payouts/asset";
 import { fundClassicAccount, ensureSpendableXlmForFees } from "@/lib/stellar/fund";
 import { invokeSorobanPayout } from "@/lib/stellar/sorobanPayout";
 import { UNLOCK_COOKIE_NAME, getUnlockedKey, getUnlockedKeyFromCookie } from "@/lib/auth/wallet-unlock";
@@ -17,6 +22,7 @@ import { isUserDerivedEncrypted } from "@/lib/org-wallet-encryption";
 import { buildUnsignedUsdcEnvelope } from "@/lib/stellar/sendUsdc";
 import type { Organization } from "@/lib/db/organizations";
 import { resolvePaymentRecipient } from "@/lib/payment/resolve-recipient";
+import { normalizeSozuTag } from "@/lib/org-sozu-tag";
 import { isValidStellarReceiveAddress } from "@/lib/payment/stellar-address";
 import { payoutRailForDestination } from "@/lib/payment/payout-rail";
 import { getCircleUsdcSacContractId } from "@/lib/stellar/org-treasury";
@@ -52,7 +58,7 @@ function resolveSignerForRequest(
   sessionId: string,
   cookieValue: string | null | undefined,
   org: Organization | null,
-  user: { privy_user_id: string } | null,
+  user: { privy_user_id: string; stellar_public_key?: string | null } | null,
 ): HomeTreasurySignerResult {
   const unlocked =
     getUnlockedKey(sessionId) ?? getUnlockedKeyFromCookie(cookieValue) ?? undefined;
@@ -61,6 +67,7 @@ function resolveSignerForRequest(
     pollarHomeTreasury: usesPollarHomeTreasury(user, org),
     orgStoredSecret: getOrgStoredSignerSecret(org),
     unlockedSecret: unlocked,
+    sessionPublicKey: user?.stellar_public_key,
   });
 }
 
@@ -88,6 +95,7 @@ async function pollarClientTxResponse(params: {
   destination: string;
   recipientLabel?: string;
   fromAddress: string;
+  asset?: PayoutAsset;
 }) {
   // Pollar custodial wallets often have USDC but 0 spendable XLM (reserves / deferred funding).
   // Top up from STELLAR_FUNDER before asking the client to sign.
@@ -102,7 +110,9 @@ async function pollarClientTxResponse(params: {
     });
   }
 
-  const rail = payoutRailForDestination(params.destination);
+  const asset: PayoutAsset = params.asset === "PIZZA" ? "PIZZA" : "USDC";
+  const rail = asset === "PIZZA" ? "sac" : (payoutRailForDestination(params.destination) ?? "classic");
+  const pizzaTokenId = asset === "PIZZA" ? getPizzaTokenId() : undefined;
   return NextResponse.json(
     {
       error: "Confirm this payout with your Pollar session (Home treasury).",
@@ -112,8 +122,15 @@ async function pollarClientTxResponse(params: {
       destination: params.destination,
       recipientLabel: params.recipientLabel,
       fromAddress: params.fromAddress,
-      rail: rail ?? "classic",
-      sacContractId: rail === "sac" ? getCircleUsdcSacContractId() : undefined,
+      asset,
+      rail,
+      sacContractId:
+        asset === "PIZZA"
+          ? pizzaTokenId
+          : rail === "sac"
+            ? getCircleUsdcSacContractId()
+            : undefined,
+      amountI128: asset === "PIZZA" ? pizzaSendAmountI128(params.amount) : undefined,
       feeXlm: {
         toppedUp: feeEnsure.toppedUp,
         spendable: feeEnsure.xlmSpendableAfter,
@@ -221,9 +238,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const user = await getUserBySessionId(session.id);
-    const canStellarPayout =
-      user?.admin_level === "super_admin" || user?.admin_level === "admin";
+    let user = await getUserBySessionId(session.id);
+    const orgId = session.orgId ?? user?.org_id ?? null;
 
     const body = await request.json().catch(() => ({}));
 
@@ -240,6 +256,10 @@ export async function POST(request: NextRequest) {
       }
       normalized.push(n);
     }
+    const batchCaps = enforcePayoutCaps(normalized.map((n) => n!.amount));
+    if (!batchCaps.ok) {
+      return NextResponse.json({ error: batchCaps.error, capExceeded: true }, { status: 400 });
+    }
     const hasStellarInBatch = normalized.some((n) => n != null && n.type === "to_stellar");
     let stellarSignerSecretKey: string | undefined;
     let orgSorobanContractId: string | null = null;
@@ -247,13 +267,10 @@ export async function POST(request: NextRequest) {
     let batchSignerMode: HomeTreasurySignerResult["mode"] | undefined;
     let batchFromAddress: string | undefined;
     if (hasStellarInBatch) {
-      if (!canStellarPayout) {
-        return NextResponse.json(
-          { error: "Only admins can perform Stellar payouts." },
-          { status: 403 }
-        );
-      }
-      const org = user?.org_id ? await getOrganizationForUser(user.org_id) : null;
+      const gate = await requireStellarPayoutAccess(session.id);
+      if (!gate.ok) return gate.response;
+      user = gate.user;
+      const org = orgId ? await getOrganizationForUser(orgId) : null;
       batchOrg = org;
       orgSorobanContractId = org?.soroban_contract_id ?? null;
       if (orgSorobanContractId) {
@@ -323,7 +340,7 @@ export async function POST(request: NextRequest) {
         bankAccountId: n.bankAccountId,
         stellarAddress: n.stellarAddress,
         recipientLabel: n.recipientLabel,
-        orgId: user?.org_id ?? null,
+        orgId,
       });
       if (n.type === "to_stellar" && n.stellarAddress) {
         try {
@@ -376,15 +393,33 @@ export async function POST(request: NextRequest) {
   }
 
   const amount = typeof body.amount === "string" ? body.amount : "0";
+  let asset: PayoutAsset;
+  try {
+    asset = parsePayoutAsset(body.asset);
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Unsupported payout asset" },
+      { status: 400 },
+    );
+  }
 
-  if (body.toStellar === true && typeof body.destination === "string") {
-    if (!canStellarPayout) {
-      return NextResponse.json(
-        { error: "Only admins can perform Stellar payouts." },
-        { status: 403 }
-      );
+  const isStellarSend = body.toStellar === true && typeof body.destination === "string";
+  if (asset === "PIZZA" && !isStellarSend) {
+    return NextResponse.json({ error: "PIZZA payouts must go to a Stellar address." }, { status: 400 });
+  }
+
+  if (asset === "USDC") {
+    const singleCaps = enforcePayoutCaps([amount]);
+    if (!singleCaps.ok) {
+      return NextResponse.json({ error: singleCaps.error, capExceeded: true }, { status: 400 });
     }
-    const org = user?.org_id ? await getOrganizationForUser(user.org_id) : null;
+  }
+
+  if (isStellarSend) {
+    const gate = await requireStellarPayoutAccess(session.id);
+    if (!gate.ok) return gate.response;
+    user = gate.user;
+    const org = orgId ? await getOrganizationForUser(orgId) : null;
     const sorobanContractId = org?.soroban_contract_id ?? null;
     const cookieStore = await cookies();
     const unlockCookie = cookieStore.get(UNLOCK_COOKIE_NAME)?.value;
@@ -395,25 +430,62 @@ export async function POST(request: NextRequest) {
     let recipientLabel =
       typeof body.recipientLabel === "string" ? body.recipientLabel.trim() : undefined;
 
-    if (!isValidStellarReceiveAddress(destination)) {
-      console.log("[payouts] Resolving recipient:", { raw: destination });
-      const resolved = await resolvePaymentRecipient(destination);
+    // A saved person's name is not a $tag. Only a label that starts with $ is resolved.
+    const labelTag =
+      recipientLabel?.trim().startsWith("$") ? normalizeSozuTag(recipientLabel) : null;
+    const destinationWasAddress = isValidStellarReceiveAddress(destination);
+    if (!destinationWasAddress || labelTag) {
+      const lookup = destinationWasAddress ? recipientLabel! : destination;
+      console.log("[payouts] Resolving recipient:", { raw: lookup });
+      const resolved = await resolvePaymentRecipient(lookup);
       if (!resolved.ok) {
-        console.error("[payouts] Resolution failed:", {
-          raw: destination,
+        if (!destinationWasAddress) {
+          console.error("[payouts] Resolution failed:", {
+            raw: lookup,
+            error: resolved.error,
+            status: resolved.status,
+          });
+          return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+        }
+        console.warn("[payouts] Tag label did not resolve; paying the submitted address", {
+          label: recipientLabel,
           error: resolved.error,
-          status: resolved.status,
         });
-        return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+      } else {
+        const canonical = resolved.recipient.walletAddress.trim().toUpperCase();
+        if (destinationWasAddress && destination.trim().toUpperCase() !== canonical) {
+          console.warn("[payouts] Canonical smart account replaced submitted destination", {
+            submitted: destination,
+            canonical,
+            tag: resolved.recipient.tag,
+          });
+        }
+        console.log("[payouts] Resolved to:", {
+          walletAddress: canonical,
+          tag: resolved.recipient.tag,
+          rail: resolved.recipient.paymentRail,
+        });
+        destination = canonical;
+        if (!recipientLabel && resolved.recipient.tag) {
+          recipientLabel = `$${resolved.recipient.tag.replace(/^\$+/, "")}`;
+        }
       }
-      console.log("[payouts] Resolved to:", {
-        walletAddress: resolved.recipient.walletAddress,
-        tag: resolved.recipient.tag,
-        rail: resolved.recipient.paymentRail,
-      });
-      destination = resolved.recipient.walletAddress;
-      if (!recipientLabel && resolved.recipient.tag) {
-        recipientLabel = `$${resolved.recipient.tag.replace(/^\$+/, "")}`;
+    }
+
+    if (asset === "PIZZA") {
+      if (!isPizzaTokenConfigured()) {
+        return NextResponse.json(
+          { error: "PIZZA token is not configured on this server." },
+          { status: 400 },
+        );
+      }
+      try {
+        parsePizzaSendAmount(amount);
+      } catch (err) {
+        return NextResponse.json(
+          { error: err instanceof Error ? err.message : "PIZZA amount must be a whole number of at least 1" },
+          { status: 400 },
+        );
       }
     }
 
@@ -421,16 +493,17 @@ export async function POST(request: NextRequest) {
       type: "to_stellar",
       stellarAddress: destination,
       recipientLabel,
-      orgId: user?.org_id ?? null,
+      orgId,
+      asset,
     });
 
-    /** Soroban treasury: passkey signs disbursement_wallet.payout on client. */
-    if (sorobanContractId) {
-      if (!user?.org_id) {
+    /** Pizza is SEP-41 — never the org USDC disbursement contract. */
+    if (sorobanContractId && asset !== "PIZZA") {
+      if (!orgId || !user) {
         failPayout(record.id);
         return NextResponse.json({ error: "No organization." }, { status: 400 });
       }
-      const memberSa = await getMemberSmartAccount(user.org_id, user.id);
+      const memberSa = await getMemberSmartAccount(orgId, user.id);
       if (!memberSa) {
         failPayout(record.id);
         return NextResponse.json(
@@ -454,6 +527,17 @@ export async function POST(request: NextRequest) {
     }
 
     if (requirePayoutPassword && org?.stellar_disbursement_public_key) {
+      if (asset === "PIZZA") {
+        failPayout(record.id);
+        return NextResponse.json(
+          {
+            error:
+              "Sending PIZZA requires the Home treasury Pollar session (or an unlocked payout wallet). Payout password signing is USDC-only.",
+            code: "PIZZA_PAYOUT_PASSWORD_UNSUPPORTED",
+          },
+          { status: 400 },
+        );
+      }
       if (destination.trim().toUpperCase().startsWith("C")) {
         failPayout(record.id);
         return NextResponse.json(
@@ -503,6 +587,7 @@ export async function POST(request: NextRequest) {
         destination,
         recipientLabel,
         fromAddress: signer.fromAddress,
+        asset,
       });
     }
 
@@ -536,6 +621,8 @@ export async function POST(request: NextRequest) {
           String(user?.id ?? session.id),
           record.id,
         );
+      } else if (asset === "PIZZA") {
+        txHash = await sendPizzaToken(destination, amount, signerSecretKey);
       } else {
         txHash = await executeStellarPayout(
           destination,
@@ -548,11 +635,12 @@ export async function POST(request: NextRequest) {
       const signerWallet = getSignerPublicKey(signerSecretKey, org, signer.fromAddress);
       appendAuditEvent(
         "payout_approved",
-        `Payout ${amount} USDC to ${destination} (approved by ${session.email ?? session.id})`,
+        `Payout ${amount} ${asset} to ${destination} (approved by ${session.email ?? session.id})`,
         session.id,
         {
           signerWallet,
           amount,
+          asset,
           stellarTxHash: txHash,
           destination,
           recipientLabel,
@@ -585,7 +673,7 @@ export async function POST(request: NextRequest) {
     type: "to_bank",
     bankAccountId,
     recipientLabel,
-    orgId: user?.org_id ?? null,
+    orgId,
   });
   appendAuditEvent("payout", `Payout to bank: ${recipientLabel ?? bankAccountId}`, session.id);
   return NextResponse.json({ payout: record });

@@ -5,7 +5,10 @@ import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getOrgDisbursementPublicKey } from "@/lib/stellar/sendUsdc";
 import { resolveOrgDisbursementContractId, resolveOrgTreasuryContractId } from "@/lib/stellar/org-treasury";
-import { canManageDisbursements, isOrgTreasuryOwner } from "@/lib/auth/disbursement-auth";
+import { canManageDisbursements, isOrgTreasuryOwner, repairOrgCreatorAccess } from "@/lib/auth/disbursement-auth";
+import { orgOnboardingFlags } from "@/lib/org/onboarding-flags";
+import { isPizzaTokenConfigured } from "@/lib/stellar/pizza-token";
+import { readStoredAvatar } from "@/lib/avatar";
 import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
 import { getUsdcBalance } from "@/lib/stellar/balance";
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
@@ -15,6 +18,7 @@ import {
   isOrgDistributionConfigured,
   resolveOrgDistributionPublicKey,
 } from "@/lib/sdp/org-distribution";
+import { getOrgMember, resolveCanonicalActiveOrgId } from "@/lib/db/org-members";
 import type { DashboardProfile, DashboardBalanceData, DashboardStats } from "@/contexts/DashboardProfileContext";
 import type { TransactionRow } from "@/lib/stellar/transactions";
 
@@ -58,43 +62,57 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
   const user = await getUserBySessionId(session.id);
   if (!user) return null;
 
-  const orgId = session.orgId ?? null;
+  const orgId = await resolveCanonicalActiveOrgId({
+    userId: user.id,
+    primaryOrgId: user.org_id,
+    sessionOrgId: session.orgId,
+    staffPublicKey: user.stellar_public_key,
+  });
+  const activeUser = await repairOrgCreatorAccess(user, orgId).catch(() => user);
   const org_payout_wallet_public_key = getOrgDisbursementPublicKey();
 
-  const [org, memberSa] = await Promise.all([
+  const [org, memberSa, membership] = await Promise.all([
     orgId ? getOrganizationForUser(orgId) : Promise.resolve(null),
-    orgId ? getMemberSmartAccount(orgId, user.id) : Promise.resolve(null),
+    orgId ? getMemberSmartAccount(orgId, activeUser.id) : Promise.resolve(null),
+    orgId ? getOrgMember(activeUser.id, orgId) : Promise.resolve(null),
   ]);
 
-  const can_manage_disbursements = canManageDisbursements(user, org);
+  const can_manage_disbursements = canManageDisbursements(activeUser, org, membership?.role);
   const orgDisbursementContractId = org ? resolveOrgDisbursementContractId(org) : null;
   const orgTreasuryContractId = org ? resolveOrgTreasuryContractId(org) : null;
   const orgHasTreasury = !!orgDisbursementContractId || !!(org?.stellar_disbursement_secret_encrypted);
-  const hasPayoutKey = !!(user.stellar_payout_public_key || user.stellar_public_key);
-  const pollarUser = isPollarMappedUser(user);
+  const hasPayoutKey = !!(activeUser.stellar_payout_public_key || activeUser.stellar_public_key);
+  const pollarUser = isPollarMappedUser(activeUser);
+  const { needsOrgCreation, needsOrganization, needsSmartWalletSetup } = orgOnboardingFlags({
+    canonicalOrgId: orgId,
+    primaryOrgId: activeUser.org_id,
+    isPollarUser: pollarUser,
+    hasMemberSmartAccount: !!memberSa,
+  });
 
   const profile: DashboardProfile = {
-    email: user.email,
-    username: user.username ?? null,
+    email: activeUser.email,
+    username: activeUser.username ?? null,
+    user_id: activeUser.id,
+    user_avatar_url: readStoredAvatar(activeUser.avatar_url),
+    org_avatar_url: readStoredAvatar(org?.avatar_url),
     org_name: org?.name ?? null,
     org_soroban_contract_id: orgDisbursementContractId,
     org_treasury_contract_id: orgTreasuryContractId,
     needsPayoutWalletSetup:
-      user.admin_level === "super_admin" && !hasPayoutKey && !orgHasTreasury && !orgDisbursementContractId,
-    needsOrgCreation: user.admin_level === "super_admin" && !user.org_id,
-    needsOrganization: !user.org_id,
-    needsSmartWalletSetup:
-      !!user.org_id &&
-      memberSa == null &&
-      !(pollarUser && !!org?.stellar_disbursement_public_key),
-    admin_level: user.admin_level,
+      activeUser.admin_level === "super_admin" && !hasPayoutKey && !orgHasTreasury && !orgDisbursementContractId,
+    needsOrgCreation,
+    needsOrganization,
+    needsSmartWalletSetup,
+    admin_level: activeUser.admin_level,
     can_manage_disbursements,
     member_smart_account_id: memberSa?.contract_id ?? null,
     smart_wallet_ready: !!memberSa,
-    org_id: user.org_id ?? null,
+    org_id: orgId,
     org_type: org?.type ?? null,
     is_pollar_user: pollarUser,
-    is_treasury_owner: isOrgTreasuryOwner(user, org),
+    is_treasury_owner: isOrgTreasuryOwner(activeUser, org, membership?.role),
+    can_send_pizza: isPizzaTokenConfigured(),
   };
 
   // Dashboard shows treasury balance (receive address). Payout flows use disbursement contract separately.

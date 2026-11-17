@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
-import { getClientSignupIntent } from "@/lib/auth/signup-intent";
 import { MerchantPollarOnboarding } from "@/components/onboarding/MerchantPollarOnboarding";
+import { OrgKindPicker, type OrgKind } from "@/components/onboarding/OrgKindPicker";
 import { suggestOrgTagFromOrgName } from "@/lib/sozu-tag-suggest";
 import {
   OrgCreateSetupProgress,
@@ -14,34 +14,32 @@ import {
 } from "@/components/onboarding/OrgCreateSetupProgress";
 
 /**
- * Pollar create-org:
- * - Merchant intent → educational onboarding + store wallet progress (no passkey smart wallet).
- * - NGO → name-only; Org treasury wallet is provisioned automatically.
+ * Pollar create-org: required type picker, then store vs distribution form.
  */
 export function PollarCreateOrganizationForm() {
-  const [intent, setIntent] = useState<"loading" | "merchant" | "ngo">("loading");
+  const [kind, setKind] = useState<OrgKind | null>(null);
 
-  useEffect(() => {
-    setIntent(getClientSignupIntent() === "merchant" ? "merchant" : "ngo");
-  }, []);
-
-  if (intent === "loading") {
+  if (!kind) {
     return (
       <DarkGradientBg>
         <main className="flex min-h-screen items-center justify-center p-4 text-white">
-          <p className="text-sm text-gray-300">…</p>
+          <OrgKindPicker onSelect={setKind} />
         </main>
       </DarkGradientBg>
     );
   }
 
-  if (intent === "merchant") {
-    return <MerchantPollarOnboarding />;
+  if (kind === "store") {
+    return <MerchantPollarOnboarding onBackToPicker={() => setKind(null)} />;
   }
-  return <NgoPollarCreateOrganizationForm />;
+  return <NgoPollarCreateOrganizationForm onBackToPicker={() => setKind(null)} />;
 }
 
-function NgoPollarCreateOrganizationForm() {
+function NgoPollarCreateOrganizationForm({
+  onBackToPicker,
+}: {
+  onBackToPicker: () => void;
+}) {
   const router = useRouter();
   const t = useTranslations("onboardingPages.createOrg");
   const tCommon = useTranslations("onboardingPages");
@@ -166,6 +164,14 @@ function NgoPollarCreateOrganizationForm() {
           </button>
 
           <p className="mt-4 text-center text-xs text-gray-400">
+            <button
+              type="button"
+              onClick={onBackToPicker}
+              className="underline underline-offset-2 hover:text-gray-200"
+            >
+              {t("typePickerBack")}
+            </button>
+            {" · "}
             <Link href="/join" className="underline underline-offset-2 hover:text-gray-200">
               {t("haveInviteSecondary")}
             </Link>

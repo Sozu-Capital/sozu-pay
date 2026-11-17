@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import DashboardTransactions from "@/components/DashboardTransactions";
+import { StoreReconciliationPanel } from "@/components/StoreReconciliationPanel";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 import { storeHomeActions, type StoreHomeActionKind } from "@/lib/dashboard/nav-links";
 
 const ACTION_LABEL_KEY: Record<StoreHomeActionKind, string> = {
   pos: "actionPOS",
   "qr-codes": "actionQrAndNfc",
+  send: "actionSend",
   "pay-supplier": "actionPaySupplier",
   "cash-out": "actionCashOut",
 };
@@ -37,6 +39,15 @@ function ActionIcon({ kind }: { kind: StoreHomeActionKind }) {
       <span className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/40">
         <svg className="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
+        </svg>
+      </span>
+    );
+  }
+  if (kind === "send") {
+    return (
+      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40">
+        <svg className="h-5 w-5 rotate-45 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
         </svg>
       </span>
     );
@@ -102,7 +113,7 @@ export default function StoreHomeDashboard() {
           </>
         )}
 
-        {/* Quick actions — POS is the only create-charge CTA */}
+        {/* Quick actions — payment link is reusable; new sale is one charge */}
         <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {actions.map((action) => (
             <Link
@@ -116,6 +127,8 @@ export default function StoreHomeDashboard() {
           ))}
         </div>
       </div>
+
+      <StoreReconciliationPanel compact />
 
       {/* Recent transactions */}
       <section>

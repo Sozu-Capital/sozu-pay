@@ -74,6 +74,42 @@ export async function getPizzaRedeem(id: string): Promise<PizzaRedeem | null> {
   return data ? fromDb(data) : null;
 }
 
+export async function listSubmittedPizzaRedeemsForOrg(
+  orgId: string
+): Promise<Array<{ qrPointId: string; amount: number }>> {
+  const { data, error } = await getSupabase()
+    .from("pizza_redeems")
+    .select("qr_point_id, amount")
+    .eq("org_id", orgId)
+    .eq("status", "submitted");
+
+  if (error) {
+    console.error("[pizza-redeems] list submitted error:", error.message);
+    return [];
+  }
+  return (data ?? []).map((row) => ({
+    qrPointId: row.qr_point_id as string,
+    amount: Number(row.amount) || 0,
+  }));
+}
+
+/** Redeems for store recon windows (confirmed = submitted). Newest first. */
+export async function listPizzaRedeemsForOrgReconciliation(
+  orgId: string,
+): Promise<PizzaRedeem[]> {
+  const { data, error } = await getSupabase()
+    .from("pizza_redeems")
+    .select("*")
+    .eq("org_id", orgId)
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    console.error("[pizza-redeems] list for recon error:", error.message);
+    return [];
+  }
+  return (data ?? []).map((row) => fromDb(row as Record<string, unknown>));
+}
+
 export async function markPizzaRedeemSubmitted(
   id: string,
   txHash: string,

@@ -107,6 +107,14 @@ describe("pizzaWalletCheckoutUrl", () => {
       pizzaWalletCheckoutUrl({ walletOrigin: WALLET, slug: "margherita-nfc" }),
       "https://app.sozu.capital/checkout/pizza/margherita-nfc",
     );
+    assert.equal(
+      pizzaWalletCheckoutUrl({
+        walletOrigin: WALLET,
+        slug: "margherita-nfc",
+        storeSlug: "cafe",
+      }),
+      "https://app.sozu.capital/checkout/pizza/margherita-nfc?store=cafe",
+    );
   });
 });
 

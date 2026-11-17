@@ -39,7 +39,10 @@ import {
 } from "../src/lib/pilot/mainnet-keys";
 
 const REPO_ROOT = path.resolve(__dirname, "..");
-const SIBLING_REPOS = ["sozu-pay", "sozu-wallet", "sozu-faucet"].map((r) => path.resolve(REPO_ROOT, "..", r));
+const SIBLING_REPOS = [
+  REPO_ROOT,
+  ...["sozu-pay", "sozu-wallet", "sozu-faucet"].map((r) => path.resolve(REPO_ROOT, "..", r)),
+];
 const USDC = new Asset("USDC", MAINNET_USDC_ISSUER);
 const horizon = new Horizon.Server(MAINNET_HORIZON_URL);
 

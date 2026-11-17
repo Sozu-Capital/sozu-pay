@@ -102,3 +102,30 @@ export async function listDeskOrdersForUser(userId: string): Promise<DeskOrderRo
 export function deskOrderBlocksAnother(status: string): boolean {
   return ACTIVE_DESK_STATUSES.includes(status);
 }
+
+/** The store can drop an order that has not been locked yet. */
+export async function cancelOpenDeskOrder(orderId: string, userId: string): Promise<boolean> {
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from("desk_orders")
+    .select("id, status, user_id")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (error || !data || data.user_id !== userId || data.status !== "open") return false;
+
+  const transition = await sb.rpc("desk_transition", {
+    p_order_id: orderId,
+    p_from: ["open"],
+    p_to: "expired",
+    p_actor: `wallet:${userId}`,
+    p_patch: { closed_at: new Date().toISOString() },
+    p_hash: null,
+    p_note: "cancelled by the store",
+  });
+  if (transition.error) {
+    console.error("[desk] cancel open order:", transition.error.message);
+    return false;
+  }
+  const row = Array.isArray(transition.data) ? transition.data[0] : transition.data;
+  return Boolean(row);
+}

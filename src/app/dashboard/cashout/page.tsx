@@ -116,7 +116,11 @@ export default function CashOutPage() {
         );
         return;
       }
-      setSuccess(t("deskRequestCreated"));
+      setSuccess(
+        data.kind === "desk"
+          ? t("deskRequestCreated")
+          : t("bankRequestCreated", { currency: data.bankCurrency || bankCurrency }),
+      );
       setAttested(false);
       setAmountUsd("");
       loadBalance();

@@ -1,5 +1,6 @@
 import type { QrPointDestinationType } from "@/lib/dashboard/merchant-qr";
-import { slugFromTitle, STANDING_PRICE_PREFIX } from "@/lib/dashboard/payment-link";
+import { isOrganizationId, slugFromTitle, STANDING_PRICE_PREFIX } from "@/lib/dashboard/payment-link";
+import { getOrganizationById, getOrganizationBySlug } from "@/lib/db/organizations";
 import { getSupabase } from "@/lib/supabase/server";
 
 export type QRPointDestinationType = QrPointDestinationType;
@@ -108,20 +109,39 @@ export async function getQRPointByOrgAndSlug(
   return data ? fromDb(data) : null;
 }
 
-/** Legacy /pay/qr/{slug}. Returns null when two stores share the item slug. */
+/**
+ * Printed /pay/qr/{slug} and older pizza calls.
+ * The first point that used the slug keeps that URL. A later store with the
+ * same item name is reached only through /pay/qr/{store}/{slug}.
+ */
 export async function getQRPointBySlug(slug: string): Promise<MerchantQRPoint | null> {
   const { data, error } = await getSupabase()
     .from("merchant_qr_points")
     .select("*")
     .eq("slug", slug.toLowerCase())
-    .limit(2);
+    .order("created_at", { ascending: true })
+    .limit(1);
 
   if (error) {
     console.error("[qr-points] getBySlug error:", error.message);
     return null;
   }
-  if (!data || data.length !== 1) return null;
-  return fromDb(data[0]);
+  return data?.[0] ? fromDb(data[0]) : null;
+}
+
+/** Store-scoped lookup when the caller knows the shop. Otherwise the original slug owner. */
+export async function resolvePublicQRPoint(
+  slug: string,
+  store?: string | null,
+): Promise<MerchantQRPoint | null> {
+  const item = slug.trim().toLowerCase();
+  const storeSegment = store?.trim().toLowerCase();
+  if (!storeSegment) return getQRPointBySlug(item);
+  const org = isOrganizationId(storeSegment)
+    ? await getOrganizationById(storeSegment)
+    : await getOrganizationBySlug(storeSegment);
+  if (!org) return null;
+  return getQRPointByOrgAndSlug(org.id, item);
 }
 
 /** Point all dynamic checkout QR/NFC tags at the latest live payment link. */

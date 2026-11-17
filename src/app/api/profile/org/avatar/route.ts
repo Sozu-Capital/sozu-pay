@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
-import { resolveCanonicalActiveOrgId } from "@/lib/db/org-members";
+import { getOrgMember, resolveCanonicalActiveOrgId } from "@/lib/db/org-members";
+import { getOrganizationById } from "@/lib/db/organizations";
+import { canManageDisbursements } from "@/lib/auth/disbursement-auth";
 import { parseAvatarDataUrl } from "@/lib/avatar";
 import { getSupabase } from "@/lib/supabase/server";
 
@@ -24,6 +26,12 @@ export async function POST(request: Request) {
   });
   if (!orgId) {
     return NextResponse.json({ error: "No organization selected." }, { status: 400 });
+  }
+
+  const org = await getOrganizationById(orgId);
+  const member = await getOrgMember(user.id, orgId);
+  if (!canManageDisbursements(user, org, member?.role)) {
+    return NextResponse.json({ error: "You cannot change this business photo." }, { status: 403 });
   }
 
   let image: string | null;

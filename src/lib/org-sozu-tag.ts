@@ -114,7 +114,40 @@ async function upsertStellarWallet(
     turnkey_wallet_id: authUserId,
   };
 
-  const { error } = await sb.from("stellar_wallets").upsert(row, { onConflict: userCol });
+  if (!existing) {
+    const inserted = await sb.from("stellar_wallets").insert(row);
+    if (!inserted.error) return { ok: true };
+    if (!/duplicate key|unique constraint|23505/i.test(inserted.error.message)) {
+      return {
+        ok: false,
+        error: `stellar_wallets insert failed (${userCol}, ${pkCol}): ${inserted.error.message}. If your schema differs, set SOZUPAY_STELLAR_WALLET_USER_ID_COLUMN / SOZUPAY_STELLAR_WALLET_PUBLIC_KEY_COLUMN.`,
+      };
+    }
+    const { data: raced } = await sb
+      .from("stellar_wallets")
+      .select(pkCol)
+      .eq(userCol, authUserId)
+      .limit(1)
+      .maybeSingle();
+    const racedPk = (raced as Record<string, string> | null)?.[pkCol] ?? null;
+    if (canonicalWriteDecision(racedPk, publicKey).action !== "write") return { ok: true };
+    const { error: racedWrite } = await sb
+      .from("stellar_wallets")
+      .update({ [pkCol]: publicKey })
+      .eq(userCol, authUserId)
+      .eq(pkCol, racedPk ?? "");
+    if (!racedWrite) return { ok: true };
+    return {
+      ok: false,
+      error: `stellar_wallets update failed (${userCol}, ${pkCol}): ${racedWrite.message}.`,
+    };
+  }
+
+  const { error } = await sb
+    .from("stellar_wallets")
+    .update({ [pkCol]: publicKey })
+    .eq(userCol, authUserId)
+    .eq(pkCol, existingPk ?? "");
   if (!error) return { ok: true };
 
   return {

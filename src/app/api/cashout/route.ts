@@ -3,7 +3,11 @@ import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getOrgTreasuryUsdcBalance } from "@/lib/org-receive-address";
-import { getActivePendingWithdrawalForOrg, listWithdrawalRequestsForOrg } from "@/lib/db/withdrawal-requests";
+import {
+  createWithdrawalRequest,
+  getActivePendingWithdrawalForOrg,
+  listWithdrawalRequestsForOrg,
+} from "@/lib/db/withdrawal-requests";
 import {
   arsCentsFor,
   canonicalEscrowAccount,
@@ -74,6 +78,9 @@ export async function POST(request: NextRequest) {
   const bankAccountHolder = typeof body.bankAccountHolder === "string" ? body.bankAccountHolder.trim() : "";
   const bankCountry = typeof body.bankCountry === "string" ? body.bankCountry.trim().toUpperCase() : "";
   const bankAccountNumber = typeof body.bankAccountNumber === "string" ? body.bankAccountNumber.trim() : "";
+  const bankCurrency = typeof body.bankCurrency === "string" ? body.bankCurrency.trim().toUpperCase() : "";
+  const bankRoutingCode = typeof body.bankRoutingCode === "string" ? body.bankRoutingCode.trim() : "";
+  const deskPayout = bankCountry === "AR" && bankCurrency === "ARS";
 
   const amount = parseFloat(amountUsd);
   if (!isFinite(amount) || amount <= 0) {
@@ -117,6 +124,35 @@ export async function POST(request: NextRequest) {
       { error: "Confirm the bank account is in your name", code: "attestation_required" },
       { status: 400 },
     );
+  }
+
+  if (!deskPayout) {
+    if (bankCountry === "AR" || bankCurrency === "ARS") {
+      return NextResponse.json(
+        { error: "The P2P desk pays Argentine pesos to an Argentine account. Choose AR and ARS together." },
+        { status: 400 },
+      );
+    }
+    const id = `wd_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const row = await createWithdrawalRequest({
+      id,
+      orgId,
+      amountUsd,
+      sourceStellarAddress: sourceAddress,
+      bankAccountHolder,
+      bankCountry,
+      bankAccountNumber,
+      bankRoutingCode: bankRoutingCode || undefined,
+      bankCurrency: bankCurrency || undefined,
+      providerWithdrawalId: id,
+    });
+    return NextResponse.json({
+      id: row.id,
+      status: row.status,
+      kind: "bank",
+      bankCurrency: row.bank_currency,
+      estimatedArrival: row.estimated_arrival,
+    });
   }
 
   const bankAlias = normalizeDeskBankAlias(bankAccountNumber);
@@ -190,6 +226,9 @@ export async function POST(request: NextRequest) {
     id: created.id,
     status: created.status,
     kind: "desk",
+    bankCurrency: "ARS",
+    rate: quote.rate,
+    arsCents: arsCentsFor(usdcMinor, quote.rate),
     estimatedArrival: null,
   });
 }

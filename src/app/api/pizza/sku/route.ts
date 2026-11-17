@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getQRPointBySlug } from "@/lib/db/merchant-qr-points";
+import { resolvePublicQRPoint } from "@/lib/db/merchant-qr-points";
 import { getOrganizationById } from "@/lib/db/organizations";
 import { getWalletOrigin } from "@/lib/pizza/redeem";
 
@@ -25,11 +25,12 @@ export async function OPTIONS() {
  */
 export async function GET(request: NextRequest) {
   const slug = request.nextUrl.searchParams.get("slug")?.trim().toLowerCase() ?? "";
+  const store = request.nextUrl.searchParams.get("store");
   if (!slug || !/^[a-z0-9_-]+$/.test(slug)) {
     return json({ error: "slug is required" }, 400);
   }
 
-  const qr = await getQRPointBySlug(slug);
+  const qr = await resolvePublicQRPoint(slug, store);
   if (!qr || qr.destinationType !== "pizza_sku") {
     return json({ error: "Pizza SKU not found" }, 404);
   }

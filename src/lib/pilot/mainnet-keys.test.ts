@@ -108,4 +108,20 @@ describe("parseKeysFile", () => {
     assert.throws(() => parseKeysFile(JSON.stringify({ network: "testnet", keys: {} })), /public network/);
     assert.throws(() => parseKeysFile(JSON.stringify({ network: "public", keys: {} })), /missing the distribution key/);
   });
+
+  it("rejects a secret that does not sign for the listed public address", () => {
+    const roles = ["distribution", "escrow", "desk_receiving", "fee_payer"] as const;
+    const keys = Object.fromEntries(
+      roles.map((role) => {
+        const pair = Keypair.random();
+        return [role, { publicKey: pair.publicKey(), secret: pair.secret() }];
+      }),
+    );
+    assert.doesNotThrow(() => parseKeysFile(JSON.stringify({ network: "public", keys })));
+    keys.escrow.publicKey = keys.distribution.publicKey;
+    assert.throws(
+      () => parseKeysFile(JSON.stringify({ network: "public", keys })),
+      /escrow secret does not match/,
+    );
+  });
 });

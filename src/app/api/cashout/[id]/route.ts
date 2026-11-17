@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getUserBySessionId } from "@/lib/db/users";
 import { cancelWithdrawalRequest } from "@/lib/db/withdrawal-requests";
+import { cancelOpenDeskOrder } from "@/lib/desk/merchant-desk-store";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -14,6 +15,10 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
   const user = await getUserBySessionId(session.id);
   const orgId = session.orgId ?? user?.org_id ?? null;
   if (!orgId) return NextResponse.json({ error: "No organization" }, { status: 403 });
+
+  if (await cancelOpenDeskOrder(id, session.id)) {
+    return NextResponse.json({ id, status: "cancelled" });
+  }
 
   const cancelled = await cancelWithdrawalRequest(id, orgId);
   if (!cancelled) {

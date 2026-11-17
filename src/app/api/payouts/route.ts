@@ -430,7 +430,9 @@ export async function POST(request: NextRequest) {
     let recipientLabel =
       typeof body.recipientLabel === "string" ? body.recipientLabel.trim() : undefined;
 
-    const labelTag = recipientLabel ? normalizeSozuTag(recipientLabel) : null;
+    // A saved person's name is not a $tag. Only a label that starts with $ is resolved.
+    const labelTag =
+      recipientLabel?.trim().startsWith("$") ? normalizeSozuTag(recipientLabel) : null;
     const destinationWasAddress = isValidStellarReceiveAddress(destination);
     if (!destinationWasAddress || labelTag) {
       const lookup = destinationWasAddress ? recipientLabel! : destination;

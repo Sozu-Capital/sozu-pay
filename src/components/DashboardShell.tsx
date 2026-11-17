@@ -1,10 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
+import { AccountAvatar } from "@/components/AccountAvatar";
 import { DashboardNav } from "@/components/DashboardNav";
 import { OrgSwitcherModal } from "@/components/OrgSwitcherModal";
 import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
+import { orgAvatarStorageKey, userAvatarStorageKey } from "@/lib/avatar";
 import { resolveAccountDisplayName } from "@/lib/display-name";
 import { useTranslations } from "next-intl";
 
@@ -24,6 +25,8 @@ function DashboardBrandHeader({
   const accountLabel = loading
     ? "…"
     : resolveAccountDisplayName(profile?.email, t("accountFallback"), profile?.username);
+  const businessAccount = !!profile?.org_id;
+  const avatarName = loading ? "" : businessAccount ? orgLabel : accountLabel;
 
   return (
     <button
@@ -34,13 +37,13 @@ function DashboardBrandHeader({
       aria-label={t("switchOrganization")}
       className={`flex min-w-0 w-full items-center gap-2.5 rounded-lg px-1 py-1 -mx-1 text-left hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 ${className}`}
     >
-      <Image
-        src="/sozucapital_logo.png"
-        alt=""
-        width={28}
-        height={28}
-        className="h-7 w-7 shrink-0 object-contain"
-        priority
+      <AccountAvatar
+        name={avatarName}
+        imageUrl={businessAccount ? profile?.org_avatar_url : profile?.user_avatar_url}
+        storageKey={
+          businessAccount ? orgAvatarStorageKey(profile?.org_id) : userAvatarStorageKey(profile?.user_id)
+        }
+        size={28}
       />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-white leading-tight">{orgLabel}</p>

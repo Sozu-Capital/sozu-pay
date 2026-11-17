@@ -11,6 +11,7 @@ import { canManageDisbursements, isOrgTreasuryOwner, repairOrgCreatorAccess } fr
 import { orgOnboardingFlags } from "@/lib/org/onboarding-flags";
 import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
 import { isPizzaTokenConfigured } from "@/lib/stellar/pizza-token";
+import { readStoredAvatar } from "@/lib/avatar";
 import { getUsdcBalance } from "@/lib/stellar/balance";
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
 import { getUsdToLocalRate, convertUsdToLocal } from "@/lib/fx";
@@ -75,6 +76,9 @@ export async function GET() {
   const profile = {
     email: activeUser.email,
     username: activeUser.username ?? null,
+    user_id: activeUser.id,
+    user_avatar_url: readStoredAvatar(activeUser.avatar_url),
+    org_avatar_url: readStoredAvatar(org?.avatar_url),
     org_name: org?.name ?? null,
     stellar_public_key: activeUser.stellar_public_key,
     stellar_payout_public_key: activeUser.stellar_payout_public_key ?? null,

@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { SozuLoadingMark } from "@/components/SozuLoadingMark";
 
 function isPublicCreditPath(pathname: string): boolean {
   if (pathname === "/credit" || pathname === "/credit/") return true;
@@ -43,11 +44,7 @@ export function CreditPortalShell({ children }: { children: React.ReactNode }) {
   }, [pathname, router]);
 
   if (!ready) {
-    return (
-      <div className="min-h-[40vh] flex items-center justify-center text-gray-600 dark:text-gray-400">
-        Cargando…
-      </div>
-    );
+    return <SozuLoadingMark scrim />;
   }
 
   return <>{children}</>;

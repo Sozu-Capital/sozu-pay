@@ -13,6 +13,9 @@ import type { TransactionRow } from "@/lib/stellar/transactions";
 export type DashboardProfile = {
   email?: string | null;
   username?: string | null;
+  user_id?: number | null;
+  user_avatar_url?: string | null;
+  org_avatar_url?: string | null;
   org_name?: string | null;
   org_soroban_contract_id?: string | null;
   org_treasury_contract_id?: string | null;
@@ -87,8 +90,9 @@ export function DashboardProfileProvider({
   // If the layout already prefetched data, start in non-loading state.
   const [loading, setLoading] = useState(!initialData);
 
-  const fetchBootstrap = useCallback(() => {
-    setLoading(true);
+  const fetchBootstrap = useCallback((opts?: { background?: boolean }) => {
+    // Background polls must not flip the page back to the full-screen loader.
+    if (!opts?.background) setLoading(true);
     // Cache-bust so external deposits/disbursements show without a hard reload.
     const url = `/api/dashboard/bootstrap?ts=${Date.now()}`;
     fetch(url, { credentials: "include", cache: "no-store" })
@@ -110,12 +114,16 @@ export function DashboardProfileProvider({
       .catch(() => {
         // Keep existing profile on transient network errors during polling.
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!opts?.background) setLoading(false);
+      });
   }, []);
 
   useEffect(() => {
+    // The server layout already sent this data. Skip the duplicate first fetch.
+    if (initialData) return;
     fetchBootstrap();
-  }, [fetchBootstrap]);
+  }, [fetchBootstrap, initialData]);
 
   // Poll so balances update after external deposits (e.g. Stellar Expert shows it but UI won't refresh).
   useEffect(() => {
@@ -132,7 +140,7 @@ export function DashboardProfileProvider({
 
     const tick = () => {
       if (!shouldPoll()) return;
-      fetchBootstrap();
+      fetchBootstrap({ background: true });
     };
 
     if (shouldPoll()) {
@@ -140,7 +148,7 @@ export function DashboardProfileProvider({
     }
     const onVis = () => {
       if (shouldPoll()) {
-        fetchBootstrap();
+        fetchBootstrap({ background: true });
         if (timer == null) timer = window.setInterval(tick, intervalMs);
       } else if (timer != null) {
         window.clearInterval(timer);
@@ -156,7 +164,14 @@ export function DashboardProfileProvider({
 
   return (
     <DashboardProfileContext.Provider
-      value={{ profile, balance, stats, transactions, loading, refetch: fetchBootstrap }}
+      value={{
+        profile,
+        balance,
+        stats,
+        transactions,
+        loading,
+        refetch: () => fetchBootstrap({ background: true }),
+      }}
     >
       {children}
     </DashboardProfileContext.Provider>

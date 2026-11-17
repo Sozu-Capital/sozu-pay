@@ -5,16 +5,18 @@ import { routePayQrPoint } from "@/lib/dashboard/merchant-qr";
 import { getQRPointByOrgAndSlug } from "@/lib/db/merchant-qr-points";
 import { getOrganizationById, getOrganizationBySlug } from "@/lib/db/organizations";
 
-type Params = { params: Promise<{ store: string; slug: string }> };
+type Params = { params: Promise<{ slug: string; item: string }> };
 
 /**
- * POST /api/pay/links/[store]/[slug]/start
+ * POST /api/pay/links/[slug]/[item]/start
  * Opens a fresh wallet checkout for one store's standing payment link.
+ * The first segment is the store. It shares the name `slug` with the older
+ * one-segment route so Next can build both paths.
  */
 export async function POST(request: NextRequest, { params }: Params) {
-  const { store: rawStore, slug } = await params;
+  const { slug: rawStore, item: rawItem } = await params;
   const store = parseStorePathSegment(rawStore);
-  const item = slug.trim().toLowerCase();
+  const item = rawItem.trim().toLowerCase();
   if (!store || !/^[a-z0-9_-]+$/.test(item)) {
     return NextResponse.json({ error: "Payment link not found" }, { status: 404 });
   }

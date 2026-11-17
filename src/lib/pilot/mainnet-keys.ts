@@ -1,4 +1,5 @@
 import path from "node:path";
+import { Keypair } from "@stellar/stellar-sdk";
 
 /** Protocol base reserve on public and testnet. An empty account must hold two of these. */
 export const BASE_RESERVE_XLM = 0.5;
@@ -145,6 +146,15 @@ export function parseKeysFile(raw: string): PilotKeysFile {
     const k = data.keys?.[spec.role];
     if (!k?.publicKey?.startsWith("G") || !k.secret?.startsWith("S")) {
       throw new Error(`Keys file is missing the ${spec.role} key.`);
+    }
+    let derived = "";
+    try {
+      derived = Keypair.fromSecret(k.secret).publicKey();
+    } catch {
+      throw new Error(`Keys file has a ${spec.role} secret that cannot sign.`);
+    }
+    if (derived !== k.publicKey) {
+      throw new Error(`Keys file ${spec.role} secret does not match its public address.`);
     }
   }
   return data;

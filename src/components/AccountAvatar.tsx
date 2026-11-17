@@ -51,7 +51,12 @@ export function AccountAvatar({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setLocalUrl(readLocalAvatar(storageKey));
+    if (imageUrl === null) {
+      writeLocalAvatar(storageKey, null);
+      setLocalUrl(null);
+    } else {
+      setLocalUrl(readLocalAvatar(storageKey));
+    }
     const sync = () => setLocalUrl(readLocalAvatar(storageKey));
     window.addEventListener(AVATAR_CHANGED_EVENT, sync);
     window.addEventListener("storage", sync);
@@ -59,9 +64,9 @@ export function AccountAvatar({
       window.removeEventListener(AVATAR_CHANGED_EVENT, sync);
       window.removeEventListener("storage", sync);
     };
-  }, [storageKey]);
+  }, [storageKey, imageUrl]);
 
-  const shown = imageUrl || localUrl;
+  const shown = imageUrl === null ? null : imageUrl || localUrl;
   const initials = orgSwitcherInitials(name || "?");
 
   async function persist(next: string | null) {

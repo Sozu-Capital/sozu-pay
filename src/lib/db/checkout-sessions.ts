@@ -384,6 +384,19 @@ export async function releaseStaleCollectibleEdition(
     return;
   }
 
+  // A status poll can mark the row expired before this sale looks at it.
+  // The number stays taken until the claim key is cleared.
+  if (session.status === "expired") {
+    const { error } = await getSupabase()
+      .from("checkout_sessions")
+      .update({ idempotency_key: null, updated_at: nowIso })
+      .eq("id", session.id)
+      .eq("status", "expired")
+      .eq("idempotency_key", key);
+    if (error) console.error("[edition] release expired hold:", error.message);
+    return;
+  }
+
   if (session.status === "pending" && isCheckoutExpired(session.expires_at, now)) {
     const { error } = await getSupabase()
       .from("checkout_sessions")

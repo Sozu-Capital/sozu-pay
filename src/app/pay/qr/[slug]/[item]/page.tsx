@@ -3,8 +3,13 @@ import { isOrganizationId, parseStorePathSegment } from "@/lib/dashboard/payment
 import { getQRPointByOrgAndSlug } from "@/lib/db/merchant-qr-points";
 import { getOrganizationById, getOrganizationBySlug } from "@/lib/db/organizations";
 
+/**
+ * /pay/qr/{store}/{item}. The store segment is named `slug` because the older
+ * /pay/qr/{slug} route already uses that name, and Next refuses two different
+ * names in the same slot.
+ */
 type Props = {
-  params: Promise<{ store: string; slug: string }>;
+  params: Promise<{ slug: string; item: string }>;
   searchParams: Promise<{
     intent?: string;
     hopped?: string;
@@ -14,9 +19,9 @@ type Props = {
 };
 
 export default async function PayStoreQrPage({ params, searchParams }: Props) {
-  const { store: rawStore, slug } = await params;
+  const { slug: rawStore, item: rawItem } = await params;
   const store = parseStorePathSegment(rawStore);
-  const item = slug.trim().toLowerCase();
+  const item = rawItem.trim().toLowerCase();
   if (!store || !/^[a-z0-9_-]+$/.test(item)) return payQrNotFound();
 
   const org = isOrganizationId(store)

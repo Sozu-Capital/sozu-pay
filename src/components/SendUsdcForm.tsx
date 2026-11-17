@@ -160,15 +160,20 @@ export default function SendUsdcForm({
 
   async function settlementUsdcAmount(): Promise<string | null> {
     if (currency === "USDC") return amount.trim();
-    const res = await fetch(`/api/fx/clp?amount=${encodeURIComponent(amount.trim())}`, {
-      credentials: "include",
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || typeof data.amountUsd !== "string") {
+    try {
+      const res = await fetch(`/api/fx/clp?amount=${encodeURIComponent(amount.trim())}`, {
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || typeof data.amountUsd !== "string") {
+        onFailed?.(t("quoteFailed"));
+        return null;
+      }
+      return data.amountUsd;
+    } catch {
       onFailed?.(t("quoteFailed"));
       return null;
     }
-    return data.amountUsd;
   }
 
   async function resolveDestination(usdcAmount: string): Promise<StellarPayoutBody | null> {

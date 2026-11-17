@@ -46,25 +46,44 @@ export async function upsertSmartAccount(params: {
     }
   }
 
-  const { data, error } = await sb
-    .from("smart_accounts")
-    .upsert(
-      {
-        org_id: params.orgId,
-        user_id: params.userId ?? null,
-        type: params.type,
-        contract_id: params.contractId,
-      },
-      { onConflict: params.userId ? "org_id,user_id,type" : "org_id,type" }
-    )
-    .select()
-    .single();
+  const row = {
+    org_id: params.orgId,
+    user_id: params.userId ?? null,
+    type: params.type,
+    contract_id: params.contractId,
+  };
 
-  if (error) {
-    console.error("[smart-accounts] upsert error:", error.message);
-    return null;
+  if (!existing) {
+    const inserted = await sb.from("smart_accounts").insert(row).select().maybeSingle();
+    if (!inserted.error && inserted.data) return inserted.data as SmartAccountRow;
+    if (inserted.error && !/duplicate key|unique constraint|23505/i.test(inserted.error.message)) {
+      console.error("[smart-accounts] insert error:", inserted.error.message);
+      return null;
+    }
+  } else {
+    const updated = await sb
+      .from("smart_accounts")
+      .update({ contract_id: params.contractId })
+      .eq("id", (existing as SmartAccountRow).id)
+      .eq("contract_id", (existing as SmartAccountRow).contract_id)
+      .select()
+      .maybeSingle();
+    if (!updated.error && updated.data) return updated.data as SmartAccountRow;
+    if (updated.error) {
+      console.error("[smart-accounts] update error:", updated.error.message);
+      return null;
+    }
   }
-  return data as SmartAccountRow;
+
+  let racedQuery = sb
+    .from("smart_accounts")
+    .select("*")
+    .eq("org_id", params.orgId)
+    .eq("type", params.type)
+    .limit(1);
+  racedQuery = params.userId ? racedQuery.eq("user_id", params.userId) : racedQuery.is("user_id", null);
+  const { data: raced } = await racedQuery.maybeSingle();
+  return (raced as SmartAccountRow | null) ?? null;
 }
 
 export async function getMemberSmartAccount(

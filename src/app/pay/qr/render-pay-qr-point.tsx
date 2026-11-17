@@ -12,9 +12,9 @@ import {
 } from "@/lib/db/checkout-sessions";
 import type { MerchantQRPoint } from "@/lib/db/merchant-qr-points";
 import { getPizzaRedeem } from "@/lib/db/pizza-redeems";
-import { payerCheckoutUrl } from "@/lib/dashboard/payment-link";
+import { payerCheckoutUrl, walletOriginForPayHost } from "@/lib/dashboard/payment-link";
 import { routePayQrPoint } from "@/lib/dashboard/merchant-qr";
-import { getWalletOrigin, nextPizzaSkuGuestAction, pizzaWalletCheckoutUrl } from "@/lib/pizza/redeem";
+import { nextPizzaSkuGuestAction, pizzaWalletCheckoutUrl } from "@/lib/pizza/redeem";
 
 type Search = {
   intent?: string;
@@ -44,7 +44,7 @@ async function resolveLiveCheckoutId(
 
 export async function renderPayQrPoint(
   qr: MerchantQRPoint,
-  _storeSlug: string,
+  storeSlug: string,
   searchParams: Promise<Search>,
 ) {
   const route = routePayQrPoint(qr);
@@ -68,7 +68,9 @@ export async function renderPayQrPoint(
 
   if (route.kind === "pizza_sku") {
     const sp = await searchParams;
-    const walletOrigin = getWalletOrigin();
+    const h = await headers();
+    const host = h.get("x-forwarded-host") ?? h.get("host");
+    const walletOrigin = walletOriginForPayHost(host, process.env.NEXT_PUBLIC_SOZU_WALLET_URL);
     const next = nextPizzaSkuGuestAction(
       {
         intent: sp.intent,
@@ -76,7 +78,7 @@ export async function renderPayQrPoint(
         pizza: sp.pizza,
         guest: sp.guest,
       },
-      { slug: qr.slug, walletOrigin },
+      { slug: qr.slug, walletOrigin, storeSlug },
     );
 
     if (next.kind === "intent") {
@@ -99,7 +101,7 @@ export async function renderPayQrPoint(
       redirect(next.url);
     }
 
-    redirect(pizzaWalletCheckoutUrl({ walletOrigin, slug: qr.slug }));
+    redirect(pizzaWalletCheckoutUrl({ walletOrigin, slug: qr.slug, storeSlug }));
   }
 
   const h = await headers();

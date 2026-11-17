@@ -146,7 +146,8 @@ export async function POST(request: NextRequest) {
   // Collectible receipts stay on standing links that opted in (fx source), never POS.
   const posSozuCheckout = parsed.amount.kind === "clp";
   let providerSessionId = id;
-  let providerUrl = sozuWalletCheckoutUrl(id);
+  const hostHeader = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  let providerUrl = sozuWalletCheckoutUrl(id, hostHeader);
   let providerExpiresAt: string | undefined;
   let paymentMethod: string | undefined = "sozu";
   let allowDebit = false;

@@ -22,9 +22,13 @@ Standing pizza-credit voucher for the Thursday NFC redeem. **Not** Circle USDC â
 - **Premint:** `20` to owner `GDW4KDAKWDXTTXKBJ3EPUCXQ47JOURDM3QXV623QIBNFFOO7SJT2ZQ3A`
 - **Contract ID:** `CDLIQJFEKJ4HGDQ7I5KOAVXOIZLCMVVICRMPK2LL3GE6PL53BQWGS4F6`
 - **WASM hash:** `4d80f771784327034902289ecb6209fd06330f6651f7249f5ab60b62dbab9f3b`
+- **Activation txs (2026-08-19):**
+  - Upload WASM: `70dd3cfbdcf8bcc725756124077c75a46608da211db71c15e5fe5769fd1923fd`
+  - CreateContractV2: `54ee25857cbfa942a2e826fbf2c1d7f9b18f4bf3acc4e89aacf2f695b85d3281`
 - Env: `SOROBAN_PIZZA_TOKEN_ID`
 - Deploy: `./scripts/deploy-pizza-token-testnet.sh`
 - Explorer: <https://lab.stellar.org/r/testnet/contract/CDLIQJFEKJ4HGDQ7I5KOAVXOIZLCMVVICRMPK2LL3GE6PL53BQWGS4F6>
+- Evidence pack (redeems + Section 6): [INSTAWARDS_SECTION6_EVIDENCE_PACK.md](../03-planning/INSTAWARDS_SECTION6_EVIDENCE_PACK.md)
 
 ## Disbursement wallet
 

@@ -17,6 +17,7 @@ export type User = {
   activation_requested_at: string | null;
   created_at: string;
   updated_at: string;
+  avatar_url?: string | null;
 };
 
 /** Staff Pollar identity → users.privy_user_id (`pollar:<subject>`). */

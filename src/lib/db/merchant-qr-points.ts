@@ -1,4 +1,6 @@
 import type { QrPointDestinationType } from "@/lib/dashboard/merchant-qr";
+import { isOrganizationId, slugFromTitle, STANDING_PRICE_PREFIX } from "@/lib/dashboard/payment-link";
+import { getOrganizationById, getOrganizationBySlug } from "@/lib/db/organizations";
 import { getSupabase } from "@/lib/supabase/server";
 
 export type QRPointDestinationType = QrPointDestinationType;
@@ -78,18 +80,68 @@ export async function listQRPointsForOrg(orgId: string): Promise<MerchantQRPoint
   return (data ?? []).map(fromDb);
 }
 
+/** First free item slug for this store. Another store may use the same item name. */
+export async function allocateQrSlug(orgId: string, title: string): Promise<string> {
+  const root = slugFromTitle(title);
+  for (let i = 0; i < 40; i++) {
+    const candidate = i === 0 ? root : `${root.slice(0, 36)}-${i + 1}`;
+    const existing = await getQRPointByOrgAndSlug(orgId, candidate);
+    if (!existing) return candidate;
+  }
+  throw new Error("Could not allocate a unique slug");
+}
+
+export async function getQRPointByOrgAndSlug(
+  orgId: string,
+  slug: string,
+): Promise<MerchantQRPoint | null> {
+  const { data, error } = await getSupabase()
+    .from("merchant_qr_points")
+    .select("*")
+    .eq("org_id", orgId)
+    .eq("slug", slug.toLowerCase())
+    .maybeSingle();
+
+  if (error) {
+    console.error("[qr-points] getByOrgAndSlug error:", error.message);
+    return null;
+  }
+  return data ? fromDb(data) : null;
+}
+
+/**
+ * Printed /pay/qr/{slug} and older pizza calls.
+ * The first point that used the slug keeps that URL. A later store with the
+ * same item name is reached only through /pay/qr/{store}/{slug}.
+ */
 export async function getQRPointBySlug(slug: string): Promise<MerchantQRPoint | null> {
   const { data, error } = await getSupabase()
     .from("merchant_qr_points")
     .select("*")
     .eq("slug", slug.toLowerCase())
-    .maybeSingle();
+    .order("created_at", { ascending: true })
+    .limit(1);
 
   if (error) {
     console.error("[qr-points] getBySlug error:", error.message);
     return null;
   }
-  return data ? fromDb(data) : null;
+  return data?.[0] ? fromDb(data[0]) : null;
+}
+
+/** Store-scoped lookup when the caller knows the shop. Otherwise the original slug owner. */
+export async function resolvePublicQRPoint(
+  slug: string,
+  store?: string | null,
+): Promise<MerchantQRPoint | null> {
+  const item = slug.trim().toLowerCase();
+  const storeSegment = store?.trim().toLowerCase();
+  if (!storeSegment) return getQRPointBySlug(item);
+  const org = isOrganizationId(storeSegment)
+    ? await getOrganizationById(storeSegment)
+    : await getOrganizationBySlug(storeSegment);
+  if (!org) return null;
+  return getQRPointByOrgAndSlug(org.id, item);
 }
 
 /** Point all dynamic checkout QR/NFC tags at the latest live payment link. */
@@ -106,7 +158,8 @@ export async function syncLiveCheckoutForOrg(
       updated_at: now,
     })
     .eq("org_id", orgId)
-    .eq("destination_type", "checkout");
+    .eq("destination_type", "checkout")
+    .or(`destination_ref.is.null,destination_ref.not.like.${STANDING_PRICE_PREFIX}*`);
 
   if (error) {
     console.error("[qr-points] syncLiveCheckoutForOrg error:", error.message);

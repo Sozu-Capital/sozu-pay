@@ -8,6 +8,7 @@ import { resolveOrgDisbursementContractId, resolveOrgTreasuryContractId } from "
 import { canManageDisbursements, isOrgTreasuryOwner, repairOrgCreatorAccess } from "@/lib/auth/disbursement-auth";
 import { orgOnboardingFlags } from "@/lib/org/onboarding-flags";
 import { isPizzaTokenConfigured } from "@/lib/stellar/pizza-token";
+import { readStoredAvatar } from "@/lib/avatar";
 import { isPollarMappedUser } from "@/lib/pollar/session-bridge";
 import { getUsdcBalance } from "@/lib/stellar/balance";
 import { getSorobanUsdcBalance } from "@/lib/stellar/soroban-balance";
@@ -92,6 +93,9 @@ export async function getDashboardBootstrapData(): Promise<DashboardBootstrapDat
   const profile: DashboardProfile = {
     email: activeUser.email,
     username: activeUser.username ?? null,
+    user_id: activeUser.id,
+    user_avatar_url: readStoredAvatar(activeUser.avatar_url),
+    org_avatar_url: readStoredAvatar(org?.avatar_url),
     org_name: org?.name ?? null,
     org_soroban_contract_id: orgDisbursementContractId,
     org_treasury_contract_id: orgTreasuryContractId,

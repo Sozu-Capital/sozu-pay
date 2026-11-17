@@ -15,11 +15,11 @@ CREATE TABLE IF NOT EXISTS merchant_qr_points (
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_merchant_qr_points_org_id ON merchant_qr_points(org_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_merchant_qr_points_slug ON merchant_qr_points(slug);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_merchant_qr_points_org_slug ON merchant_qr_points(org_id, slug);
 
 -- Comments
 COMMENT ON TABLE merchant_qr_points IS 'Merchant QR code payment points for in-store/online checkout';
-COMMENT ON COLUMN merchant_qr_points.slug IS 'Unique slug for the public pay URL (/pay/qr/{slug})';
+COMMENT ON COLUMN merchant_qr_points.slug IS 'Item slug, unique per store. Public URL is /pay/qr/{store}/{slug}';
 COMMENT ON COLUMN merchant_qr_points.destination_type IS 'checkout = live checkout session; custom_url = external URL; pizza_sku = standing Margherita redeem (no checkout_session)';
 COMMENT ON COLUMN merchant_qr_points.destination_ref IS 'Checkout session ID or custom URL';
 COMMENT ON COLUMN merchant_qr_points.is_online IS 'Toggle whether this QR point is active';

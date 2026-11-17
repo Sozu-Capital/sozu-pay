@@ -12,12 +12,23 @@ export type ReconciliationCharge = {
   reference: string | null;
 };
 
+/** Confirmed PizzaToken redeems use status `submitted` (treasury credited). */
+export type ReconciliationRedeem = {
+  amount: number;
+  confirmedAt: string;
+  status: "pending" | "signed" | "submitted" | "failed";
+};
+
 export type StoreReconciliationSummary = {
   timeZone: string;
   todayClp: number;
   cycleClp: number;
   cycleChargeCount: number;
   todayChargeCount: number;
+  /** Confirmed (submitted) PizzaToken redeems in today’s Santiago window. Not CLP. */
+  todayPizzaRedeemCount: number;
+  /** Confirmed (submitted) PizzaToken redeems in this week’s Santiago window. Not CLP. */
+  cyclePizzaRedeemCount: number;
   cycleStartIso: string;
   todayStartIso: string;
   charges: ReconciliationCharge[];
@@ -110,6 +121,7 @@ export function summarizeStoreReconciliation(
   charges: ReconciliationCharge[],
   now: Date = new Date(),
   timeZone: string = STORE_RECONCILIATION_TIME_ZONE,
+  redeems: ReconciliationRedeem[] = [],
 ): StoreReconciliationSummary {
   const todayStart = startOfLocalDay(now, timeZone);
   const cycleStart = startOfLocalWeek(now, timeZone);
@@ -134,12 +146,26 @@ export function summarizeStoreReconciliation(
     }
   }
 
+  let todayPizzaRedeemCount = 0;
+  let cyclePizzaRedeemCount = 0;
+
+  for (const redeem of redeems) {
+    if (redeem.status !== "submitted") continue;
+    const t = new Date(redeem.confirmedAt).getTime();
+    if (Number.isNaN(t)) continue;
+    const n = redeem.amount > 0 ? redeem.amount : 1;
+    if (t >= cycleMs) cyclePizzaRedeemCount += n;
+    if (t >= todayMs) todayPizzaRedeemCount += n;
+  }
+
   return {
     timeZone,
     todayClp,
     cycleClp,
     cycleChargeCount,
     todayChargeCount,
+    todayPizzaRedeemCount,
+    cyclePizzaRedeemCount,
     cycleStartIso: cycleStart.toISOString(),
     todayStartIso: todayStart.toISOString(),
     charges,
@@ -151,13 +177,20 @@ export function formatReconciliationClp(amount: number): string {
 }
 
 export function reconciliationCsv(summary: StoreReconciliationSummary): string {
-  const header = "id,completed_at,amount_clp,amount_usd,reference,stellar_tx_hash";
+  const header =
+    "id,completed_at,amount_clp,amount_usd,reference,stellar_tx_hash,pizza_redeem_count";
   const rows = summary.charges.map((c) => {
     const ref = (c.reference ?? "").replaceAll('"', '""');
     const hash = c.stellarTxHash ?? "";
     const usd = c.amountUsd ?? "";
-    return `${c.id},${c.completedAt},${c.amountClp},${usd},"${ref}",${hash}`;
+    // Period (this week) PizzaToken count — same on every charge row; not CLP.
+    return `${c.id},${c.completedAt},${c.amountClp},${usd},"${ref}",${hash},${summary.cyclePizzaRedeemCount}`;
   });
+  if (rows.length === 0) {
+    rows.push(
+      `_pizza_period,${summary.cycleStartIso},0,,,"cycle_pizza_redeems",,${summary.cyclePizzaRedeemCount}`,
+    );
+  }
   return [header, ...rows].join("\n") + "\n";
 }
 

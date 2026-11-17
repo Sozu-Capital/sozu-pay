@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getQRPointBySlug } from "@/lib/db/merchant-qr-points";
-import { getOrganizationById } from "@/lib/db/organizations";
+import { resolvePublicQRPoint } from "@/lib/db/merchant-qr-points";
+import { ensureOrganizationSlug, getOrganizationById } from "@/lib/db/organizations";
 import { createPizzaRedeem } from "@/lib/db/pizza-redeems";
 import { resolveCheckoutSettleToAddress } from "@/lib/checkout/settle-to";
 import { getPizzaTokenId } from "@/lib/stellar/pizza-token";
@@ -39,6 +39,7 @@ export async function OPTIONS() {
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const slug = typeof body.slug === "string" ? body.slug.trim().toLowerCase() : "";
+  const store = typeof body.store === "string" ? body.store : null;
   const guestAddress =
     typeof body.guestAddress === "string" ? body.guestAddress.trim().toUpperCase() : "";
 
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
     return json({ error: "guestAddress must be a Stellar G or C address" }, 400);
   }
 
-  const qr = await getQRPointBySlug(slug);
+  const qr = await resolvePublicQRPoint(slug, store);
   if (!qr || qr.destinationType !== "pizza_sku" || !qr.isOnline) {
     return json({ error: "Pizza SKU not found" }, 404);
   }
@@ -85,7 +86,8 @@ export async function POST(request: NextRequest) {
     tokenId: transfer.contractId,
   });
 
-  const returnTo = `${merchantQrPayUrl(slug, request)}?intent=${encodeURIComponent(redeem.id)}`;
+  const storeSlug = await ensureOrganizationSlug(org);
+  const returnTo = `${merchantQrPayUrl(storeSlug, slug, request)}?intent=${encodeURIComponent(redeem.id)}`;
   const signUrl = pizzaRedeemWalletSignUrl({
     walletOrigin: getWalletOrigin(),
     intentId: redeem.id,

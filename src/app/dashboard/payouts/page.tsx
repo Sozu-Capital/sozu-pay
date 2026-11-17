@@ -7,7 +7,6 @@ import PayoutStatusModal, { type PayoutModalSuccess } from "@/components/PayoutS
 import { useSmartAccountKitContext } from "@/components/SmartAccountKitProvider";
 import { executePasskeySorobanPayout } from "@/lib/stellar/smartAccounts/signSorobanPayout";
 import Link from "next/link";
-import { useDashboardProfile } from "@/contexts/DashboardProfileContext";
 import {
   executeAndCompletePollarClientPayout,
   isPollarClientTxChallenge,
@@ -40,8 +39,6 @@ export default function PayoutsPage() {
   const t = useTranslations("payoutsPage");
   const tc = useTranslations("common");
   const { kit, credentialId } = useSmartAccountKitContext();
-  const dash = useDashboardProfile();
-  const canSendPizza = !!dash?.profile?.can_send_pizza;
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -628,7 +625,7 @@ export default function PayoutsPage() {
       <section className="mt-8 max-w-lg rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-5">
         <h2 className="text-lg font-semibold">{t("sendUsdcTitle")}</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          {canSendPizza ? t("sendPizzaSubtitle") : t("sendUsdcSubtitle")}
+          {t("sendUsdcSubtitle")}
         </p>
         <Link
           href="/dashboard/send"

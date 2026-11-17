@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { SozuLoadingMark } from "@/components/SozuLoadingMark";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import {
   getPollarBrowserClient,
@@ -105,7 +106,7 @@ export default function PollarOAuthCallbackPage() {
             </Link>
           </div>
         ) : (
-          <p className="text-sm text-white/80">{t("redirecting")}</p>
+          <SozuLoadingMark />
         )}
       </main>
     </DarkGradientBg>

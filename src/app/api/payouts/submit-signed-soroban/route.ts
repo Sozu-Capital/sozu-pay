@@ -6,7 +6,10 @@ import { getOrganizationForUser } from "@/lib/db/organizations";
 import { getMemberSmartAccount } from "@/lib/db/smart-accounts";
 import { getPayoutById, getPayoutByIdAsync, completePayout, failPayout, ensurePendingPayout } from "@/lib/payouts";
 import { appendAuditEvent } from "@/lib/audit";
-import { submitSignedSorobanEnvelope } from "@/lib/stellar/org-treasury";
+import { getSorobanUsdcTokenId, submitSignedSorobanEnvelope } from "@/lib/stellar/org-treasury";
+import { getNetworkPassphrase } from "@/lib/stellar/soroban-common";
+import { enforcePayoutCaps, formatStroops, usdcToStroops } from "@/lib/payouts/caps";
+import { readSorobanPayoutAmounts } from "@/lib/payouts/envelope-caps";
 import { formatSorobanPayoutError } from "@/lib/stellar/soroban-payout-errors";
 import { LOCALE_COOKIE, readServerLocaleCookie } from "@/lib/i18n/locale";
 
@@ -70,6 +73,18 @@ export async function POST(request: NextRequest) {
   if (!memberSa) {
     return NextResponse.json({ error: "Member smart wallet not registered." }, { status: 403 });
   }
+
+  const signed = readSorobanPayoutAmounts(signedEnvelopeXdr, getNetworkPassphrase(), {
+    disbursementContractId: org.soroban_contract_id,
+    tokenContractId: getSorobanUsdcTokenId(),
+  });
+  if (!signed.ok) return NextResponse.json({ error: signed.error }, { status: 400 });
+  const signedTotal = signed.amounts.reduce((sum, value) => sum + value, BigInt(0));
+  if (usdcToStroops(payout.amount) !== signedTotal) {
+    return NextResponse.json({ error: "Signed payout amount does not match the payout." }, { status: 400 });
+  }
+  const caps = enforcePayoutCaps(signed.amounts.map(formatStroops));
+  if (!caps.ok) return NextResponse.json({ error: caps.error }, { status: 400 });
 
   try {
     const txHash = await submitSignedSorobanEnvelope(signedEnvelopeXdr, locale);

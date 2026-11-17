@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Transaction, Keypair } from "@stellar/stellar-sdk";
+import { SozuLoadingMark } from "@/components/SozuLoadingMark";
 
 const CTA_CLASS =
   "rounded-xl border border-orange-400/35 bg-orange-500/15 hover:bg-orange-500/25 active:bg-orange-500/30 backdrop-blur-md disabled:opacity-50 disabled:cursor-not-allowed text-orange-100 font-semibold py-3 px-6 transition-colors";
@@ -141,7 +142,7 @@ export function SdpRegisterFlow() {
   };
 
   if (loadingProfile) {
-    return <p className="text-sm text-gray-400">Cargando…</p>;
+    return <SozuLoadingMark mode="inline" />;
   }
 
   if (!profile?.stellar_public_key) {

@@ -8,6 +8,7 @@ import {
   POLLAR_OAUTH_WINDOW_NAME,
   pollarOAuthCallbackUrl,
   shouldReserveOAuthPopup,
+  withSessionIdOnRedirectUri,
 } from "@/lib/pollar/oauth-resume";
 
 const POLLAR_STORAGE_PREFIX = "pollar:";
@@ -28,8 +29,8 @@ export function isPollarFakeAuth(): boolean {
 
 /**
  * Must run synchronously in the Google click handler, before any await.
- * Desktop reserves a named popup so Google can finish there. Phones must
- * no-op — a second tab never returns to /auth/pollar/callback.
+ * Open Google in another tab so this SozuPay tab stays alive. Pollar's hosted
+ * success page only window.close()s — it never sends the browser back here.
  */
 export function reservePollarOAuthPopup(): Window | null {
   if (typeof window === "undefined") return null;
@@ -39,7 +40,11 @@ export function reservePollarOAuthPopup(): Window | null {
     oauthPopup = null;
     return null;
   }
-  const popup = window.open("about:blank", POLLAR_OAUTH_WINDOW_NAME, "popup=yes,width=480,height=720");
+  const ua = window.navigator.userAgent;
+  // iOS ignores window.open with a feature string; open a named tab instead.
+  const popup = /iPhone|iPad|iPod|Android/i.test(ua)
+    ? window.open("about:blank", POLLAR_OAUTH_WINDOW_NAME)
+    : window.open("about:blank", POLLAR_OAUTH_WINDOW_NAME, "popup=yes,width=480,height=720");
   if (!popup || popup.closed) {
     reservedPopup = null;
     oauthPopup = null;
@@ -81,12 +86,13 @@ const sozuOpenAuthUrl: AuthUrlOpener = async ({ getUrl }) => {
     (oauthPopup && !oauthPopup.closed ? oauthPopup : null);
   reservedPopup = null;
 
-  const url = await getUrl();
-  if (!url) {
+  const rawUrl = await getUrl();
+  if (!rawUrl) {
     closePollarOAuthPopup();
     return;
   }
 
+  const url = withSessionIdOnRedirectUri(rawUrl);
   const sessionId = clientSessionIdFromOAuthUrl(url);
   if (sessionId) persistPendingPollarOAuth(sessionId);
 
@@ -98,9 +104,6 @@ const sozuOpenAuthUrl: AuthUrlOpener = async ({ getUrl }) => {
 
   oauthPopup = null;
   window.location.assign(url);
-  await new Promise<void>(() => {
-    /* page navigates away; the callback finishes sign-in */
-  });
 };
 
 /** One client per publishable key. Pollar warns (and can TDZ) if we construct/destroy per mount. */

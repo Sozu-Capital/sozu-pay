@@ -8,12 +8,23 @@ import {
   hashApiKeyPrefix,
   isInAppBrowser,
   isPollarOAuthPopupWindow,
+  parsePendingPollarOAuth,
+  pendingOAuthFromCookieHeader,
   pollarOAuthCallbackUrl,
   pollarSessionStorageKey,
+  POLLAR_PENDING_OAUTH_KEY,
   sanitizeReturnTo,
   shouldReserveOAuthPopup,
   shouldUseSameWindowOAuth,
+  withSessionIdOnRedirectUri,
 } from "./oauth-resume.js";
+
+const IPHONE_SAFARI =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15";
+const ANDROID_CHROME = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/122.0.0.0";
+const MAC_CHROME =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/122";
+const INSTAGRAM_IPHONE = "Mozilla/5.0 (iPhone) Instagram 123.0";
 
 describe("sanitizeReturnTo", () => {
   it("accepts same-origin app paths", () => {
@@ -47,6 +58,25 @@ describe("clientSessionIdFromOAuthUrl", () => {
   it("reads the session id Pollar appends on the way back", () => {
     assert.equal(clientSessionIdFromCallbackSearch("?client_session_id=sess-9"), "sess-9");
     assert.equal(clientSessionIdFromCallbackSearch(""), null);
+  });
+});
+
+describe("withSessionIdOnRedirectUri", () => {
+  it("copies client_session_id onto redirect_uri", () => {
+    const url = withSessionIdOnRedirectUri(
+      "https://sdk.api.pollar.xyz/v2/auth/google?api_key=pk&client_session_id=sess-9&redirect_uri=https://pay.example/auth/pollar/callback",
+    );
+    const parsed = new URL(url);
+    assert.equal(parsed.searchParams.get("client_session_id"), "sess-9");
+    const redirect = new URL(parsed.searchParams.get("redirect_uri") ?? "");
+    assert.equal(redirect.searchParams.get("client_session_id"), "sess-9");
+    assert.equal(redirect.origin + redirect.pathname, "https://pay.example/auth/pollar/callback");
+  });
+
+  it("leaves the url unchanged when session id or redirect is missing", () => {
+    const noSession = "https://sdk.api.pollar.xyz/v2/auth/google?redirect_uri=https://pay.example/";
+    assert.equal(withSessionIdOnRedirectUri(noSession), noSession);
+    assert.equal(withSessionIdOnRedirectUri("not a url"), "not a url");
   });
 });
 
@@ -86,74 +116,48 @@ describe("pollar storage helpers", () => {
     );
   });
 
-  it("uses same-window OAuth on mobile user agents", () => {
+  it("uses same-window OAuth only in in-app browsers", () => {
+    assert.equal(shouldUseSameWindowOAuth(IPHONE_SAFARI), false);
+    assert.equal(shouldUseSameWindowOAuth(ANDROID_CHROME), false);
+    assert.equal(shouldUseSameWindowOAuth(MAC_CHROME), false);
+    assert.equal(shouldUseSameWindowOAuth(INSTAGRAM_IPHONE), true);
     assert.equal(
-      shouldUseSameWindowOAuth(
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
-      ),
+      shouldUseSameWindowOAuth("Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 FBAN/FBIOS FBAV/1.0"),
       true,
-    );
-    assert.equal(
-      shouldUseSameWindowOAuth(
-        "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/122.0.0.0",
-      ),
-      true,
-    );
-    assert.equal(
-      shouldUseSameWindowOAuth(
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/122",
-      ),
-      false,
     );
   });
 
-  it("does not reserve an OAuth popup on phones", () => {
-    assert.equal(
-      shouldReserveOAuthPopup(
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
-      ),
-      false,
-    );
-    assert.equal(
-      shouldReserveOAuthPopup(
-        "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/122.0.0.0",
-      ),
-      false,
-    );
+  it("reserves an OAuth popup on phones so this SozuPay tab stays alive", () => {
+    assert.equal(shouldReserveOAuthPopup(IPHONE_SAFARI), true);
+    assert.equal(shouldReserveOAuthPopup(ANDROID_CHROME), true);
+  });
+
+  it("does not reserve an OAuth popup in in-app browsers", () => {
+    assert.equal(shouldReserveOAuthPopup(INSTAGRAM_IPHONE), false);
   });
 
   it("reserves an OAuth popup on desktop Mac", () => {
-    assert.equal(
-      shouldReserveOAuthPopup(
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/122",
-      ),
-      true,
-    );
+    assert.equal(shouldReserveOAuthPopup(MAC_CHROME), true);
   });
 
-  it("does not reserve an OAuth popup on Macintosh with touch", () => {
+  it("reserves an OAuth popup on Macintosh with touch", () => {
     assert.equal(
       shouldReserveOAuthPopup(
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15",
         5,
       ),
-      false,
+      true,
     );
   });
 
   it("detects in-app browsers that swallow Google return", () => {
-    assert.equal(isInAppBrowser("Mozilla/5.0 (iPhone) Instagram 123.0"), true);
+    assert.equal(isInAppBrowser(INSTAGRAM_IPHONE), true);
     assert.equal(
       isInAppBrowser("Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 FBAN/FBIOS FBAV/1.0"),
       true,
     );
     assert.equal(isInAppBrowser("Mozilla/5.0 Line/14.0.0"), true);
-    assert.equal(
-      isInAppBrowser(
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
-      ),
-      false,
-    );
+    assert.equal(isInAppBrowser(IPHONE_SAFARI), false);
   });
 
   it("hashes api keys the way Pollar namespaces storage", async () => {
@@ -162,5 +166,53 @@ describe("pollar storage helpers", () => {
     const hash = await hashApiKeyPrefix("pk_test", digest);
     assert.equal(hash.length, 32);
     assert.match(hash, /^[0-9a-f]{32}$/);
+  });
+});
+
+describe("parsePendingPollarOAuth", () => {
+  it("accepts a fresh pending payload", () => {
+    const now = 1_700_000_000_000;
+    const raw = JSON.stringify({ clientSessionId: "sess-9", createdAt: now });
+    assert.deepEqual(parsePendingPollarOAuth(raw, now), {
+      clientSessionId: "sess-9",
+      createdAt: now,
+    });
+  });
+
+  it("rejects expired, invalid, and empty payloads", () => {
+    const now = 1_700_000_000_000;
+    assert.equal(
+      parsePendingPollarOAuth(
+        JSON.stringify({ clientSessionId: "sess-9", createdAt: now - 11 * 60 * 1000 }),
+        now,
+      ),
+      null,
+    );
+    assert.equal(parsePendingPollarOAuth("{not json", now), null);
+    assert.equal(parsePendingPollarOAuth("", now), null);
+    assert.equal(parsePendingPollarOAuth(null, now), null);
+  });
+});
+
+describe("pendingOAuthFromCookieHeader", () => {
+  it("parses a SameSite pending-oauth cookie", () => {
+    const now = 1_700_000_000_000;
+    const raw = JSON.stringify({ clientSessionId: "sess-9", createdAt: now });
+    const header = `other=1; ${POLLAR_PENDING_OAUTH_KEY}=${encodeURIComponent(raw)}; foo=bar`;
+    assert.deepEqual(pendingOAuthFromCookieHeader(header, now), {
+      clientSessionId: "sess-9",
+      createdAt: now,
+    });
+  });
+
+  it("rejects expired cookies and missing keys", () => {
+    const now = 1_700_000_000_000;
+    const raw = JSON.stringify({ clientSessionId: "sess-9", createdAt: now - 11 * 60 * 1000 });
+    assert.equal(
+      pendingOAuthFromCookieHeader(`${POLLAR_PENDING_OAUTH_KEY}=${encodeURIComponent(raw)}`, now),
+      null,
+    );
+    assert.equal(pendingOAuthFromCookieHeader("foo=bar", now), null);
+    assert.equal(pendingOAuthFromCookieHeader("", now), null);
   });
 });

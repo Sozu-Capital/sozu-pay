@@ -277,6 +277,14 @@
     "liveCheckoutWaiting": "Live checkout — waiting for first payment link",
     "openPayUrl": "Open pay URL",
     "closePoint": "Close",
+    "downloadQr": "Download QR card",
+    "downloadQrHint": "Click the QR to download a PNG with the item, store, and price.",
+    "downloaded": "Downloaded",
+    "copyUrl": "Copy URL",
+    "copiedUrl": "URL copied",
+    "shareLink": "Share",
+    "shared": "Shared",
+    "createdReady": "Payment link ready. Download the QR card or copy the URL to share it.",
     "customUrlLinked": "Custom URL: {url}",
     "takeOffline": "Take offline",
     "bringOnline": "Bring online",
@@ -454,6 +462,16 @@
     "signingOut": "Signing out…",
     "you": "You",
     "requestFailed": "Request failed"
+  },
+  "feedback": {
+    "label": "Feedback",
+    "placeholder": "What should we change?",
+    "send": "Send",
+    "sending": "Sending…",
+    "cancel": "Cancel",
+    "sent": "Sent to support",
+    "failed": "Could not send. Try again.",
+    "empty": "Write a short note first."
   },
   "languageSwitcher": {
     "label": "Language",

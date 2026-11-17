@@ -5,6 +5,11 @@ import { getCircleUsdcSacContractId, getSorobanUsdcTokenId } from "@/lib/stellar
 import { selectCompletedStellarPayoutsForOrg } from "@/lib/db/org-payouts";
 import { resolveAddressesToSozuTags } from "@/lib/payment/resolve-address-to-tag";
 import { normalizeStellarAddressInput } from "@/lib/payment/stellar-address";
+import {
+  historyMovementFromOperation,
+  isPositiveAmount,
+  type HorizonHistoryOperation,
+} from "@/lib/stellar/history-payment";
 
 const STELLAR_EXPERT_BASE =
   process.env.STELLAR_NETWORK === "public"
@@ -164,6 +169,7 @@ async function getSorobanTransferRows(params: {
 
     const val = coerceSimulateRetval(ev.value);
     const amount = val ? i128ToDecimalString(scValI128ToBigInt(val), 7) : "0";
+    if (!isPositiveAmount(amount)) continue;
     const isIncoming = toU === matchedHolder;
 
     let date = "";
@@ -201,7 +207,7 @@ async function getSorobanTransferRows(params: {
 
 function payoutRecordsToRows(records: Awaited<ReturnType<typeof selectCompletedStellarPayoutsForOrg>>): RawTxRow[] {
   return records
-    .filter((p) => p.stellarTxHash)
+    .filter((p) => p.stellarTxHash && isPositiveAmount(p.amount))
     .map((p) => ({
       id: p.stellarTxHash!,
       date: p.createdAt,
@@ -249,35 +255,16 @@ export async function getTransactions(
           .call();
 
         for (const p of payments.records) {
-          const id = p.id ?? p.transaction_hash ?? "";
-          const rawDate: unknown = (p as { created_at?: unknown }).created_at;
-          const date =
-            rawDate instanceof Date ? rawDate.toISOString() : String(rawDate ?? "");
-          let amount = "0";
-          let type: TransactionRow["type"] = "incoming";
-          let counterpartyAddress = "";
-
-          if (p.type === "payment" && "amount" in p) {
-            amount = (p as { amount: string }).amount;
-            const to = (p as { to?: string }).to?.toUpperCase() ?? "";
-            const from = (p as { from?: string }).from?.toUpperCase() ?? "";
-            if (to === gAddress) {
-              type = "incoming";
-              counterpartyAddress = from;
-            } else {
-              type = "payout";
-              counterpartyAddress = to;
-            }
-          }
-
+          const movement = historyMovementFromOperation(p as HorizonHistoryOperation, gAddress);
+          if (!movement) continue;
           rows.push({
-            id,
-            date,
-            amount,
-            type,
-            counterpartyAddress: counterpartyAddress || gAddress,
+            id: movement.id,
+            date: movement.date,
+            amount: movement.amount,
+            type: movement.type,
+            counterpartyAddress: movement.counterpartyAddress,
             status: "completed",
-            stellarExpertUrl: stellarExpertTxUrl(p.transaction_hash),
+            stellarExpertUrl: stellarExpertTxUrl(movement.id),
           });
         }
       } catch (e) {
@@ -320,6 +307,7 @@ export async function getTransactions(
   }
 
   const sortedRows = Array.from(mergedMap.values())
+    .filter((row) => isPositiveAmount(row.amount))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, limit);
 

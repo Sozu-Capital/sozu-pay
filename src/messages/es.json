@@ -277,6 +277,14 @@
     "liveCheckoutWaiting": "Checkout activo — esperando el primer enlace de pago",
     "openPayUrl": "Abrir URL de pago",
     "closePoint": "Cerrar",
+    "downloadQr": "Descargar tarjeta QR",
+    "downloadQrHint": "Tocá el QR para descargar un PNG con el producto, la tienda y el precio.",
+    "downloaded": "Descargado",
+    "copyUrl": "Copiar URL",
+    "copiedUrl": "URL copiada",
+    "shareLink": "Compartir",
+    "shared": "Compartido",
+    "createdReady": "El link está listo. Descargá la tarjeta QR o copiá la URL para compartirla.",
     "customUrlLinked": "URL personalizada: {url}",
     "takeOffline": "Desactivar",
     "bringOnline": "Activar",
@@ -454,6 +462,16 @@
     "signingOut": "Cerrando sesión…",
     "you": "Tú",
     "requestFailed": "Error en la solicitud"
+  },
+  "feedback": {
+    "label": "Comentarios",
+    "placeholder": "¿Qué deberíamos cambiar?",
+    "send": "Enviar",
+    "sending": "Enviando…",
+    "cancel": "Cancelar",
+    "sent": "Enviado a soporte",
+    "failed": "No se pudo enviar. Intentá de nuevo.",
+    "empty": "Escribí una nota corta primero."
   },
   "languageSwitcher": {
     "label": "Idioma",

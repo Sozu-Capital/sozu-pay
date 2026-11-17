@@ -14,6 +14,7 @@ describe("storeDashboardNavLinks", () => {
 
     assert.ok(hrefs.includes("/dashboard/pos"));
     assert.ok(hrefs.includes("/dashboard/qr-codes"));
+    assert.ok(hrefs.includes("/dashboard/souvenirs"));
     assert.ok(hrefs.includes("/dashboard/send"));
     assert.ok(kinds.includes("pos"));
     assert.ok(kinds.includes("send"));

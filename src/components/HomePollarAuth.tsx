@@ -16,6 +16,7 @@ import {
 import { completeHostedOAuthSession } from "@/lib/pollar/oauth-complete";
 import {
   clearPendingPollarOAuth,
+  isInAppBrowser,
   persistPollarReturnTo,
   readPendingPollarOAuth,
   readPollarReturnTo,
@@ -70,6 +71,9 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
   const t = useTranslations("login");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [inAppHint, setInAppHint] = useState(false);
+  const [showContinueHere, setShowContinueHere] = useState(false);
+  const [googleStuck, setGoogleStuck] = useState(false);
   const resumeRef = useRef(false);
 
   const fakeAuth = isPollarFakeAuth();
@@ -109,7 +113,7 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
     [returnTo, t],
   );
 
-  useEffect(() => {
+  const resumePendingOAuth = useCallback(() => {
     if (fakeAuth || resumeRef.current) return;
     const pending = readPendingPollarOAuth();
     if (!pending) return;
@@ -146,8 +150,38 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
     })();
   }, [bridgeWithToken, fakeAuth, returnTo, setBusyState, t]);
 
+  useEffect(() => {
+    setInAppHint(isInAppBrowser(window.navigator.userAgent));
+  }, []);
+
+  useEffect(() => {
+    if (!busy) {
+      setShowContinueHere(false);
+      return;
+    }
+    const id = window.setTimeout(() => setShowContinueHere(true), 8000);
+    return () => window.clearTimeout(id);
+  }, [busy]);
+
+  useEffect(() => {
+    resumePendingOAuth();
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) resumePendingOAuth();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, [resumePendingOAuth]);
+
+  function handleContinueHere() {
+    resumeRef.current = false;
+    setShowContinueHere(false);
+    setGoogleStuck(true);
+    setBusyState(false);
+  }
+
   async function handleGoogle() {
     setError("");
+    setGoogleStuck(false);
     persistPollarReturnTo(returnTo);
     // Reserve the OAuth window in this click tick before any await (iOS popup rule).
     if (!fakeAuth) reservePollarOAuthPopup();
@@ -201,6 +235,9 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
 
   return (
     <div className="flex w-full max-w-sm flex-col items-stretch gap-3">
+      {inAppHint ? (
+        <p className="text-center text-[11px] text-amber-200/80">{t("inAppBrowserHint")}</p>
+      ) : null}
       <button
         type="button"
         onClick={() => void handleGoogle()}
@@ -210,6 +247,18 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
         <GoogleGlyph />
         {busy ? t("redirecting") : t("continueWithGoogle")}
       </button>
+      {showContinueHere ? (
+        <button
+          type="button"
+          onClick={handleContinueHere}
+          className="text-center text-sm text-white/80 underline underline-offset-2"
+        >
+          {t("googleReturnContinue")}
+        </button>
+      ) : null}
+      {googleStuck && !busy ? (
+        <p className="text-center text-sm text-white/70">{t("googleReturnStuck")}</p>
+      ) : null}
       {fakeAuth ? (
         <p className="text-center text-[11px] text-white/45">{t("pollarDevModeHint")}</p>
       ) : null}

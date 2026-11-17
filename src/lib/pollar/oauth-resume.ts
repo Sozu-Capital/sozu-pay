@@ -176,10 +176,27 @@ export function pollarOAuthCallbackUrl(origin: string): string {
 }
 
 /**
- * Phones and tablets. `window.open(..., features)` often returns null here;
- * open the OAuth tab with no feature string. Same-window is only the fallback
- * when that open is blocked.
+ * Phones and tablets must finish Google in the same tab. Opening a second
+ * Pollar/Google tab leaves Continue with Google stuck on Redirecting… and
+ * never reaches /auth/pollar/callback.
  */
 export function shouldUseSameWindowOAuth(userAgent: string): boolean {
   return /iPhone|iPad|iPod|Android/i.test(userAgent);
+}
+
+/** In-app WebViews that often swallow the Google OAuth return. */
+export function isInAppBrowser(userAgent: string): boolean {
+  return /FBAN|FBAV|Instagram|Line\/|Twitter|TikTok|Snapchat|LinkedInApp|WhatsApp|Messenger/i.test(
+    userAgent,
+  );
+}
+
+/**
+ * Reserve a named popup only on real desktop. Phones (and iPadOS that reports
+ * Macintosh with touch) must not window.open — Google has to finish in this tab.
+ */
+export function shouldReserveOAuthPopup(userAgent: string, maxTouchPoints = 0): boolean {
+  if (shouldUseSameWindowOAuth(userAgent)) return false;
+  if (/Macintosh/i.test(userAgent) && maxTouchPoints > 1) return false;
+  return true;
 }

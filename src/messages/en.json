@@ -48,7 +48,10 @@
     "pollarNotConfigured": "Google login is not configured.",
     "pollarDevModeHint": "Dev mode: Google is simulated until Pollar keys are set.",
     "merchantAuthLead": "Sign in with Google to create your store. We'll open a payment wallet for you — no passkey or seed phrase.",
-    "existingAccountLead": "Already have a passkey account?"
+    "existingAccountLead": "A passkey is a different SozuPay account, not the same Pollar / Google login.",
+    "inAppBrowserHint": "This in-app browser often blocks Google login. Open SozuPay in Safari or Chrome.",
+    "googleReturnStuck": "Google may have opened in another tab. If sign-in finished there, you can continue here.",
+    "googleReturnContinue": "Continue here"
   },
   "merchants": {
     "homeHeadline": "Get paid online today.",
@@ -1620,4 +1623,3 @@
     "hotlinkActiveHint": "Auto pay is on — when beneficiaries finish SozuCredit registration, SDP pays from the distribution account."
   }
 }
-

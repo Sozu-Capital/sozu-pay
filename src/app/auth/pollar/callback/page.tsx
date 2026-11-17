@@ -26,7 +26,23 @@ import {
 export default function PollarOAuthCallbackPage() {
   const t = useTranslations("login");
   const [error, setError] = useState("");
+  const [showContinue, setShowContinue] = useState(false);
   const ran = useRef(false);
+
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted && !ran.current) {
+        window.location.replace(window.location.href);
+      }
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setShowContinue(true), 4000);
+    return () => window.clearTimeout(id);
+  }, []);
 
   useEffect(() => {
     if (ran.current) return;
@@ -121,7 +137,14 @@ export default function PollarOAuthCallbackPage() {
             </Link>
           </div>
         ) : (
-          <SozuLoadingMark />
+          <div className="flex flex-col items-center gap-4">
+            <SozuLoadingMark />
+            {showContinue ? (
+              <Link href="/" className="text-sm underline underline-offset-2">
+                {t("googleReturnContinue")}
+              </Link>
+            ) : null}
+          </div>
         )}
       </main>
     </DarkGradientBg>

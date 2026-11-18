@@ -2,8 +2,22 @@
 export const POLLAR_RETURN_TO_KEY = "sozupay_pollar_return_to";
 export const POLLAR_PENDING_OAUTH_KEY = "sozupay_pollar_pending_oauth";
 export const POLLAR_OAUTH_CALLBACK_PATH = "/auth/pollar/callback";
+export const POLLAR_OAUTH_HANDOFF_PATH = "/auth/pollar/google";
 /** `window.name` of the tab opened for Google. The main app window never uses this. */
 export const POLLAR_OAUTH_WINDOW_NAME = "pollar-oauth";
+export const POLLAR_OAUTH_HANDOFF_KEY = "sozupay_pollar_oauth_handoff";
+export const POLLAR_OAUTH_HANDOFF_CHANNEL = "sozupay_pollar_oauth_handoff";
+export const POLLAR_OAUTH_HANDOFF_MESSAGE = "sozupay-pollar-oauth-handoff";
+export const POLLAR_DESKTOP_OAUTH_FEATURES = "popup=yes,width=480,height=720";
+
+export type PollarOAuthHandoff = {
+  url: string;
+  createdAt: number;
+};
+
+export type PollarOAuthOpenPlan =
+  | { mode: "same-window" }
+  | { mode: "new-tab"; target: string; features: string };
 
 export type PendingPollarOAuth = {
   clientSessionId: string;
@@ -247,6 +261,10 @@ export function pollarOAuthCallbackUrl(origin: string): string {
   return `${origin.replace(/\/$/, "")}${POLLAR_OAUTH_CALLBACK_PATH}`;
 }
 
+export function pollarOAuthHandoffHref(origin: string, now: number = Date.now()): string {
+  return `${origin.replace(/\/$/, "")}${POLLAR_OAUTH_HANDOFF_PATH}?t=${now}`;
+}
+
 /** In-app WebViews that often swallow the Google OAuth return. */
 export function isInAppBrowser(userAgent: string): boolean {
   return /FBAN|FBAV|Instagram|Line\/|Twitter|TikTok|Snapchat|LinkedInApp|WhatsApp|Messenger/i.test(
@@ -254,19 +272,157 @@ export function isInAppBrowser(userAgent: string): boolean {
   );
 }
 
+/** Phones, Android tablets, and iPadOS (Macintosh + touch). */
+export function isPhoneLikeBrowser(userAgent: string, maxTouchPoints = 0): boolean {
+  if (/iPhone|iPad|iPod|Android/i.test(userAgent)) return true;
+  return /Macintosh/i.test(userAgent) && maxTouchPoints > 1;
+}
+
+export function pollarOAuthOpenPlan(
+  userAgent: string,
+  maxTouchPoints = 0,
+): PollarOAuthOpenPlan {
+  if (isInAppBrowser(userAgent)) return { mode: "same-window" };
+  if (isPhoneLikeBrowser(userAgent, maxTouchPoints)) {
+    return { mode: "new-tab", target: "_blank", features: "" };
+  }
+  return {
+    mode: "new-tab",
+    target: POLLAR_OAUTH_WINDOW_NAME,
+    features: POLLAR_DESKTOP_OAUTH_FEATURES,
+  };
+}
+
 /**
  * In-app browsers often swallow Google's return, so finish OAuth in this tab.
  * Safari/Chrome on phones keep this SozuPay tab and open Google in another.
  */
 export function shouldUseSameWindowOAuth(userAgent: string): boolean {
-  return isInAppBrowser(userAgent);
+  return pollarOAuthOpenPlan(userAgent).mode === "same-window";
 }
 
 /**
- * Reserve a named Google tab whenever we are not forced into same-window OAuth.
+ * Reserve a Google tab whenever we are not forced into same-window OAuth.
  * Phones, Safari, and Chrome keep this SozuPay tab; Pollar only window.close()s.
  */
 export function shouldReserveOAuthPopup(userAgent: string, maxTouchPoints = 0): boolean {
-  void maxTouchPoints;
-  return !shouldUseSameWindowOAuth(userAgent);
+  return pollarOAuthOpenPlan(userAgent, maxTouchPoints).mode === "new-tab";
+}
+
+const ALLOWED_HANDOFF_HOSTS = new Set([
+  "sdk.api.pollar.xyz",
+  "api.pollar.xyz",
+  "www.pollar.xyz",
+  "pollar.xyz",
+  "accounts.google.com",
+  "accounts.youtube.com",
+]);
+
+export function isAllowedPollarHandoffUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    return ALLOWED_HANDOFF_HOSTS.has(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+export function parsePollarHandoffUrl(
+  raw: string | null | undefined,
+  now: number,
+): string | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as PollarOAuthHandoff;
+    if (!parsed?.url || typeof parsed.url !== "string" || typeof parsed.createdAt !== "number") {
+      return null;
+    }
+    if (now - parsed.createdAt > PENDING_MAX_AGE_MS) return null;
+    if (!isAllowedPollarHandoffUrl(parsed.url)) return null;
+    return parsed.url;
+  } catch {
+    return null;
+  }
+}
+
+function localStorageOrNull(): Storage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function persistPollarHandoffUrl(url: string): void {
+  const store = localStorageOrNull();
+  if (!store) return;
+  const payload: PollarOAuthHandoff = { url, createdAt: Date.now() };
+  try {
+    store.setItem(POLLAR_OAUTH_HANDOFF_KEY, JSON.stringify(payload));
+  } catch {
+    // quota / private mode
+  }
+}
+
+export function readPollarHandoffUrl(now: number = Date.now()): string | null {
+  const store = localStorageOrNull();
+  if (!store) return null;
+  let raw: string | null = null;
+  try {
+    raw = store.getItem(POLLAR_OAUTH_HANDOFF_KEY);
+  } catch {
+    return null;
+  }
+  const url = parsePollarHandoffUrl(raw, now);
+  if (!url && raw) {
+    try {
+      store.removeItem(POLLAR_OAUTH_HANDOFF_KEY);
+    } catch {
+      // ignore
+    }
+  }
+  return url;
+}
+
+export function clearPollarHandoffUrl(): void {
+  const store = localStorageOrNull();
+  if (!store) return;
+  try {
+    store.removeItem(POLLAR_OAUTH_HANDOFF_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+export function consumePollarHandoffUrl(now: number = Date.now()): string | null {
+  const url = readPollarHandoffUrl(now);
+  if (url) clearPollarHandoffUrl();
+  return url;
+}
+
+function openHandoffChannel(): BroadcastChannel | null {
+  if (typeof window === "undefined" || typeof BroadcastChannel === "undefined") return null;
+  try {
+    return new BroadcastChannel(POLLAR_OAUTH_HANDOFF_CHANNEL);
+  } catch {
+    return null;
+  }
+}
+
+export function publishPollarHandoffUrl(url: string): void {
+  persistPollarHandoffUrl(url);
+  const channel = openHandoffChannel();
+  if (!channel) return;
+  try {
+    channel.postMessage({ type: POLLAR_OAUTH_HANDOFF_MESSAGE, url });
+  } catch {
+    // ignore
+  }
+  try {
+    channel.close();
+  } catch {
+    // ignore
+  }
 }

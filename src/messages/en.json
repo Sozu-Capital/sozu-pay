@@ -51,8 +51,11 @@
     "existingAccountLead": "A passkey is a different SozuPay account, not the same Pollar / Google login.",
     "inAppBrowserHint": "This in-app browser often blocks Google login. Open SozuPay in Safari or Chrome.",
     "waitingForGoogle": "Waiting for Google…",
-    "googleWaitingHint": "Confirm Google in the other tab, then come back here. Wallet setup can take a minute.",
-    "googleReturnStuck": "After Google says you are done, return here. Wallet setup can take a minute.",
+    "googleOpenNewTab": "Open Google in a new tab",
+    "googleOpening": "Opening Google…",
+    "googleHandoffStuck": "Google did not open. Return home and try Continue with Google again.",
+    "googleWaitingHint": "Google opens in a new tab. This page finishes sign-in after you confirm. Wallet setup can take a minute.",
+    "googleReturnStuck": "Pollar's confirmation page cannot log you in. Return here after Google. Wallet setup can take a minute.",
     "googleReturnContinue": "Continue here"
   },
   "merchants": {

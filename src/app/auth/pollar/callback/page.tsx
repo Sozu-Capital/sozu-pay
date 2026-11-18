@@ -55,6 +55,18 @@ export default function PollarOAuthCallbackPage() {
 
         const sendHome = (path: string) => {
           clearPendingPollarOAuth();
+          if (window.opener && !window.opener.closed) {
+            try {
+              window.opener.focus();
+            } catch {
+              // ignore
+            }
+            window.close();
+            window.setTimeout(() => {
+              window.location.replace(path);
+            }, 400);
+            return;
+          }
           window.location.replace(path);
         };
 

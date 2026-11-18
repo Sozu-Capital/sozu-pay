@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   isMissingProductImageColumn,
   parseProductImageDataUrl,
+  paymentLinkImageUrl,
   PRODUCT_IMAGE_DATA_URL_MAX_LENGTH,
   readStoredProductImage,
 } from "./product-image.js";
@@ -34,6 +35,16 @@ describe("readStoredProductImage", () => {
     assert.equal(readStoredProductImage(jpeg), jpeg);
     assert.equal(readStoredProductImage("https://example.com/tee.jpg"), null);
     assert.equal(readStoredProductImage(null), null);
+  });
+});
+
+describe("paymentLinkImageUrl", () => {
+  it("points at the public photo for a store item", () => {
+    assert.equal(
+      paymentLinkImageUrl("https://dev.pay.sozu.capital/", "org-1", "house-latte"),
+      "https://dev.pay.sozu.capital/api/public/stores/org-1/items/house-latte/image",
+    );
+    assert.equal(paymentLinkImageUrl("", "org-1", "latte"), null);
   });
 });
 

@@ -8,12 +8,14 @@ import {
   registerSmartAccount,
   resolvePublicKeyFromServer,
 } from "@/lib/stellar/smartAccounts/registerWalletClient";
+import { ensureReceiveAccount, mainnetReceiveAccountEnabled } from "@/lib/stellar/receive-account-client";
 
 export default function SetupSmartWalletPage() {
   const router = useRouter();
   const t = useTranslations("onboardingPages.smartWallet");
   const tCommon = useTranslations("onboardingPages");
   const [isMerchant, setIsMerchant] = useState(false);
+  const [isPollar, setIsPollar] = useState(false);
   const {
     ready,
     kit,
@@ -47,10 +49,7 @@ export default function SetupSmartWalletPage() {
       .then((d) => {
         const email = typeof d?.email === "string" ? d.email : "";
         if (email) setProfileEmail(email);
-        if (d?.is_pollar_user) {
-          router.replace("/dashboard");
-          return;
-        }
+        if (d?.is_pollar_user) setIsPollar(true);
         if (d?.org_type === "store") setIsMerchant(true);
       })
       .catch(() => {});
@@ -76,6 +75,21 @@ export default function SetupSmartWalletPage() {
   const canProceed = ready && !!kit;
   const passkeyLabel = fullName.trim() || t("primaryPasskey");
 
+  const saveSignInPasskey = async (credentialId: string, publicKey: Uint8Array) => {
+    let binary = "";
+    for (const byte of publicKey) binary += String.fromCharCode(byte);
+    const res = await fetch("/api/auth/passkeys", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ credentialId, publicKey: btoa(binary) }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) {
+      throw new Error(data.error ?? t("failed"));
+    }
+  };
+
   const persistWallet = async (params: {
     contractId: string;
     credentialId: string;
@@ -96,7 +110,9 @@ export default function SetupSmartWalletPage() {
     setCreateStep("device");
     const unsubCreated = kit?.events.on("credentialCreated", () => setCreateStep("deploy"));
     try {
-      if (isMerchant) {
+      let credentialId = "";
+      let publicKey: Uint8Array | null = null;
+      if (isMerchant || isPollar) {
         const wallet = await createWallet(
           passkeyLabel,
           profileEmail || fullName.trim() || "merchant",
@@ -105,19 +121,26 @@ export default function SetupSmartWalletPage() {
         if (!wallet.contractId || !wallet.credentialId || !wallet.publicKey) {
           throw new Error(t("noWalletConnected"));
         }
+        credentialId = wallet.credentialId;
+        publicKey = wallet.publicKey;
         await persistWallet({
           contractId: wallet.contractId,
-          credentialId: wallet.credentialId,
-          publicKey: wallet.publicKey,
+          credentialId,
+          publicKey,
         });
       } else {
         const wallet = await linkMemberWallet(loginCredentialId ?? undefined);
+        credentialId = wallet.credentialId;
+        publicKey = wallet.publicKey;
         await persistWallet({
           contractId: wallet.contractId,
-          credentialId: wallet.credentialId,
-          publicKey: wallet.publicKey,
+          credentialId,
+          publicKey,
         });
       }
+      if (!credentialId || !publicKey) throw new Error(t("noWalletConnected"));
+      await saveSignInPasskey(credentialId, publicKey);
+      if (!isPollar && mainnetReceiveAccountEnabled()) await ensureReceiveAccount();
       router.replace("/dashboard");
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : t("failed"));
@@ -148,6 +171,8 @@ export default function SetupSmartWalletPage() {
         credentialId: linked.credentialId,
         publicKey,
       });
+      await saveSignInPasskey(linked.credentialId, publicKey);
+      if (!isPollar && mainnetReceiveAccountEnabled()) await ensureReceiveAccount();
       router.replace("/dashboard");
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : t("failed"));

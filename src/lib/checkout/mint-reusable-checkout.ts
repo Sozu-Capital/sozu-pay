@@ -29,6 +29,8 @@ export async function mintReusableCheckout(params: {
   fxSource: string;
   /** Locks one numbered collectible, for example edition:liquid-society:6/10. */
   idempotencyKey?: string;
+  /** Item slug, so the receipt can load the photo on that payment link. */
+  sourceSlug?: string;
   request?: NextRequest;
   hostHeader?: string | null;
 }): Promise<
@@ -62,6 +64,7 @@ export async function mintReusableCheckout(params: {
       providerUrl: walletCheckoutUrl,
       fxSource: params.fxSource,
       idempotencyKey: params.idempotencyKey,
+      sourceSlug: params.sourceSlug,
       expiresAt: computeCheckoutExpiresAt(),
       paymentMethod: "sozu",
     });

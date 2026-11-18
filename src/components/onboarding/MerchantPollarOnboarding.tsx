@@ -469,7 +469,7 @@ export function MerchantPollarOnboarding({ onBackToPicker }: MerchantPollarOnboa
               <p className="text-xs leading-relaxed text-gray-400">{t("secureHowHint")}</p>
             </div>
             <div className="mt-6 flex flex-col gap-2">
-              <PrimaryButton onClick={() => finish("/dashboard")}>
+              <PrimaryButton onClick={() => finish("/onboarding/setup-smart-wallet")}>
                 {t("secureNowCta")}
               </PrimaryButton>
               <SecondaryButton onClick={() => setPhase("done")}>

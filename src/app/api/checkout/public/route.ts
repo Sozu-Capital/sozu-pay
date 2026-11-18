@@ -3,15 +3,32 @@ import {
   getCheckoutSession,
   markCheckoutSessionExpired,
 } from "@/lib/db/checkout-sessions";
-import { listQRPointsForOrg } from "@/lib/db/merchant-qr-points";
 import { getOrganizationById } from "@/lib/db/organizations";
 import { getAppBaseUrl } from "@/lib/app-url";
 import { effectiveCheckoutStatus } from "@/lib/checkout/expiration";
-import { checkoutProductImageUrl } from "@/lib/dashboard/checkout-product-image";
 import { editionClaimFields } from "@/lib/dashboard/collectible-edition";
-import { isCollectibleCheckout } from "@/lib/dashboard/payment-link";
+import { checkoutOriginFromHeaders, isCollectibleCheckout } from "@/lib/dashboard/payment-link";
+import { paymentLinkImageUrl } from "@/lib/dashboard/product-image";
+import { getQRPointByOrgAndSlug } from "@/lib/db/merchant-qr-points";
+import type { CheckoutSession } from "@/lib/db/checkout-sessions";
 
 const ALLOWED_ORIGIN = getAppBaseUrl();
+
+async function productImageForSession(
+  request: NextRequest,
+  session: CheckoutSession,
+): Promise<string | null> {
+  const slug = session.source_slug?.trim();
+  if (!slug) return null;
+  const point = await getQRPointByOrgAndSlug(session.org_id, slug);
+  if (!point?.imageUrl) return null;
+  const origin = checkoutOriginFromHeaders(
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host"),
+    request.headers.get("x-forwarded-proto"),
+    getAppBaseUrl(request),
+  );
+  return paymentLinkImageUrl(origin, session.org_id, point.slug);
+}
 
 function corsHeaders() {
   return {
@@ -19,15 +36,6 @@ function corsHeaders() {
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
-}
-
-async function productImageForCheckout(session: {
-  org_id: string;
-  reference: string | null;
-  idempotency_key: string | null;
-}): Promise<string | null> {
-  const points = await listQRPointsForOrg(session.org_id);
-  return checkoutProductImageUrl(getAppBaseUrl(), session.org_id, session, points);
 }
 
 /**
@@ -71,9 +79,10 @@ export async function GET(request: NextRequest) {
     await markCheckoutSessionExpired(session.id);
   }
 
+  const productImageUrl = await productImageForSession(request, session);
+
   // Return 410 Gone if session is not pending (with status so payer can show receipt)
   if (status !== "pending") {
-    const productImageUrl = await productImageForCheckout(session);
     return NextResponse.json(
       {
         error: status === "expired" ? "Session expired" : "Session not pending",
@@ -102,9 +111,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Fetch merchant name
-  const orgPromise = getOrganizationById(session.org_id);
-  const productImagePromise = productImageForCheckout(session);
-  const [org, productImageUrl] = await Promise.all([orgPromise, productImagePromise]);
+  const org = await getOrganizationById(session.org_id);
   const merchantName = org?.name ?? "Merchant";
 
   return NextResponse.json(

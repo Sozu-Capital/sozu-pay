@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { OrgTreasurySetup } from "@/components/OrgTreasurySetup";
+import { ExportReceiveAccountButton } from "@/components/profile/ExportReceiveAccountButton";
 import { ProfileAddressRow } from "@/components/profile/ProfileAddressRow";
 import { ProfileCollapsibleCard } from "@/components/profile/ProfileCollapsibleCard";
 import { AccountAvatar } from "@/components/AccountAvatar";
@@ -560,6 +561,7 @@ export default function ProfilePage() {
           >
             {t("orgTagSettingsLink")}
           </Link>
+          <ExportReceiveAccountButton />
         </section>
       ) : null}
 

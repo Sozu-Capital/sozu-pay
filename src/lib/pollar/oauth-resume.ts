@@ -311,6 +311,7 @@ export function shouldReserveOAuthPopup(userAgent: string, maxTouchPoints = 0): 
 
 const ALLOWED_HANDOFF_HOSTS = new Set([
   "sdk.api.pollar.xyz",
+  "server.api.pollar.xyz",
   "api.pollar.xyz",
   "www.pollar.xyz",
   "pollar.xyz",

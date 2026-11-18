@@ -5,6 +5,33 @@ import {
   type PollarVerifiedIdentity,
 } from "./types";
 
+/** Current Pollar Server API. `https://api.pollar.xyz` is dead (404). */
+export const POLLAR_SERVER_API_ORIGIN = "https://server.api.pollar.xyz";
+
+const LEGACY_DEAD_SERVER_HOSTS = new Set(["api.pollar.xyz"]);
+
+/**
+ * Origin for secret-key Server API calls. Rewrites the retired api.pollar.xyz
+ * host and strips a trailing /v1 or /v3 so we always append `/v3/...`.
+ */
+export function resolvePollarServerBase(raw?: string | null): string {
+  const fallback = POLLAR_SERVER_API_ORIGIN;
+  const trimmed = (raw ?? "").trim();
+  const value = (trimmed || fallback).replace(/\/+$/, "").replace(/\/v\d+$/i, "");
+  try {
+    const url = new URL(value);
+    if (LEGACY_DEAD_SERVER_HOSTS.has(url.hostname)) return fallback;
+    const path = url.pathname === "/" ? "" : url.pathname.replace(/\/+$/, "");
+    return `${url.origin}${path}`;
+  } catch {
+    return fallback;
+  }
+}
+
+export function pollarTokenVerifyUrl(raw?: string | null): string {
+  return `${resolvePollarServerBase(raw)}/v3/tokens/verify`;
+}
+
 /**
  * Fake verifier for tests / local `POLLAR_FAKE_AUTH=true`.
  * Token format: `fake.<subject>.<email>` (email may use `_at_` for `@`).
@@ -35,18 +62,21 @@ export class FakePollarTokenVerifier implements PollarTokenVerifier {
 }
 
 /**
- * Live Pollar Server API token verify (`POST /v1/tokens/verify`).
+ * Live Pollar Server API token verify (`POST /v3/tokens/verify`).
  * Docs: https://docs.pollar.xyz/docs/sdk-reference/server-api
  */
 export class HttpPollarTokenVerifier implements PollarTokenVerifier {
+  private readonly verifyUrl: string;
+
   constructor(
     private readonly secretKey: string,
-    private readonly baseUrl: string = process.env.POLLAR_SERVER_BASE?.replace(/\/$/, "") ||
-      "https://api.pollar.xyz",
-  ) {}
+    baseUrl: string | null | undefined = process.env.POLLAR_SERVER_BASE,
+  ) {
+    this.verifyUrl = pollarTokenVerifyUrl(baseUrl);
+  }
 
   async verify(token: string): Promise<PollarVerifiedIdentity> {
-    const url = `${this.baseUrl}/v1/tokens/verify`;
+    const url = this.verifyUrl;
     const res = await fetch(url, {
       method: "POST",
       headers: {

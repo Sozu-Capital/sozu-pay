@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useLayoutEffect, useState, type ReactNode } from "react";
 import { PollarProvider } from "@pollar/react";
 import "@pollar/react/styles.css";
 import type { PollarClient } from "@pollar/core";
@@ -10,12 +10,12 @@ import { getPollarBrowserClient, isPollarFakeAuth } from "@/lib/pollar/browser-c
  * Mounts Pollar's confirmation / Turnkey setup modals on the same client
  * singleton Google login uses. Live (mainnet) wallets prompt the user; without
  * this, signatures fail with SDK_CONFIRMATION_UNAVAILABLE and setup never
- * finishes.
+ * finishes. useLayoutEffect so CosignModal is on the tree before login resume.
  */
 export function PollarAppProvider({ children }: { children: ReactNode }) {
   const [client, setClient] = useState<PollarClient | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (isPollarFakeAuth()) return;
     setClient(getPollarBrowserClient());
   }, []);

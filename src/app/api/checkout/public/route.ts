@@ -3,9 +3,11 @@ import {
   getCheckoutSession,
   markCheckoutSessionExpired,
 } from "@/lib/db/checkout-sessions";
+import { listQRPointsForOrg } from "@/lib/db/merchant-qr-points";
 import { getOrganizationById } from "@/lib/db/organizations";
 import { getAppBaseUrl } from "@/lib/app-url";
 import { effectiveCheckoutStatus } from "@/lib/checkout/expiration";
+import { checkoutProductImageUrl } from "@/lib/dashboard/checkout-product-image";
 import { editionClaimFields } from "@/lib/dashboard/collectible-edition";
 import { isCollectibleCheckout } from "@/lib/dashboard/payment-link";
 
@@ -17,6 +19,15 @@ function corsHeaders() {
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
+}
+
+async function productImageForCheckout(session: {
+  org_id: string;
+  reference: string | null;
+  idempotency_key: string | null;
+}): Promise<string | null> {
+  const points = await listQRPointsForOrg(session.org_id);
+  return checkoutProductImageUrl(getAppBaseUrl(), session.org_id, session, points);
 }
 
 /**
@@ -62,6 +73,7 @@ export async function GET(request: NextRequest) {
 
   // Return 410 Gone if session is not pending (with status so payer can show receipt)
   if (status !== "pending") {
+    const productImageUrl = await productImageForCheckout(session);
     return NextResponse.json(
       {
         error: status === "expired" ? "Session expired" : "Session not pending",
@@ -75,6 +87,7 @@ export async function GET(request: NextRequest) {
         stellarTxHash: session.stellar_tx_hash,
         completedPaymentMethod: session.completed_payment_method,
         collectibleReceipt: isCollectibleCheckout(session.fx_source),
+        productImageUrl,
         ...editionClaimFields(session.idempotency_key),
       },
       { status: 410, headers: corsHeaders() }
@@ -89,7 +102,9 @@ export async function GET(request: NextRequest) {
   }
 
   // Fetch merchant name
-  const org = await getOrganizationById(session.org_id);
+  const orgPromise = getOrganizationById(session.org_id);
+  const productImagePromise = productImageForCheckout(session);
+  const [org, productImageUrl] = await Promise.all([orgPromise, productImagePromise]);
   const merchantName = org?.name ?? "Merchant";
 
   return NextResponse.json(
@@ -107,6 +122,7 @@ export async function GET(request: NextRequest) {
       createdAt: session.created_at,
       expiresAt: session.expires_at,
       collectibleReceipt: isCollectibleCheckout(session.fx_source),
+      productImageUrl,
       ...editionClaimFields(session.idempotency_key),
     },
     { headers: corsHeaders() }

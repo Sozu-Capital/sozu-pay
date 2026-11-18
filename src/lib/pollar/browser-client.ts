@@ -4,7 +4,7 @@ import { PollarClient } from "@pollar/core";
 import type { AuthUrlOpener, PollarClientConfig } from "@pollar/core";
 import {
   pollarLoginTimeoutMs,
-  pollarStellarNetworkFromEnv,
+  pollarStellarNetworkForClient,
 } from "@/lib/pollar/network";
 import {
   clientSessionIdFromOAuthUrl,
@@ -188,8 +188,9 @@ const sozuOpenAuthUrl: AuthUrlOpener = async ({ getUrl }) => {
   sendUrlToHandoffTab(popup, url);
 };
 
+/** Derive stellarNetwork from `apiKey` itself. Next.js cannot inline NEXT_PUBLIC_* through a copied process.env object. */
 export function pollarBrowserClientConfig(apiKey: string): PollarClientConfig {
-  const stellarNetwork = pollarStellarNetworkFromEnv();
+  const stellarNetwork = pollarStellarNetworkForClient(apiKey);
   return {
     apiKey,
     stellarNetwork,

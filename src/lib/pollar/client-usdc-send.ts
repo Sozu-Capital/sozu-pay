@@ -7,10 +7,11 @@
 
 import {
   getPollarBrowserClient,
+  getPollarPublishableKey,
   isPollarFakeAuth,
   waitForPollarClientReady,
 } from "@/lib/pollar/browser-client";
-import { pollarStellarNetworkFromEnv } from "@/lib/pollar/network";
+import { pollarStellarNetworkForClient } from "@/lib/pollar/network";
 import type { PayoutAsset } from "@/lib/payouts/asset";
 import { pollarSendPlan } from "@/lib/payouts/send-plan";
 
@@ -20,7 +21,9 @@ const USDC_ISSUER_PUBLIC =
   "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4EZN";
 
 function usdcIssuer(): string {
-  return pollarStellarNetworkFromEnv() === "mainnet" ? USDC_ISSUER_PUBLIC : USDC_ISSUER_TESTNET;
+  return pollarStellarNetworkForClient(getPollarPublishableKey()) === "mainnet"
+    ? USDC_ISSUER_PUBLIC
+    : USDC_ISSUER_TESTNET;
 }
 
 export type PollarClientUsdcSendInput = {

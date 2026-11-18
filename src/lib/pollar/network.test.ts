@@ -4,6 +4,7 @@ import {
   POLLAR_SDK_API_VERSION,
   pollarLoginTimeoutMs,
   pollarSdkApiPath,
+  pollarStellarNetworkForClient,
   pollarStellarNetworkFromEnv,
   pollarStellarNetworkFromPublishableKey,
   resolvePollarStellarNetwork,
@@ -43,6 +44,21 @@ describe("Pollar stellar network", () => {
 
   it("defaults to testnet when nothing is configured", () => {
     assert.equal(pollarStellarNetworkFromEnv({}), "testnet");
+  });
+
+  it("does not treat an empty env dict as process.env (Next.js cannot inline that)", () => {
+    assert.equal(
+      pollarStellarNetworkFromEnv({
+        NEXT_PUBLIC_POLLAR_PUBLISHABLE_KEY: undefined,
+        NEXT_PUBLIC_STELLAR_NETWORK: undefined,
+      }),
+      "testnet",
+    );
+  });
+
+  it("picks mainnet from the client apiKey even when Stellar env is testnet", () => {
+    assert.equal(pollarStellarNetworkForClient("pub_mainnet_live"), "mainnet");
+    assert.equal(pollarStellarNetworkForClient("pub_testnet_dev"), "testnet");
   });
 
   it("uses a longer login timeout on mainnet wallet setup", () => {

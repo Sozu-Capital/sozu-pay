@@ -8,7 +8,7 @@ type Params = { params: Promise<{ id: string; slug: string }> };
 export async function GET(_request: Request, { params }: Params) {
   const { id, slug } = await params;
   const point = await resolvePublicQRPoint(slug, id);
-  const image = point?.isOnline ? readStoredProductImage(point.imageUrl) : null;
+  const image = point ? readStoredProductImage(point.imageUrl) : null;
   const match = image?.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/);
   if (!match) return new NextResponse(null, { status: 404 });
 

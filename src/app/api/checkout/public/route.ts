@@ -7,9 +7,28 @@ import { getOrganizationById } from "@/lib/db/organizations";
 import { getAppBaseUrl } from "@/lib/app-url";
 import { effectiveCheckoutStatus } from "@/lib/checkout/expiration";
 import { editionClaimFields } from "@/lib/dashboard/collectible-edition";
-import { isCollectibleCheckout } from "@/lib/dashboard/payment-link";
+import { checkoutOriginFromHeaders, isCollectibleCheckout } from "@/lib/dashboard/payment-link";
+import { paymentLinkImageUrl } from "@/lib/dashboard/product-image";
+import { getQRPointByOrgAndSlug } from "@/lib/db/merchant-qr-points";
+import type { CheckoutSession } from "@/lib/db/checkout-sessions";
 
 const ALLOWED_ORIGIN = getAppBaseUrl();
+
+async function productImageForSession(
+  request: NextRequest,
+  session: CheckoutSession,
+): Promise<string | null> {
+  const slug = session.source_slug?.trim();
+  if (!slug) return null;
+  const point = await getQRPointByOrgAndSlug(session.org_id, slug);
+  if (!point?.imageUrl) return null;
+  const origin = checkoutOriginFromHeaders(
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host"),
+    request.headers.get("x-forwarded-proto"),
+    getAppBaseUrl(request),
+  );
+  return paymentLinkImageUrl(origin, session.org_id, point.slug);
+}
 
 function corsHeaders() {
   return {
@@ -60,6 +79,8 @@ export async function GET(request: NextRequest) {
     await markCheckoutSessionExpired(session.id);
   }
 
+  const productImageUrl = await productImageForSession(request, session);
+
   // Return 410 Gone if session is not pending (with status so payer can show receipt)
   if (status !== "pending") {
     return NextResponse.json(
@@ -75,6 +96,7 @@ export async function GET(request: NextRequest) {
         stellarTxHash: session.stellar_tx_hash,
         completedPaymentMethod: session.completed_payment_method,
         collectibleReceipt: isCollectibleCheckout(session.fx_source),
+        productImageUrl,
         ...editionClaimFields(session.idempotency_key),
       },
       { status: 410, headers: corsHeaders() }
@@ -107,6 +129,7 @@ export async function GET(request: NextRequest) {
       createdAt: session.created_at,
       expiresAt: session.expires_at,
       collectibleReceipt: isCollectibleCheckout(session.fx_source),
+      productImageUrl,
       ...editionClaimFields(session.idempotency_key),
     },
     { headers: corsHeaders() }

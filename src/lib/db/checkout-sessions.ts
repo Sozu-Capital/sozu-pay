@@ -13,6 +13,8 @@ export type CheckoutSession = {
   fx_rate_clp_per_usdc: number | null;
   fx_source: string | null;
   idempotency_key: string | null;
+  /** Item slug of the standing payment link that opened this checkout. */
+  source_slug: string | null;
   reference: string | null;
   status: CheckoutSessionStatus;
   destination_stellar_address: string;
@@ -40,6 +42,8 @@ export async function createCheckoutSession(params: {
   fxRateClpPerUsdc?: number;
   fxSource?: string;
   idempotencyKey?: string;
+  /** Standing payment link item slug. Omitted for a one-shot sale. */
+  sourceSlug?: string;
   reference?: string;
   destinationStellarAddress: string;
   providerSessionId: string;
@@ -52,32 +56,35 @@ export async function createCheckoutSession(params: {
   allowBankTransfer?: boolean;
 }): Promise<CheckoutSession> {
   const now = new Date().toISOString();
-  const { data, error } = await getSupabase()
-    .from("checkout_sessions")
-    .insert({
-      id: params.id,
-      org_id: params.orgId,
-      amount_usd: params.amountUsd,
-      amount_clp: params.amountClp ?? null,
-      pricing_currency: params.pricingCurrency ?? null,
-      fx_rate_clp_per_usdc: params.fxRateClpPerUsdc ?? null,
-      fx_source: params.fxSource ?? null,
-      idempotency_key: params.idempotencyKey ?? null,
-      reference: params.reference ?? null,
-      status: "pending",
-      destination_stellar_address: params.destinationStellarAddress,
-      provider_session_id: params.providerSessionId,
-      provider_url: params.providerUrl,
-      payment_method: params.paymentMethod ?? null,
-      allow_debit: params.allowDebit ?? true,
-      allow_credit: params.allowCredit ?? true,
-      allow_bank_transfer: params.allowBankTransfer ?? true,
-      expires_at: params.expiresAt ?? null,
-      created_at: now,
-      updated_at: now,
-    })
-    .select()
-    .single();
+  const row: Record<string, unknown> = {
+    id: params.id,
+    org_id: params.orgId,
+    amount_usd: params.amountUsd,
+    amount_clp: params.amountClp ?? null,
+    pricing_currency: params.pricingCurrency ?? null,
+    fx_rate_clp_per_usdc: params.fxRateClpPerUsdc ?? null,
+    fx_source: params.fxSource ?? null,
+    idempotency_key: params.idempotencyKey ?? null,
+    reference: params.reference ?? null,
+    status: "pending",
+    destination_stellar_address: params.destinationStellarAddress,
+    provider_session_id: params.providerSessionId,
+    provider_url: params.providerUrl,
+    payment_method: params.paymentMethod ?? null,
+    allow_debit: params.allowDebit ?? true,
+    allow_credit: params.allowCredit ?? true,
+    allow_bank_transfer: params.allowBankTransfer ?? true,
+    expires_at: params.expiresAt ?? null,
+    created_at: now,
+    updated_at: now,
+  };
+  if (params.sourceSlug) row.source_slug = params.sourceSlug;
+
+  let { data, error } = await getSupabase().from("checkout_sessions").insert(row).select().single();
+  if (error && params.sourceSlug && /source_slug/i.test(error.message)) {
+    delete row.source_slug;
+    ({ data, error } = await getSupabase().from("checkout_sessions").insert(row).select().single());
+  }
 
   if (error) throw new Error(error.message);
   return data as CheckoutSession;

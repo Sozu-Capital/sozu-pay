@@ -8,6 +8,7 @@ import {
   registerSmartAccount,
   resolvePublicKeyFromServer,
 } from "@/lib/stellar/smartAccounts/registerWalletClient";
+import { ensureReceiveAccount, mainnetReceiveAccountEnabled } from "@/lib/stellar/receive-account-client";
 
 export default function SetupSmartWalletPage() {
   const router = useRouter();
@@ -118,6 +119,7 @@ export default function SetupSmartWalletPage() {
           publicKey: wallet.publicKey,
         });
       }
+      if (mainnetReceiveAccountEnabled()) await ensureReceiveAccount();
       router.replace("/dashboard");
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : t("failed"));
@@ -148,6 +150,7 @@ export default function SetupSmartWalletPage() {
         credentialId: linked.credentialId,
         publicKey,
       });
+      if (mainnetReceiveAccountEnabled()) await ensureReceiveAccount();
       router.replace("/dashboard");
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : t("failed"));

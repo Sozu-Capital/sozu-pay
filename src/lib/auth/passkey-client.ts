@@ -130,6 +130,7 @@ export async function createPasskey(challenge: PasskeyChallenge): Promise<Passke
         ...challenge.authenticatorSelection,
       },
       timeout: challenge.timeout ?? 60000,
+      extensions: { prf: {} },
     },
   })) as PublicKeyCredential | null;
 

@@ -22,3 +22,12 @@ export function readStoredProductImage(value: unknown): string | null {
 export function isMissingProductImageColumn(message: string): boolean {
   return /image_url/i.test(message);
 }
+
+/** Absolute URL for the photo stored on a payment link. */
+export function paymentLinkImageUrl(origin: string, storeId: string, itemSlug: string): string | null {
+  const store = storeId.trim();
+  const item = itemSlug.trim().toLowerCase();
+  const base = origin.trim().replace(/\/$/, "");
+  if (!store || !item || !/^https?:\/\//.test(base)) return null;
+  return `${base}/api/public/stores/${encodeURIComponent(store)}/items/${encodeURIComponent(item)}/image`;
+}

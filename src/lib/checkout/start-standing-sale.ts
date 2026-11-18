@@ -49,6 +49,7 @@ export async function startStandingSale(params: {
       amountUsd: params.amountUsd,
       reference: params.name,
       fxSource,
+      sourceSlug: params.slug,
       hostHeader: params.hostHeader,
     });
     if (!minted.ok) return { ok: false, status: minted.status, error: minted.error };
@@ -109,6 +110,7 @@ export async function startStandingSale(params: {
       reference,
       fxSource,
       idempotencyKey: editionClaimKey(params.slug, number, size),
+      sourceSlug: params.slug,
       hostHeader: params.hostHeader,
     });
     if (minted.ok) {

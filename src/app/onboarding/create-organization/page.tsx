@@ -19,6 +19,7 @@ import {
 import { OrgFundPaymentModal } from "@/components/onboarding/OrgFundPaymentModal";
 import { OrgKindPicker, type OrgKind } from "@/components/onboarding/OrgKindPicker";
 import { clearClientSignupIntent } from "@/lib/auth/signup-intent";
+import { ensureReceiveAccount, mainnetReceiveAccountEnabled } from "@/lib/stellar/receive-account-client";
 
 type TaxEntityType = "private_company" | "ngo";
 type InviteRole = "member" | "admin" | "guardian" | "treasury_manager";
@@ -361,6 +362,9 @@ function PasskeyCreateOrganizationPage() {
       const treasuryData = await treasuryRes.json().catch(() => ({}));
       if (!treasuryRes.ok) {
         throw new Error(treasuryData.error ?? t("treasuryFailed"));
+      }
+      if (mainnetReceiveAccountEnabled()) {
+        await ensureReceiveAccount();
       }
 
       const treasuryId = treasuryData.soroban_contract_id ?? null;

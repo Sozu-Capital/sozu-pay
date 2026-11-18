@@ -308,6 +308,25 @@ export async function updateOrganizationWallet(
   return data as Organization;
 }
 
+/** Point checkout at a classic account. Does not write a server-held secret. */
+export async function updateOrganizationReceiveAddress(
+  orgId: string,
+  publicKey: string,
+): Promise<Organization | null> {
+  const { data, error } = await getSupabase()
+    .from("organizations")
+    .update({
+      stellar_disbursement_public_key: publicKey,
+      stellar_disbursement_secret_encrypted: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", orgId)
+    .select()
+    .single();
+  if (error) return null;
+  return data as Organization;
+}
+
 export async function updateOrganizationRecoverySecret(
   orgId: string,
   recoveryEncryptedSecret: string | null

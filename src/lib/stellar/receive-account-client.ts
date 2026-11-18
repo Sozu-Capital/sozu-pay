@@ -27,7 +27,7 @@ export async function readPasskeyPrf(): Promise<string> {
   const credential = (await navigator.credentials.get({
     publicKey: {
       challenge: crypto.getRandomValues(new Uint8Array(32)),
-      rpId: process.env.NEXT_PUBLIC_RP_ID || window.location.hostname,
+      rpId: window.location.hostname,
       userVerification: "required",
       timeout: 60000,
       extensions: {
@@ -73,7 +73,20 @@ export async function ensureReceiveAccount(): Promise<{ publicKey: string; alrea
 /** Decrypt the store secret on this device. Nothing is sent back to the server. */
 export async function exportReceiveAccount(): Promise<string> {
   const prf = await readPasskeyPrf();
-  const res = await fetch("/api/profile/org/receive-account", { credentials: "include" });
+  let res = await fetch("/api/profile/org/receive-account", { credentials: "include" });
+  if (res.status === 404) {
+    const created = await fetch("/api/profile/org/receive-account", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prf }),
+    });
+    const createdBody = (await created.json().catch(() => ({}))) as { error?: string };
+    if (!created.ok) {
+      throw new Error(createdBody.error ?? "Could not finish the receiving account.");
+    }
+    res = await fetch("/api/profile/org/receive-account", { credentials: "include" });
+  }
   const data = (await res.json().catch(() => ({}))) as { error?: string; blob?: string };
   if (!res.ok || !data.blob) {
     throw new Error(data.error ?? "No export is saved for this store.");

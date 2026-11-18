@@ -45,12 +45,44 @@ export function resolvePollarStellarNetwork(params: {
   );
 }
 
+/**
+ * Next.js inlines `process.env.NEXT_PUBLIC_*` only as a static member
+ * expression. Copying `process.env` into a variable and reading
+ * `env.NEXT_PUBLIC_POLLAR_PUBLISHABLE_KEY` leaves the browser with
+ * `undefined`, so the SDK hashed Turnkey setup txs with the testnet
+ * passphrase while the live app issued mainnet envelopes.
+ */
+function pollarPublicEnv(): {
+  apiKey: string | undefined;
+  stellarNetwork: string | undefined;
+} {
+  return {
+    apiKey: process.env.NEXT_PUBLIC_POLLAR_PUBLISHABLE_KEY,
+    stellarNetwork: process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? process.env.STELLAR_NETWORK,
+  };
+}
+
 export function pollarStellarNetworkFromEnv(
-  env: NodeJS.Dict<string> = typeof process !== "undefined" ? process.env : {},
+  env?: NodeJS.Dict<string>,
 ): PollarStellarNetwork {
+  if (env) {
+    return resolvePollarStellarNetwork({
+      apiKey: env.NEXT_PUBLIC_POLLAR_PUBLISHABLE_KEY,
+      stellarNetwork: env.NEXT_PUBLIC_STELLAR_NETWORK ?? env.STELLAR_NETWORK,
+    });
+  }
+  const fromProcess = pollarPublicEnv();
   return resolvePollarStellarNetwork({
-    apiKey: env.NEXT_PUBLIC_POLLAR_PUBLISHABLE_KEY,
-    stellarNetwork: env.NEXT_PUBLIC_STELLAR_NETWORK ?? env.STELLAR_NETWORK,
+    apiKey: fromProcess.apiKey,
+    stellarNetwork: fromProcess.stellarNetwork,
+  });
+}
+
+/** Network for a PollarClient built with this publishable key (already inlined). */
+export function pollarStellarNetworkForClient(apiKey: string): PollarStellarNetwork {
+  return resolvePollarStellarNetwork({
+    apiKey,
+    stellarNetwork: pollarPublicEnv().stellarNetwork,
   });
 }
 

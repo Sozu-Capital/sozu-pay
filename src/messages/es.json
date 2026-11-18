@@ -50,7 +50,12 @@
     "merchantAuthLead": "Entrá con Google para crear tu negocio. Abrimos una billetera de cobro por vos — sin passkey ni frase semilla.",
     "existingAccountLead": "La passkey es otra cuenta de SozuPay, no el mismo inicio de Pollar / Google.",
     "inAppBrowserHint": "Este navegador interno suele bloquear el inicio con Google. Abrí SozuPay en Safari o Chrome.",
-    "googleReturnStuck": "Google puede haberse abierto en otra pestaña. Si ya iniciaste sesión ahí, podés continuar acá.",
+    "waitingForGoogle": "Esperando a Google…",
+    "googleOpenNewTab": "Abrí Google en una pestaña nueva",
+    "googleOpening": "Abriendo Google…",
+    "googleHandoffStuck": "Google no se abrió. Volvé al inicio e intentá Continuar con Google de nuevo.",
+    "googleWaitingHint": "Google se abre en una pestaña nueva. Esta página termina el inicio de sesión cuando confirmes. Crear la billetera puede tardar un minuto.",
+    "googleReturnStuck": "La página de confirmación de Pollar no puede iniciar tu sesión. Volvé acá después de Google. Crear la billetera puede tardar un minuto.",
     "googleReturnContinue": "Continuar acá"
   },
   "merchants": {
@@ -136,6 +141,7 @@
     "paySupplier": "Pagar proveedor",
     "cashOut": "Retirar al banco",
     "qrAndNfc": "Link de pago",
+    "souvenirs": "Souvenirs",
     "offRampQueue": "Cola off-ramp",
     "qrCodes": "Códigos QR",
     "pos": "Nueva venta",
@@ -225,6 +231,26 @@
     "releasePrepareFailed": "No se pudo preparar la liberación de USDC.",
     "releasePasskeyCancelled": "Autorización passkey cancelada.",
     "releaseSubmitFailed": "Error al liberar USDC."
+  },
+  "souvenirsPage": {
+    "title": "Souvenirs",
+    "subtitle": "Lanzá un badge coleccionable. Cada billetera Sozu puede reclamarlo una vez durante la ventana y después lo guarda para siempre.",
+    "newSouvenir": "Nuevo souvenir",
+    "hint": "Elegí una foto, un título y hasta cuándo se puede reclamar. Después de esa ventana desaparece lo no reclamado. Lo reclamado queda en el perfil.",
+    "titleLabel": "Título",
+    "titlePlaceholder": "Noche Pizza",
+    "startsLabel": "Se puede reclamar desde",
+    "endsLabel": "Se puede reclamar hasta",
+    "windowHint": "Las billeteras ven este souvenir mientras la ventana está abierta. Un solo reclamo por cuenta.",
+    "errorTitle": "El título es obligatorio.",
+    "errorImage": "Agregá una imagen.",
+    "errorCreateFailed": "No se pudo lanzar el souvenir.",
+    "creating": "Lanzando…",
+    "createButton": "Lanzar souvenir",
+    "cancel": "Cancelar",
+    "listTitle": "Tus souvenirs",
+    "empty": "Todavía no hay souvenirs. Lanzá uno con imagen, título y ventana para reclamar.",
+    "storesOnly": "Los souvenirs son para tiendas. Las organizaciones de distribución usan enlaces de fondeo."
   },
   "qrNfcPage": {
     "title": "Link de pago",

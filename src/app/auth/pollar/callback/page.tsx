@@ -20,8 +20,9 @@ import {
 } from "@/lib/pollar/oauth-resume";
 
 /**
- * Pollar hosted Google OAuth returns here on mobile (same-window) so we can
- * finish the session and send the user to returnTo (including /join/:token).
+ * Pollar hosted Google OAuth may land here (in-app same-window, or if Pollar
+ * redirects). Keep pending oauth if Google is not done yet — Pollar's success
+ * page only window.close()s and does not send phones back to SozuPay.
  */
 export default function PollarOAuthCallbackPage() {
   const t = useTranslations("login");
@@ -54,6 +55,18 @@ export default function PollarOAuthCallbackPage() {
 
         const sendHome = (path: string) => {
           clearPendingPollarOAuth();
+          if (window.opener && !window.opener.closed) {
+            try {
+              window.opener.focus();
+            } catch {
+              // ignore
+            }
+            window.close();
+            window.setTimeout(() => {
+              window.location.replace(path);
+            }, 400);
+            return;
+          }
           window.location.replace(path);
         };
 
@@ -94,9 +107,7 @@ export default function PollarOAuthCallbackPage() {
             sendHome(fallback);
             return;
           }
-          clearPendingPollarOAuth();
-          window.location.replace(returnTo ?? "/");
-          return;
+          throw new Error(t("googleReturnStuck"));
         }
 
         const res = await fetch("/api/auth/pollar/verify", {
@@ -123,6 +134,10 @@ export default function PollarOAuthCallbackPage() {
     })();
   }, [t]);
 
+  function reloadHere() {
+    window.location.reload();
+  }
+
   return (
     <DarkGradientBg>
       <main className="flex min-h-screen flex-col items-center justify-center p-6 text-white">
@@ -132,6 +147,13 @@ export default function PollarOAuthCallbackPage() {
             <p className="text-sm text-red-300" role="alert">
               {error}
             </p>
+            <button
+              type="button"
+              onClick={reloadHere}
+              className="inline-block text-sm underline underline-offset-2"
+            >
+              {t("googleReturnContinue")}
+            </button>
             <Link href="/" className="inline-block text-sm underline underline-offset-2">
               {t("goHome")}
             </Link>
@@ -140,9 +162,13 @@ export default function PollarOAuthCallbackPage() {
           <div className="flex flex-col items-center gap-4">
             <SozuLoadingMark />
             {showContinue ? (
-              <Link href="/" className="text-sm underline underline-offset-2">
+              <button
+                type="button"
+                onClick={reloadHere}
+                className="text-sm underline underline-offset-2"
+              >
                 {t("googleReturnContinue")}
-              </Link>
+              </button>
             ) : null}
           </div>
         )}

@@ -18,6 +18,7 @@ const NAV_LABEL_KEY: Record<DashboardNavKind, string> = {
   transactions: "transactions",
   pos: "pos",
   "qr-codes": "qrAndNfc",
+  souvenirs: "souvenirs",
   "pay-supplier": "paySupplier",
   "cash-out": "cashOut",
   settings: "settings",

@@ -12,71 +12,170 @@ const POLLAR_SDK_BASE =
   "https://sdk.api.pollar.xyz";
 
 const POLL_INTERVAL_MS = 500;
-const POLL_TIMEOUT_MS = 20 * 1000;
+export const POLL_TIMEOUT_MS = 5 * 60 * 1000;
+const LOGIN_TIMEOUT_MS = 90 * 1000;
+
+export type PollarSessionPollResult = "ready" | "consumed" | "dead" | "timeout";
+
+type StatusBody = {
+  success?: boolean;
+  code?: string;
+  content?: { status?: string };
+} | null;
+
+export function isPollarSessionReady(status: string | null | undefined): boolean {
+  return status === "READY";
+}
+
+export function isPollarSessionConsumed(status: string | null | undefined): boolean {
+  return status === "CONSUMED";
+}
+
+export function isPollarSessionDead(
+  httpStatus: number,
+  code?: string | null,
+): boolean {
+  return (
+    httpStatus === 404 ||
+    httpStatus === 410 ||
+    code === "INVALID_CLIENT_SESSION_ID" ||
+    code === "EXPIRED_CLIENT_ID"
+  );
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+}
 
 export async function waitForPollarSessionReady(
   clientSessionId: string,
   timeoutMs: number = POLL_TIMEOUT_MS,
-): Promise<boolean> {
+  signal?: AbortSignal,
+): Promise<PollarSessionPollResult> {
   const url = `${POLLAR_SDK_BASE}/v2/auth/session/status/${encodeURIComponent(clientSessionId)}/poll`;
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
+    if (signal?.aborted) return "timeout";
     try {
-      const res = await fetch(url, { headers: { accept: "application/json" } });
-      if (res.status === 404 || res.status === 410) return false;
-      const body = (await res.json().catch(() => null)) as {
-        success?: boolean;
-        code?: string;
-        content?: { status?: string };
-      } | null;
-      if (body?.code === "INVALID_CLIENT_SESSION_ID" || body?.code === "EXPIRED_CLIENT_ID") {
-        return false;
+      const res = await fetch(url, { headers: { accept: "application/json" }, signal });
+      const body = (await res.json().catch(() => null)) as StatusBody;
+      if (isPollarSessionDead(res.status, body?.code)) return "dead";
+      const status = body?.content?.status;
+      if (isPollarSessionReady(status)) return "ready";
+      if (isPollarSessionConsumed(status)) return "consumed";
+      // GENERATING_WALLET / PENDING: keep polling — wallet create can take a minute.
+    } catch (err) {
+      if (signal?.aborted || (err instanceof Error && err.name === "AbortError")) {
+        return "timeout";
       }
-      if (body?.success && body.content?.status === "READY") return true;
-    } catch {
       // retry
     }
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+    const remaining = timeoutMs - (Date.now() - started);
+    if (remaining <= 0) break;
+    await sleep(Math.min(POLL_INTERVAL_MS, remaining), signal);
   }
-  return false;
+  return "timeout";
+}
+
+function tokenFromStoredSession(raw: string | null): string | null {
+  if (!raw) return null;
+  try {
+    const session = JSON.parse(raw) as unknown;
+    if (!isValidSession(session)) return null;
+    const token = session.token?.accessToken;
+    return typeof token === "string" && token.length > 0 ? token : null;
+  } catch {
+    return null;
+  }
+}
+
+async function readStoredPollarAccessToken(apiKey: string): Promise<string | null> {
+  try {
+    const hash = await hashApiKeyPrefix(apiKey);
+    return tokenFromStoredSession(localStorage.getItem(pollarSessionStorageKey(hash)));
+  } catch {
+    return null;
+  }
+}
+
+async function persistValidSession(apiKey: string, content: unknown): Promise<void> {
+  if (!isValidSession(content)) return;
+  try {
+    const hash = await hashApiKeyPrefix(apiKey);
+    localStorage.setItem(pollarSessionStorageKey(hash), JSON.stringify(content));
+  } catch {
+    // private mode — SozuPay session can still be established from the token
+  }
+}
+
+async function loginHostedSession(params: {
+  clientSessionId: string;
+  apiKey: string;
+}): Promise<string | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LOGIN_TIMEOUT_MS);
+  try {
+    const km = new WebCryptoKeyManager(params.apiKey);
+    await km.init();
+    const dpopJwk = await km.getPublicJwk();
+
+    const res = await fetch(`${POLLAR_SDK_BASE}/v2/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-pollar-api-key": params.apiKey,
+      },
+      body: JSON.stringify({ clientSessionId: params.clientSessionId, dpopJwk }),
+      signal: controller.signal,
+    });
+    const body = await res.json().catch(() => null);
+    const accessToken = accessTokenFromLoginResponse(body);
+    if (!accessToken) return null;
+
+    const content = (body as { content?: unknown }).content;
+    await persistValidSession(params.apiKey, content);
+    return accessToken;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
- * After same-window Google OAuth, the original PollarClient.login() poll is gone.
- * Finish the hosted session: wait until READY, POST /auth/login, persist for restore.
+ * After hosted Google OAuth, the original PollarClient.login() poll may be gone
+ * because Pollar only window.close()s. Finish the session: wait until READY
+ * (including GENERATING_WALLET), POST /auth/login, persist for restore.
  */
 export async function completeHostedOAuthSession(params: {
   clientSessionId: string;
   apiKey: string;
 }): Promise<string | null> {
-  const ready = await waitForPollarSessionReady(params.clientSessionId);
-  if (!ready) return null;
+  const outcome = await waitForPollarSessionReady(params.clientSessionId);
 
-  const km = new WebCryptoKeyManager(params.apiKey);
-  await km.init();
-  const dpopJwk = await km.getPublicJwk();
-
-  const res = await fetch(`${POLLAR_SDK_BASE}/v2/auth/login`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-pollar-api-key": params.apiKey,
-    },
-    body: JSON.stringify({ clientSessionId: params.clientSessionId, dpopJwk }),
-  });
-  const body = await res.json().catch(() => null);
-  const accessToken = accessTokenFromLoginResponse(body);
-  if (!accessToken) return null;
-
-  const content = (body as { content?: unknown }).content;
-  if (isValidSession(content)) {
-    try {
-      const hash = await hashApiKeyPrefix(params.apiKey);
-      localStorage.setItem(pollarSessionStorageKey(hash), JSON.stringify(content));
-    } catch {
-      // private mode — SozuPay session can still be established from the token
-    }
+  if (outcome === "ready") {
+    const token = await loginHostedSession(params);
+    if (token) return token;
+    return readStoredPollarAccessToken(params.apiKey);
   }
 
-  return accessToken;
+  if (outcome === "consumed") {
+    return readStoredPollarAccessToken(params.apiKey);
+  }
+
+  return null;
 }

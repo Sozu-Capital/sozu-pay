@@ -3,6 +3,7 @@ export type DashboardNavKind =
   | "transactions"
   | "pos"
   | "qr-codes"
+  | "souvenirs"
   | "pay-supplier"
   | "cash-out"
   | "settings"
@@ -35,6 +36,7 @@ export function storeDashboardNavLinks(options: { isAdmin?: boolean } = {}): Das
     { href: "/dashboard", kind: "overview" },
     { href: "/dashboard/transactions", kind: "transactions" },
     { href: "/dashboard/qr-codes", kind: "qr-codes" },
+    { href: "/dashboard/souvenirs", kind: "souvenirs" },
     { href: "/dashboard/pos", kind: "pos" },
     { href: "/dashboard/send", kind: "send" },
     { href: "/dashboard/recipients", kind: "pay-supplier" },

@@ -11,6 +11,13 @@ export type PasskeyExportBlob = {
   ct: string;
 };
 
+/** A fresh ArrayBuffer view. WebCrypto rejects a view over ArrayBufferLike. */
+function exactBytes(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
+  const copy = new Uint8Array(new ArrayBuffer(bytes.byteLength));
+  copy.set(bytes);
+  return copy;
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
@@ -34,15 +41,19 @@ async function aesKey(prf: Uint8Array): Promise<CryptoKey> {
   if (prf.byteLength < 32) {
     throw new Error("Passkey key is too short.");
   }
-  const raw = new Uint8Array(prf.buffer, prf.byteOffset, 32);
+  const raw = exactBytes(prf.subarray(0, 32));
   return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
 }
 
 export async function sealStellarSecret(secret: string, prf: Uint8Array): Promise<string> {
   const key = await aesKey(prf);
-  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const iv = exactBytes(crypto.getRandomValues(new Uint8Array(12)));
   const ciphertext = new Uint8Array(
-    await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(secret)),
+    await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      key,
+      exactBytes(new TextEncoder().encode(secret)),
+    ),
   );
   return JSON.stringify({
     v: 1,
@@ -58,9 +69,9 @@ export async function openStellarSecret(blobText: string, prf: Uint8Array): Prom
   }
   const key = await aesKey(prf);
   const plain = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: new Uint8Array(base64ToBytes(parsed.iv)) },
+    { name: "AES-GCM", iv: exactBytes(base64ToBytes(parsed.iv)) },
     key,
-    new Uint8Array(base64ToBytes(parsed.ct)),
+    exactBytes(base64ToBytes(parsed.ct)),
   );
   return new TextDecoder().decode(plain);
 }

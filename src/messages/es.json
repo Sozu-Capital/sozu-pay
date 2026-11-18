@@ -54,7 +54,7 @@
     "googleOpenNewTab": "Abrí Google en una pestaña nueva",
     "googleOpening": "Abriendo Google…",
     "googleHandoffStuck": "Google no se abrió. Volvé al inicio e intentá Continuar con Google de nuevo.",
-    "googleWaitingHint": "Google se abre en una pestaña nueva. Esta página termina el inicio de sesión cuando confirmes. Crear la billetera puede tardar un minuto.",
+    "googleWaitingHint": "Google se abre en una pestaña nueva. Esta página termina el inicio de sesión cuando confirmes. Crear la billetera en mainnet puede tardar un minuto — aprobá el aviso de Pollar si aparece.",
     "googleReturnStuck": "La página de confirmación de Pollar no puede iniciar tu sesión. Volvé acá después de Google. Crear la billetera puede tardar un minuto.",
     "googleReturnContinue": "Continuar acá"
   },

@@ -1,7 +1,11 @@
 "use client";
 
 import { PollarClient } from "@pollar/core";
-import type { AuthUrlOpener } from "@pollar/core";
+import type { AuthUrlOpener, PollarClientConfig } from "@pollar/core";
+import {
+  pollarLoginTimeoutMs,
+  pollarStellarNetworkFromEnv,
+} from "@/lib/pollar/network";
 import {
   clientSessionIdFromOAuthUrl,
   persistPendingPollarOAuth,
@@ -184,6 +188,18 @@ const sozuOpenAuthUrl: AuthUrlOpener = async ({ getUrl }) => {
   sendUrlToHandoffTab(popup, url);
 };
 
+export function pollarBrowserClientConfig(apiKey: string): PollarClientConfig {
+  const stellarNetwork = pollarStellarNetworkFromEnv();
+  return {
+    apiKey,
+    stellarNetwork,
+    loginTimeoutMs: pollarLoginTimeoutMs(stellarNetwork),
+    openAuthUrl: sozuOpenAuthUrl,
+    oauthRedirectUri:
+      typeof window !== "undefined" ? pollarOAuthCallbackUrl(window.location.origin) : undefined,
+  };
+}
+
 /** One client per publishable key. Pollar warns (and can TDZ) if we construct/destroy per mount. */
 export function getPollarBrowserClient(): PollarClient | null {
   if (typeof window === "undefined") return null;
@@ -191,13 +207,27 @@ export function getPollarBrowserClient(): PollarClient | null {
   if (!apiKey) return null;
   if (client && clientApiKey === apiKey) return client;
   client?.destroy();
-  client = new PollarClient({
-    apiKey,
-    openAuthUrl: sozuOpenAuthUrl,
-    oauthRedirectUri: pollarOAuthCallbackUrl(window.location.origin),
-  });
+  client = new PollarClient(pollarBrowserClientConfig(apiKey));
   clientApiKey = apiKey;
   return client;
+}
+
+/** Bound `client.ready()` so a mainnet cold start cannot freeze Continue with Google. */
+export async function waitForPollarClientReady(
+  pollar: PollarClient,
+  timeoutMs = 15_000,
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      pollar.ready(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Pollar client init timed out")), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
 
 /** Drop the singleton so the next get() restores a session written after hosted OAuth. */
@@ -234,7 +264,7 @@ export function clearPollarBrowserStorage(): void {
 export async function logoutPollarBrowserClient(): Promise<void> {
   try {
     if (client) {
-      await client.ready();
+      await waitForPollarClientReady(client);
       await client.logout();
       client.destroy();
     }

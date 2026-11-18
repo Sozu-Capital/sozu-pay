@@ -1,5 +1,7 @@
 import "server-only";
 
+import { getAppBaseUrl } from "@/lib/app-url";
+import { productImageUrl } from "@/lib/dashboard/checkout-product-image";
 import { parseStandingLink } from "@/lib/dashboard/payment-link";
 import { listQRPointsForOrg } from "@/lib/db/merchant-qr-points";
 import { getOrganizationById } from "@/lib/db/organizations";
@@ -12,6 +14,7 @@ export type StoreDirectoryItem = {
   collectibleReceipt: boolean;
   editionSize: number | null;
   hasImage: boolean;
+  imageUrl: string | null;
 };
 
 export type StoreDirectoryCard = {
@@ -67,6 +70,9 @@ export async function getStoreProfile(id: string): Promise<StoreDirectoryProfile
       collectibleReceipt: offer.collectibleReceipt,
       editionSize: offer.editionSize,
       hasImage: point.imageUrl != null,
+      imageUrl: point.imageUrl
+        ? productImageUrl(getAppBaseUrl(), org.id, point.slug)
+        : null,
     });
   }
   items.sort((a, b) => a.name.localeCompare(b.name));

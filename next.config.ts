@@ -4,7 +4,7 @@ import createNextIntlPlugin from "next-intl/plugin";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@stellar/stellar-sdk"],
+  transpilePackages: ["@stellar/stellar-sdk", "@pollar/core", "@pollar/react"],
   webpack: (config) => {
     config.resolve = config.resolve || {};
     config.resolve.alias = {

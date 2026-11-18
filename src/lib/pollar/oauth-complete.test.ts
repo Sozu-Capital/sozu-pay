@@ -5,6 +5,7 @@ import {
   completeHostedOAuthSession,
   isPollarSessionConsumed,
   isPollarSessionDead,
+  isPollarSessionFailed,
   isPollarSessionReady,
   POLL_TIMEOUT_MS,
   waitForPollarSessionReady,
@@ -100,7 +101,11 @@ describe("pollar session status helpers", () => {
     assert.equal(isPollarSessionDead(410), true);
     assert.equal(isPollarSessionDead(200, "INVALID_CLIENT_SESSION_ID"), true);
     assert.equal(isPollarSessionDead(200, "EXPIRED_CLIENT_ID"), true);
+    assert.equal(isPollarSessionDead(200, "SDK_UPGRADE_REQUIRED"), true);
     assert.equal(isPollarSessionDead(200, "OK"), false);
+    assert.equal(isPollarSessionFailed("FAILED"), true);
+    assert.equal(isPollarSessionFailed("ERROR"), true);
+    assert.equal(isPollarSessionFailed("GENERATING_WALLET"), false);
   });
 });
 
@@ -113,6 +118,21 @@ describe("waitForPollarSessionReady", () => {
   it("returns consumed when the session is CONSUMED", async () => {
     globalThis.fetch = async () => jsonResponse(statusEnvelope("CONSUMED"));
     assert.equal(await waitForPollarSessionReady("sess-9", 1_000), "consumed");
+  });
+
+  it("returns dead when wallet setup FAILED", async () => {
+    globalThis.fetch = async () => jsonResponse(statusEnvelope("FAILED"));
+    assert.equal(await waitForPollarSessionReady("sess-9", 1_000), "dead");
+  });
+
+  it("polls the v3 session status route", async () => {
+    let polled = "";
+    globalThis.fetch = async (input) => {
+      polled = String(input);
+      return jsonResponse(statusEnvelope("READY"));
+    };
+    await waitForPollarSessionReady("sess-9", 1_000);
+    assert.match(polled, /\/v3\/auth\/session\/status\/sess-9\/poll$/);
   });
 
   it("keeps polling GENERATING_WALLET and PENDING until READY", async () => {
@@ -149,7 +169,7 @@ describe("waitForPollarSessionReady", () => {
 });
 
 describe("completeHostedOAuthSession", () => {
-  it("POSTs /v2/auth/login once READY and returns the access token", async () => {
+  it("POSTs /v3/auth/login once READY and returns the access token", async () => {
     installLocalStorage();
     const calls: { url: string; method?: string }[] = [];
     globalThis.fetch = async (input, init) => {
@@ -158,7 +178,7 @@ describe("completeHostedOAuthSession", () => {
       if (url.includes("/auth/session/status/")) {
         return jsonResponse(statusEnvelope("READY"));
       }
-      if (url.endsWith("/v2/auth/login")) {
+      if (url.endsWith("/v3/auth/login")) {
         return jsonResponse({
           success: true,
           content: validSession("at-login"),
@@ -173,7 +193,7 @@ describe("completeHostedOAuthSession", () => {
     });
     assert.equal(token, "at-login");
     assert.equal(
-      calls.some((c) => c.url.endsWith("/v2/auth/login") && c.method === "POST"),
+      calls.some((c) => c.url.endsWith("/v3/auth/login") && c.method === "POST"),
       true,
     );
   });

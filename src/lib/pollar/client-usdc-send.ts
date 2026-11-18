@@ -5,7 +5,12 @@
  */
 "use client";
 
-import { getPollarBrowserClient, isPollarFakeAuth } from "@/lib/pollar/browser-client";
+import {
+  getPollarBrowserClient,
+  isPollarFakeAuth,
+  waitForPollarClientReady,
+} from "@/lib/pollar/browser-client";
+import { pollarStellarNetworkFromEnv } from "@/lib/pollar/network";
 import type { PayoutAsset } from "@/lib/payouts/asset";
 import { pollarSendPlan } from "@/lib/payouts/send-plan";
 
@@ -15,9 +20,7 @@ const USDC_ISSUER_PUBLIC =
   "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4EZN";
 
 function usdcIssuer(): string {
-  return process.env.NEXT_PUBLIC_STELLAR_NETWORK === "public"
-    ? USDC_ISSUER_PUBLIC
-    : USDC_ISSUER_TESTNET;
+  return pollarStellarNetworkFromEnv() === "mainnet" ? USDC_ISSUER_PUBLIC : USDC_ISSUER_TESTNET;
 }
 
 export type PollarClientUsdcSendInput = {
@@ -36,6 +39,35 @@ export type PollarClientUsdcSendResult = {
   stellarTxHash: string;
 };
 
+type PollarSubmitLike = {
+  status: string;
+  hash?: string;
+  message?: string;
+  details?: string;
+  code?: string;
+};
+
+/** Turnkey / 0.12 submit outcomes: success and pending have a hash; cosign waits on the prompt. */
+export function stellarHashFromPollarSubmit(
+  outcome: PollarSubmitLike,
+  source: string,
+  fallback: string,
+): string {
+  if (outcome.status === "error") {
+    const detail = outcome.message ?? outcome.details ?? fallback;
+    const code = outcome.code ? ` [${outcome.code}]` : "";
+    throw new Error(`${detail}${code} (signing ${source.slice(0, 8)}…)`);
+  }
+  if (outcome.status === "cosign_pending") {
+    throw new Error("Approve this payment in the Pollar confirmation prompt, then try again.");
+  }
+  if (outcome.status !== "success" && outcome.status !== "pending") {
+    throw new Error(`${fallback} (${outcome.status})`);
+  }
+  if (!outcome.hash) throw new Error("Pollar payment returned no transaction hash");
+  return outcome.hash;
+}
+
 /**
  * Debit the active Pollar session wallet to destination.
  */
@@ -53,8 +85,15 @@ export async function sendUsdcViaPollarClient(
     throw new Error("Pollar is not configured. Set NEXT_PUBLIC_POLLAR_PUBLISHABLE_KEY.");
   }
 
-  await client.ready();
-  const from = (client.getWallet()?.address ?? "").trim();
+  await waitForPollarClientReady(client);
+  const wallet = client.getWallet();
+  if (wallet?.provisioning === "CREATING") {
+    throw new Error("Pollar is still opening your Stellar wallet. Wait a moment and try again.");
+  }
+  if (wallet?.provisioning === "FAILED") {
+    throw new Error("Pollar could not open your Stellar wallet. Sign out and try Google login again.");
+  }
+  const from = (wallet?.address ?? "").trim();
   if (!from.startsWith("G")) {
     throw new Error("No Pollar custodial wallet in session. Sign in with Google (Pollar).");
   }
@@ -81,13 +120,9 @@ export async function sendUsdcViaPollarClient(
         issuer: usdcIssuer(),
       },
     });
-    if (outcome.status === "error") {
-      const detail = outcome.message ?? outcome.details ?? "Pollar USDC payment failed";
-      const code = outcome.code ? ` [${outcome.code}]` : "";
-      throw new Error(`${detail}${code} (signing ${source.slice(0, 8)}…)`);
-    }
-    if (!outcome.hash) throw new Error("Pollar payment returned no transaction hash");
-    return { stellarTxHash: outcome.hash };
+    return {
+      stellarTxHash: stellarHashFromPollarSubmit(outcome, source, "Pollar USDC payment failed"),
+    };
   }
 
   const amountI128 = (input.amountI128 ?? plan.amountI128).trim();
@@ -101,11 +136,7 @@ export async function sendUsdcViaPollarClient(
     ],
   });
 
-  if (outcome.status === "error") {
-    const detail = outcome.message ?? outcome.details ?? "Pollar SEP-41 transfer failed";
-    const code = outcome.code ? ` [${outcome.code}]` : "";
-    throw new Error(`${detail}${code} (signing ${source.slice(0, 8)}…)`);
-  }
-  if (!outcome.hash) throw new Error("Pollar SEP-41 transfer returned no transaction hash");
-  return { stellarTxHash: outcome.hash };
+  return {
+    stellarTxHash: stellarHashFromPollarSubmit(outcome, source, "Pollar SEP-41 transfer failed"),
+  };
 }

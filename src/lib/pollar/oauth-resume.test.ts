@@ -195,6 +195,7 @@ describe("pollar storage helpers", () => {
       true,
     );
     assert.equal(isAllowedPollarHandoffUrl("https://api.pollar.xyz/v2/auth/google"), true);
+    assert.equal(isAllowedPollarHandoffUrl("https://server.api.pollar.xyz/v3/auth/google"), true);
     assert.equal(isAllowedPollarHandoffUrl("https://www.pollar.xyz/auth"), true);
     assert.equal(isAllowedPollarHandoffUrl("https://pollar.xyz/auth"), true);
     assert.equal(isAllowedPollarHandoffUrl("https://accounts.google.com/o/oauth2/v2/auth"), true);

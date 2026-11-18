@@ -13,6 +13,7 @@ import {
   reservePollarOAuthPopup,
   resetPollarBrowserClient,
   subscribePollarGoogleOpen,
+  waitForPollarClientReady,
   type PollarGoogleOpen,
 } from "@/lib/pollar/browser-client";
 import { completeHostedOAuthSession } from "@/lib/pollar/oauth-complete";
@@ -163,7 +164,7 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
         let token: string | null = null;
         const existing = getPollarBrowserClient();
         if (existing) {
-          await existing.ready();
+          await waitForPollarClientReady(existing).catch(() => undefined);
           token = accessTokenFromClient(existing);
         }
         if (!token && apiKey) {
@@ -273,7 +274,7 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
         throw new Error(t("pollarNotConfigured"));
       }
 
-      await client.ready();
+      await waitForPollarClientReady(client);
 
       const reused = accessTokenFromClient(client);
       if (reused) {
@@ -291,7 +292,7 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
         discardReservedPollarOAuthPopup();
         throw new Error(t("pollarNotConfigured"));
       }
-      await fresh.ready();
+      await waitForPollarClientReady(fresh);
       const apiKey = getPollarPublishableKey();
       const sdkToken = waitForAccessToken(fresh, t("failedToSignIn")).catch(() => null);
       const hostedToken = apiKey ? waitForPendingThenComplete(apiKey) : Promise.resolve(null);

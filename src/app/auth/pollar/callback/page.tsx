@@ -9,6 +9,7 @@ import {
   getPollarBrowserClient,
   getPollarPublishableKey,
   resetPollarBrowserClient,
+  waitForPollarClientReady,
 } from "@/lib/pollar/browser-client";
 import { completeHostedOAuthSession } from "@/lib/pollar/oauth-complete";
 import {
@@ -84,10 +85,7 @@ export default function PollarOAuthCallbackPage() {
 
         const client = getPollarBrowserClient();
         if (client) {
-          await Promise.race([
-            client.ready(),
-            new Promise((resolve) => setTimeout(resolve, 4000)),
-          ]);
+          await waitForPollarClientReady(client, 4000).catch(() => undefined);
           const state = client.getAuthState();
           if (state.step === "authenticated") {
             token = state.session?.token?.accessToken ?? null;

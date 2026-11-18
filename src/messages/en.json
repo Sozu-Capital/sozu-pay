@@ -54,7 +54,7 @@
     "googleOpenNewTab": "Open Google in a new tab",
     "googleOpening": "Opening Google…",
     "googleHandoffStuck": "Google did not open. Return home and try Continue with Google again.",
-    "googleWaitingHint": "Google opens in a new tab. This page finishes sign-in after you confirm. Wallet setup can take a minute.",
+    "googleWaitingHint": "Google opens in a new tab. This page finishes sign-in after you confirm. Mainnet wallet setup can take a minute — approve the Pollar prompt if it appears.",
     "googleReturnStuck": "Pollar's confirmation page cannot log you in. Return here after Google. Wallet setup can take a minute.",
     "googleReturnContinue": "Continue here"
   },

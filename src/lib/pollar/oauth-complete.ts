@@ -2,6 +2,11 @@
 
 import { isValidSession, WebCryptoKeyManager } from "@pollar/core";
 import {
+  pollarLoginTimeoutMs,
+  pollarSdkApiPath,
+  pollarStellarNetworkFromEnv,
+} from "@/lib/pollar/network";
+import {
   accessTokenFromLoginResponse,
   hashApiKeyPrefix,
   pollarSessionStorageKey,
@@ -13,7 +18,6 @@ const POLLAR_SDK_BASE =
 
 const POLL_INTERVAL_MS = 500;
 export const POLL_TIMEOUT_MS = 5 * 60 * 1000;
-const LOGIN_TIMEOUT_MS = 90 * 1000;
 
 export type PollarSessionPollResult = "ready" | "consumed" | "dead" | "timeout";
 
@@ -39,8 +43,13 @@ export function isPollarSessionDead(
     httpStatus === 404 ||
     httpStatus === 410 ||
     code === "INVALID_CLIENT_SESSION_ID" ||
-    code === "EXPIRED_CLIENT_ID"
+    code === "EXPIRED_CLIENT_ID" ||
+    code === "SDK_UPGRADE_REQUIRED"
   );
+}
+
+export function isPollarSessionFailed(status: string | null | undefined): boolean {
+  return status === "FAILED" || status === "ERROR";
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -66,7 +75,7 @@ export async function waitForPollarSessionReady(
   timeoutMs: number = POLL_TIMEOUT_MS,
   signal?: AbortSignal,
 ): Promise<PollarSessionPollResult> {
-  const url = `${POLLAR_SDK_BASE}/v2/auth/session/status/${encodeURIComponent(clientSessionId)}/poll`;
+  const url = `${POLLAR_SDK_BASE}${pollarSdkApiPath(`/auth/session/status/${encodeURIComponent(clientSessionId)}/poll`)}`;
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     if (signal?.aborted) return "timeout";
@@ -75,6 +84,7 @@ export async function waitForPollarSessionReady(
       const body = (await res.json().catch(() => null)) as StatusBody;
       if (isPollarSessionDead(res.status, body?.code)) return "dead";
       const status = body?.content?.status;
+      if (isPollarSessionFailed(status)) return "dead";
       if (isPollarSessionReady(status)) return "ready";
       if (isPollarSessionConsumed(status)) return "consumed";
       // GENERATING_WALLET / PENDING: keep polling — wallet create can take a minute.
@@ -127,13 +137,16 @@ async function loginHostedSession(params: {
   apiKey: string;
 }): Promise<string | null> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), LOGIN_TIMEOUT_MS);
+  const timer = setTimeout(
+    () => controller.abort(),
+    pollarLoginTimeoutMs(pollarStellarNetworkFromEnv()),
+  );
   try {
     const km = new WebCryptoKeyManager(params.apiKey);
     await km.init();
     const dpopJwk = await km.getPublicJwk();
 
-    const res = await fetch(`${POLLAR_SDK_BASE}/v2/auth/login`, {
+    const res = await fetch(`${POLLAR_SDK_BASE}${pollarSdkApiPath("/auth/login")}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

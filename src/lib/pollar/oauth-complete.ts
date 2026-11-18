@@ -4,7 +4,7 @@ import { isValidSession, WebCryptoKeyManager } from "@pollar/core";
 import {
   pollarLoginTimeoutMs,
   pollarSdkApiPath,
-  pollarStellarNetworkFromEnv,
+  pollarStellarNetworkForClient,
 } from "@/lib/pollar/network";
 import {
   accessTokenFromLoginResponse,
@@ -139,7 +139,7 @@ async function loginHostedSession(params: {
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),
-    pollarLoginTimeoutMs(pollarStellarNetworkFromEnv()),
+    pollarLoginTimeoutMs(pollarStellarNetworkForClient(params.apiKey)),
   );
   try {
     const km = new WebCryptoKeyManager(params.apiKey);

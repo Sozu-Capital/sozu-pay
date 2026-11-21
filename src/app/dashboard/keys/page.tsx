@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 export default function KeysPage() {
@@ -64,6 +65,14 @@ export default function KeysPage() {
           {recoverySent ? t("recoverySent") : t("recoveryBtn")}
         </button>
         <p className="mt-4 text-sm text-gray-500 dark:text-gray-500">{t("recoveryAdvanced")}</p>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="text-lg font-semibold">{t("pollarDeviceKeys")}</h2>
+        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{t("pollarDeviceKeysBody")}</p>
+        <Link href="/device-keys" className="mt-3 inline-block text-sm text-blue-400 hover:underline">
+          {t("pollarDeviceKeys")}
+        </Link>
       </section>
     </div>
   );

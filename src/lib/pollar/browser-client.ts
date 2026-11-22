@@ -20,7 +20,8 @@ import {
 } from "@/lib/pollar/oauth-resume";
 
 const POLLAR_STORAGE_PREFIX = "pollar:";
-const POLLAR_KEYS_DB = "pollar-keys";
+/** Turnkey device-key store. Must survive logout — deleting it burns the vote. */
+export const POLLAR_KEYS_DB = "pollar-keys";
 
 let client: PollarClient | null = null;
 let clientApiKey: string | null = null;
@@ -242,6 +243,11 @@ export function resetPollarBrowserClient(): void {
   clientApiKey = null;
 }
 
+/**
+ * Drops Pollar session tokens in localStorage.
+ * Never deletes IndexedDB `pollar-keys`: that store is the Turnkey device vote.
+ * Losing it locks co-signed wallets that have no passkey or email recovery.
+ */
 export function clearPollarBrowserStorage(): void {
   if (typeof window === "undefined") return;
   try {
@@ -254,14 +260,9 @@ export function clearPollarBrowserStorage(): void {
   } catch {
     // private mode
   }
-  try {
-    indexedDB.deleteDatabase(POLLAR_KEYS_DB);
-  } catch {
-    // ignore
-  }
 }
 
-/** Revoke Pollar session so the next Google login is a clean OAuth, not a restore. */
+/** Revoke the Pollar OAuth session. Device keys stay so the next login can still vote. */
 export async function logoutPollarBrowserClient(): Promise<void> {
   try {
     if (client) {

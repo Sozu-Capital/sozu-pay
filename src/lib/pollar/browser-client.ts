@@ -214,6 +214,35 @@ export function getPollarBrowserClient(): PollarClient | null {
   return client;
 }
 
+export type PollarAuthSnapshot = {
+  step: string;
+  verified: boolean;
+};
+
+/** Wait until the restored Pollar session is verified, or until there is no session. */
+export async function waitForPollarAuthState(
+  pollar: PollarClient,
+  timeoutMs = 8_000,
+): Promise<PollarAuthSnapshot> {
+  await waitForPollarClientReady(pollar);
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const state = pollar.getAuthState();
+    if (state.step === "authenticated" && state.verified) {
+      return { step: state.step, verified: true };
+    }
+    if (state.step === "error" || state.step === "idle") {
+      return { step: state.step, verified: false };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  const state = pollar.getAuthState();
+  return {
+    step: state.step,
+    verified: state.step === "authenticated" ? state.verified : false,
+  };
+}
+
 /** Bound `client.ready()` so a mainnet cold start cannot freeze Continue with Google. */
 export async function waitForPollarClientReady(
   pollar: PollarClient,

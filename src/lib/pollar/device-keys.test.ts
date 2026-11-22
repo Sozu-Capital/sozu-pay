@@ -4,8 +4,10 @@ import {
   classifyDeviceKeys,
   extractCompressedPublicKeys,
   isCompressedDevicePublicKey,
+  isPollarSessionAuthError,
   normalizeDevicePublicKey,
   pollarErrorMessage,
+  turnkeyMatchBlockedReason,
 } from "./device-keys.js";
 
 const IPHONE = "03f284375ddc5ad0cf2ce01d03ba3c1442300d44a32274701076891dcd3ac829a6";
@@ -54,6 +56,50 @@ describe("device public keys", () => {
     assert.match(
       pollarErrorMessage({ body: { message: "This device isn't part of your wallet yet" } }),
       /isn't part of your wallet/,
+    );
+  });
+
+  it("does not treat an auth failure as an empty enrolled-key list", () => {
+    assert.equal(isPollarSessionAuthError("SDK_AUTH_INVALID_TOKEN"), true);
+    assert.equal(
+      turnkeyMatchBlockedReason({
+        authStep: "authenticated",
+        authVerified: false,
+        devicesError: null,
+      }),
+      "pollar_login_required",
+    );
+    assert.equal(
+      turnkeyMatchBlockedReason({
+        authStep: "idle",
+        authVerified: false,
+        devicesError: null,
+      }),
+      "pollar_login_required",
+    );
+    assert.equal(
+      turnkeyMatchBlockedReason({
+        authStep: "authenticated",
+        authVerified: true,
+        devicesError: "SDK_AUTH_INVALID_TOKEN",
+      }),
+      "pollar_login_required",
+    );
+    assert.equal(
+      turnkeyMatchBlockedReason({
+        authStep: "authenticated",
+        authVerified: true,
+        devicesError: "SDK_COSIGN_UPSTREAM_ERROR",
+      }),
+      "turnkey_unreachable",
+    );
+    assert.equal(
+      turnkeyMatchBlockedReason({
+        authStep: "authenticated",
+        authVerified: true,
+        devicesError: null,
+      }),
+      null,
     );
   });
 });

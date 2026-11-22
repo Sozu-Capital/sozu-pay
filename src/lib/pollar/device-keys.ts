@@ -76,6 +76,25 @@ function uniqueNormalized(keys: string[]): string[] {
   return [...new Set(keys.map(normalizeDevicePublicKey).filter(isCompressedDevicePublicKey))];
 }
 
+export function isPollarSessionAuthError(message: string | null | undefined): boolean {
+  if (!message) return false;
+  return /SDK_AUTH_INVALID_TOKEN|SDK_AUTH_/i.test(message);
+}
+
+/** Empty enrolled lists are not a verdict when we never reached Turnkey. */
+export function turnkeyMatchBlockedReason(input: {
+  authStep: string;
+  authVerified: boolean;
+  devicesError: string | null;
+}): "pollar_login_required" | "turnkey_unreachable" | null {
+  if (input.authStep !== "authenticated" || !input.authVerified) {
+    return "pollar_login_required";
+  }
+  if (isPollarSessionAuthError(input.devicesError)) return "pollar_login_required";
+  if (input.devicesError) return "turnkey_unreachable";
+  return null;
+}
+
 export function pollarErrorMessage(err: unknown): string {
   if (err instanceof Error && err.message.trim()) return err.message;
   if (typeof err === "string" && err.trim()) return err;

@@ -29,6 +29,8 @@ import {
 type HomePollarAuthProps = {
   returnTo?: string;
   onBusyChange?: (busy: boolean) => void;
+  /** Do not treat a SozuPay cookie as a live Pollar session. */
+  ignoreExistingSession?: boolean;
 };
 
 function encodeFakeEmail(email: string): string {
@@ -103,7 +105,11 @@ async function waitForPendingThenComplete(apiKey: string): Promise<string | null
  * NGO home Google-only Pollar login. On success, bridges to SozuPay session via
  * POST /api/auth/pollar/verify. No email OTP / GitHub / passkey on this door.
  */
-export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) {
+export function HomePollarAuth({
+  returnTo,
+  onBusyChange,
+  ignoreExistingSession = false,
+}: HomePollarAuthProps) {
   const t = useTranslations("login");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -153,7 +159,7 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
   const resumePendingOAuth = useCallback(() => {
     if (fakeAuth || resumeRef.current) return;
     void (async () => {
-      if (await enterIfAlreadySignedIn(returnTo)) return;
+      if (!ignoreExistingSession && (await enterIfAlreadySignedIn(returnTo))) return;
       const pending = readPendingPollarOAuth();
       if (!pending || resumeRef.current) return;
       resumeRef.current = true;
@@ -185,7 +191,7 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
         setBusyState(false);
       }
     })();
-  }, [bridgeWithToken, fakeAuth, returnTo, setBusyState, t]);
+  }, [bridgeWithToken, fakeAuth, ignoreExistingSession, returnTo, setBusyState, t]);
 
   useEffect(() => {
     setInAppHint(isInAppBrowser(window.navigator.userAgent));
@@ -194,7 +200,7 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
   useEffect(() => subscribePollarGoogleOpen(setGoogleOpen), []);
 
   useEffect(() => {
-    if (!busy) return;
+    if (!busy || ignoreExistingSession) return;
     let cancelled = false;
     const tick = async () => {
       if (cancelled) return;
@@ -206,7 +212,7 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [busy, returnTo]);
+  }, [busy, ignoreExistingSession, returnTo]);
 
   useEffect(() => {
     if (!busy) {
@@ -242,7 +248,7 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
     resumeRef.current = false;
     setShowContinueHere(false);
     void (async () => {
-      if (await enterIfAlreadySignedIn(returnTo)) return;
+      if (!ignoreExistingSession && (await enterIfAlreadySignedIn(returnTo))) return;
       if (readPendingPollarOAuth()) {
         resumePendingOAuth();
         return;
@@ -268,22 +274,24 @@ export function HomePollarAuth({ returnTo, onBusyChange }: HomePollarAuthProps) 
         return;
       }
 
-      const client = getPollarBrowserClient();
-      if (!client) {
-        discardReservedPollarOAuthPopup();
-        throw new Error(t("pollarNotConfigured"));
-      }
-
-      await waitForPollarClientReady(client);
-
-      const reused = accessTokenFromClient(client);
-      if (reused) {
-        discardReservedPollarOAuthPopup();
-        try {
-          await bridgeWithToken(reused);
-          return;
-        } catch {
-          await logoutPollarBrowserClient();
+      if (ignoreExistingSession) {
+        await logoutPollarBrowserClient();
+      } else {
+        const client = getPollarBrowserClient();
+        if (!client) {
+          discardReservedPollarOAuthPopup();
+          throw new Error(t("pollarNotConfigured"));
+        }
+        await waitForPollarClientReady(client);
+        const reused = accessTokenFromClient(client);
+        if (reused) {
+          discardReservedPollarOAuthPopup();
+          try {
+            await bridgeWithToken(reused);
+            return;
+          } catch {
+            await logoutPollarBrowserClient();
+          }
         }
       }
 

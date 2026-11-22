@@ -1,6 +1,7 @@
 "use client";
 
 import type { PollarClient } from "@pollar/core";
+import { waitForPollarAuthState } from "@/lib/pollar/browser-client";
 import {
   classifyDeviceKeys,
   extractCompressedPublicKeys,
@@ -32,6 +33,8 @@ export type PollarCosignSnapshot = {
   recoveryError: string | null;
   devicesError: string | null;
   localKeyError: string | null;
+  authStep: string;
+  authVerified: boolean;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -64,6 +67,7 @@ export function pollarRecoveryApi(client: PollarClient): PollarClient["cosign"][
 }
 
 export async function snapshotPollarCosign(client: PollarClient): Promise<PollarCosignSnapshot> {
+  const auth = await waitForPollarAuthState(client);
   const wallet = client.getWallet() as
     | { address?: string; provisioning?: string }
     | null
@@ -75,6 +79,25 @@ export async function snapshotPollarCosign(client: PollarClient): Promise<Pollar
     localPublicKeyHex = await client.cosign.publicKeyHex();
   } catch (err) {
     localKeyError = pollarErrorMessage(err);
+  }
+
+  const empty: PollarCosignSnapshot = {
+    walletAddress: typeof wallet?.address === "string" ? wallet.address : null,
+    provisioning: typeof wallet?.provisioning === "string" ? wallet.provisioning : null,
+    localPublicKeyHex,
+    recovery: null,
+    enrolledPublicKeys: [],
+    enrollments: null,
+    devicesRaw: null,
+    recoveryError: null,
+    devicesError: null,
+    localKeyError,
+    authStep: auth.step,
+    authVerified: auth.verified,
+  };
+
+  if (auth.step !== "authenticated" || !auth.verified) {
+    return empty;
   }
 
   let recovery: PollarRecoveryStatus | null = null;
@@ -93,19 +116,18 @@ export async function snapshotPollarCosign(client: PollarClient): Promise<Pollar
     devicesError = pollarErrorMessage(err);
   }
 
-  const enrolledPublicKeys = extractCompressedPublicKeys([devicesRaw, recovery?.raw]);
+  const enrolledPublicKeys = devicesError
+    ? []
+    : extractCompressedPublicKeys([devicesRaw, recovery?.raw]);
 
   return {
-    walletAddress: typeof wallet?.address === "string" ? wallet.address : null,
-    provisioning: typeof wallet?.provisioning === "string" ? wallet.provisioning : null,
-    localPublicKeyHex,
+    ...empty,
     recovery,
     enrolledPublicKeys,
     enrollments: asRecord(devicesRaw)?.enrollments ?? null,
     devicesRaw,
     recoveryError,
     devicesError,
-    localKeyError,
   };
 }
 

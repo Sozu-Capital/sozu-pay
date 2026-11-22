@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { HomePollarAuth } from "@/components/HomePollarAuth";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import {
   getPollarBrowserClient,
@@ -13,6 +14,7 @@ import { sendUsdcViaPollarClient } from "@/lib/pollar/client-usdc-send";
 import {
   classifyDeviceKeys,
   pollarErrorMessage,
+  turnkeyMatchBlockedReason,
   type DeviceKeyMatch,
 } from "@/lib/pollar/device-keys";
 import { dumpPollarIndexedDb, type PollarIndexedDbDump } from "@/lib/pollar/indexed-db-keys";
@@ -73,21 +75,27 @@ export function PollarDeviceKeysPage() {
       const client = getPollarBrowserClient();
       if (!client) {
         setCosign(null);
-        setMatch(classifyDeviceKeys({ localPublicKeys: dump.publicKeys, enrolledPublicKeys: [] }));
+        setMatch(null);
         setHorizon(null);
         return;
       }
-      await waitForPollarClientReady(client);
       const snapshot = await snapshotPollarCosign(client);
       setCosign(snapshot);
+      const blocked = turnkeyMatchBlockedReason({
+        authStep: snapshot.authStep,
+        authVerified: snapshot.authVerified,
+        devicesError: snapshot.devicesError,
+      });
       setMatch(
-        classifyDeviceKeys({
-          localPublicKeys: [
-            ...dump.publicKeys,
-            ...(snapshot.localPublicKeyHex ? [snapshot.localPublicKeyHex] : []),
-          ],
-          enrolledPublicKeys: snapshot.enrolledPublicKeys,
-        }),
+        blocked
+          ? null
+          : classifyDeviceKeys({
+              localPublicKeys: [
+                ...dump.publicKeys,
+                ...(snapshot.localPublicKeyHex ? [snapshot.localPublicKeyHex] : []),
+              ],
+              enrolledPublicKeys: snapshot.enrolledPublicKeys,
+            }),
       );
       const address = snapshot.walletAddress;
       if (address?.startsWith("G")) {
@@ -159,8 +167,23 @@ export function PollarDeviceKeysPage() {
     return fn(api);
   }
 
-  const enrolled = match?.thisDeviceEnrolled === true;
+  const blocked =
+    fake
+      ? null
+      : !cosign
+        ? "pollar_login_required"
+        : turnkeyMatchBlockedReason({
+            authStep: cosign.authStep,
+            authVerified: cosign.authVerified,
+            devicesError: cosign.devicesError,
+          });
+  const enrolled = !blocked && match?.thisDeviceEnrolled === true;
   const wallet = cosign?.walletAddress ?? null;
+  const idbRecordCount =
+    idb?.databases.reduce(
+      (sum, db) => sum + db.stores.reduce((inner, store) => inner + store.recordCount, 0),
+      0,
+    ) ?? 0;
 
   return (
     <DarkGradientBg>
@@ -180,7 +203,14 @@ export function PollarDeviceKeysPage() {
           <p className="text-xs text-white/60">{t("originLabel")}: {idb?.origin ?? "—"}</p>
           <p className="text-xs text-white/60">
             {t("dbLabel")}:{" "}
-            {idb?.databases.map((db) => `${db.name} v${db.version ?? "?"}`).join(", ") || t("noDb")}
+            {idb?.databases
+              .map((db) => {
+                const stores = db.stores
+                  .map((store) => `${store.name} (${store.recordCount})`)
+                  .join(", ");
+                return `${db.name} v${db.version ?? "?"}${stores ? ` · ${stores}` : ""}`;
+              })
+              .join("; ") || t("noDb")}
           </p>
           {cosign?.localPublicKeyHex ? (
             <p className="break-all font-mono text-xs text-white/90">
@@ -188,13 +218,23 @@ export function PollarDeviceKeysPage() {
             </p>
           ) : null}
           {cosign?.localKeyError ? <p className="text-xs text-amber-200">{cosign.localKeyError}</p> : null}
-          <KeyList keys={idb?.publicKeys ?? []} empty={t("noLocalKeys")} />
+          <KeyList
+            keys={idb?.publicKeys ?? []}
+            empty={idbRecordCount > 0 ? t("noHexKeys") : t("noLocalKeys")}
+          />
         </section>
 
-        <section className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2">
+        <section className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
           <h2 className="text-sm font-semibold">{t("walletTitle")}</h2>
           {busy ? <p className="text-sm text-white/60">{t("loading")}</p> : null}
-          <p className="break-all font-mono text-xs">{wallet ?? t("noWallet")}</p>
+          {blocked === "pollar_login_required" ? (
+            <>
+              <p className="text-sm text-amber-100">{t("needsLoginBody")}</p>
+              <HomePollarAuth returnTo="/device-keys" ignoreExistingSession />
+            </>
+          ) : (
+            <p className="break-all font-mono text-xs">{wallet ?? t("noWallet")}</p>
+          )}
           {cosign?.provisioning ? (
             <p className="text-xs text-white/60">{t("provisioning")}: {cosign.provisioning}</p>
           ) : null}
@@ -215,20 +255,30 @@ export function PollarDeviceKeysPage() {
         <section className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
           <h2 className="text-sm font-semibold">{t("matchTitle")}</h2>
           <p className="text-sm text-white/80">
-            {enrolled ? t("matchYes") : t("matchNo")}
+            {blocked === "pollar_login_required"
+              ? t("matchNeedsLogin")
+              : blocked === "turnkey_unreachable"
+                ? t("matchUnreachable")
+                : enrolled
+                  ? t("matchYes")
+                  : t("matchNo")}
           </p>
-          <div>
-            <p className="text-xs uppercase text-white/50">{t("enrolledHere")}</p>
-            <KeyList keys={match?.enrolledLocalKeys ?? []} empty={t("none")} />
-          </div>
-          <div>
-            <p className="text-xs uppercase text-white/50">{t("localNotEnrolled")}</p>
-            <KeyList keys={match?.unenrolledLocalKeys ?? []} empty={t("none")} />
-          </div>
-          <div>
-            <p className="text-xs uppercase text-white/50">{t("enrolledElsewhere")}</p>
-            <KeyList keys={match?.enrolledOnlyKeys ?? []} empty={t("none")} />
-          </div>
+          {blocked ? null : (
+            <>
+              <div>
+                <p className="text-xs uppercase text-white/50">{t("enrolledHere")}</p>
+                <KeyList keys={match?.enrolledLocalKeys ?? []} empty={t("none")} />
+              </div>
+              <div>
+                <p className="text-xs uppercase text-white/50">{t("localNotEnrolled")}</p>
+                <KeyList keys={match?.unenrolledLocalKeys ?? []} empty={t("none")} />
+              </div>
+              <div>
+                <p className="text-xs uppercase text-white/50">{t("enrolledElsewhere")}</p>
+                <KeyList keys={match?.enrolledOnlyKeys ?? []} empty={t("none")} />
+              </div>
+            </>
+          )}
         </section>
 
         <section className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
@@ -249,7 +299,7 @@ export function PollarDeviceKeysPage() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              disabled={actionBusy || fake}
+              disabled={actionBusy || fake || Boolean(blocked)}
               onClick={() =>
                 void runAction(t("addedPasskey"), () =>
                   withRecovery(async (api) => {
@@ -263,7 +313,7 @@ export function PollarDeviceKeysPage() {
             </button>
             <button
               type="button"
-              disabled={actionBusy || fake}
+              disabled={actionBusy || fake || Boolean(blocked)}
               onClick={() =>
                 void runAction(t("recoveredPasskey"), () =>
                   withRecovery(async (api) => {
@@ -277,7 +327,7 @@ export function PollarDeviceKeysPage() {
             </button>
             <button
               type="button"
-              disabled={actionBusy || fake}
+              disabled={actionBusy || fake || Boolean(blocked)}
               onClick={() =>
                 void runAction(t("askedEnrollment"), () =>
                   withRecovery(async (api) => {
@@ -299,7 +349,7 @@ export function PollarDeviceKeysPage() {
             />
             <button
               type="button"
-              disabled={actionBusy || fake || !email.includes("@")}
+              disabled={actionBusy || fake || Boolean(blocked) || !email.includes("@")}
               onClick={() =>
                 void runAction(t("emailSent"), () =>
                   withRecovery(async (api) => {
@@ -322,7 +372,7 @@ export function PollarDeviceKeysPage() {
             />
             <button
               type="button"
-              disabled={actionBusy || fake || !code.trim()}
+              disabled={actionBusy || fake || Boolean(blocked) || !code.trim()}
               onClick={() =>
                 void runAction(t("codeAccepted"), () =>
                   withRecovery(async (api) => {
@@ -384,9 +434,11 @@ export function PollarDeviceKeysPage() {
           >
             {t("refresh")}
           </button>
-          <Link href="/?returnTo=/device-keys" className="text-white/80 underline">
-            {t("googleLogin")}
-          </Link>
+          {blocked === "pollar_login_required" ? null : (
+            <Link href="/?fresh=1&returnTo=/device-keys" className="text-white/80 underline">
+              {t("googleLogin")}
+            </Link>
+          )}
           <Link href="/dashboard" className="text-white/80 underline">
             {t("dashboard")}
           </Link>

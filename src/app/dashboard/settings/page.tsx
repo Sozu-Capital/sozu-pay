@@ -617,6 +617,12 @@ export default function SettingsPage() {
               <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">{t("recoveryEmailSoon")}</p>
             </div>
             <Link
+              href="/device-keys"
+              className="inline-block text-sm text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              {t("pollarDeviceKeysLink")}
+            </Link>
+            <Link
               href="/dashboard/profile"
               className="inline-block text-sm text-blue-600 dark:text-blue-400 hover:underline"
             >
